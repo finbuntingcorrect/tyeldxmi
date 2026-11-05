@@ -9,28 +9,26 @@ function sortByCreated(tasks: Task[]): Task[] {
   return [...tasks].sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
 }
 
+function readStored() {
+  if (typeof localStorage === 'undefined') {
+    return { tasks: [] as Task[], error: null as string | null };
+  }
+  return loadTasks();
+}
+
 export function useTasks() {
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [ready, setReady] = useState(false);
+  const [stored] = useState(readStored);
+  const [tasks, setTasks] = useState<Task[]>(stored.tasks);
   const [today, setToday] = useState(() => localDateKey());
-  const [storageError, setStorageError] = useState<string | null>(null);
-  const tasksRef = useRef<Task[]>([]);
-  const readyRef = useRef(false);
+  const [storageError, setStorageError] = useState<string | null>(stored.error);
+  const tasksRef = useRef<Task[]>(stored.tasks);
+  const readyRef = useRef(true);
 
   const commit = useCallback((next: Task[]) => {
     tasksRef.current = next;
     setTasks(next);
     if (!readyRef.current) return;
     setStorageError(saveTasks(next));
-  }, []);
-
-  useEffect(() => {
-    const result = loadTasks();
-    tasksRef.current = result.tasks;
-    setTasks(result.tasks);
-    setStorageError(result.error);
-    readyRef.current = true;
-    setReady(true);
   }, []);
 
   useEffect(() => {
@@ -125,7 +123,7 @@ export function useTasks() {
   const earlierIncompleteCount = tasks.filter((task) => !task.completed && task.date < today).length;
 
   return {
-    ready,
+    ready: true,
     today,
     storageError,
     todayTasks,

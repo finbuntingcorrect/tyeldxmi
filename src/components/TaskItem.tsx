@@ -20,10 +20,6 @@ export function TaskItem({ task, onToggle, onRename, onDelete }: TaskItemProps) 
   const errorId = useId();
 
   useEffect(() => {
-    if (!editing) setDraft(task.title);
-  }, [editing, task.title]);
-
-  useEffect(() => {
     if (editing) {
       inputRef.current?.focus();
       inputRef.current?.select();
@@ -155,6 +151,8 @@ export function TaskItem({ task, onToggle, onRename, onDelete }: TaskItemProps) 
               aria-label={`Редактировать «${task.title}»`}
               onClick={() => {
                 setConfirming(false);
+                setDraft(task.title);
+                setEditError(null);
                 setEditing(true);
               }}
               className="grid h-11 w-11 place-items-center rounded-xl text-muted transition hover:bg-cream hover:text-ink"
