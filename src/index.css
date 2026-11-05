@@ -1,0 +1,55 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-cream: #f7f1e7;
+  --color-card: #fff8ef;
+  --color-primary: #e6a04b;
+  --color-primary-hover: #c97a2b;
+  --color-ink: #2e211b;
+  --color-muted: #7a6a5c;
+  --color-success: #6fae4a;
+  --color-sage: #8a9b6e;
+  --color-line: #e6d8c7;
+  --font-sans: 'Nunito', ui-sans-serif, system-ui, sans-serif;
+  --font-pixel: 'Press Start 2P', ui-monospace, monospace;
+}
+
+@layer base {
+  html {
+    color-scheme: light;
+  }
+
+  body {
+    @apply bg-cream font-sans text-ink antialiased;
+    margin: 0;
+    min-height: 100vh;
+    background-image: radial-gradient(rgb(230 216 199 / 0.7) 0.7px, transparent 0.7px);
+    background-size: 18px 18px;
+  }
+
+  ::selection {
+    background: #e6a04b;
+    color: #2e211b;
+  }
+
+  :focus-visible {
+    outline: 2px solid #c97a2b;
+    outline-offset: 3px;
+  }
+
+  /*
+    Mascot files are anti-aliased illustrations in a pixel style, not a hard
+    integer grid. Nearest-neighbor scaling softens the outlines into jagged
+    noise, so the pictures stay on the browser's smooth scaler.
+  */
+  .mascot-art {
+    image-rendering: auto;
+    background-color: #fdf1e3;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
