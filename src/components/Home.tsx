@@ -1,11 +1,10 @@
 import { useState } from 'react';
 import { localDateKey, dateFromKey, formatLocalDate } from '../lib/date';
-import { tasksForDate } from '../lib/notebook';
+import { habitsForDate, tasksForDate } from '../lib/notebook';
 import { useNotebook } from '../hooks/useNotebook';
 import type { Priority } from '../types';
 import { FocusScreen } from './FocusScreen';
 import { HabitsScreen } from './HabitsScreen';
-import { MascotPanel } from './MascotPanel';
 import { ModeSwitch } from './ModeSwitch';
 import { PlannerScreen } from './PlannerScreen';
 import { SettingsPanel } from './SettingsPanel';
@@ -32,8 +31,15 @@ export function Home() {
   }
 
   const todayTasks = tasksForDate(book, today);
-  const open = todayTasks.some((task) => !task.completed) || (mode === 'habits' && book.habits.length > 0 && book.marks.filter((mark) => mark.date === today && mark.status === 'done').length < book.habits.length);
-  const mascotMode = burst > 0 ? 'success' : open ? 'working' : 'sleeping';
+  const todayHabits = habitsForDate(book, today);
+  const open = mode === 'habits'
+    ? todayHabits.some((row) => row.status !== 'done')
+    : todayTasks.some((task) => !task.completed);
+  const stamp = burst > 0
+    ? { src: '/mascot/cat-success.png', hint: 'Задача выполнена' }
+    : open
+      ? { src: '/mascot/cat-working.png', hint: 'Есть незакрытые дела' }
+      : { src: '/mascot/cat-sleeping.png', hint: todayTasks.length === 0 && todayHabits.length === 0 ? 'На сегодня тихо' : 'Можно отдохнуть' };
 
   function toggle(id: string) {
     const task = book.tasks.find((item) => item.id === id);
@@ -45,49 +51,48 @@ export function Home() {
   }
 
   return (
-    <div className="mx-auto grid w-full max-w-6xl gap-6 px-4 py-6 lg:grid-cols-[minmax(0,1fr)_280px] lg:py-10">
-      <div className="min-w-0">
-        <header className="mb-4 flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h1 className="text-3xl font-extrabold">Today Cat</h1>
-            <p className="mt-1 text-sm font-bold text-muted">{book.name ? `Привет, ${book.name}. ` : ''}{formatLocalDate(dateFromKey(today))}</p>
+    <div className="mx-auto w-full max-w-5xl px-3 py-6 sm:px-6 sm:py-10">
+      <div className="border border-line bg-card">
+        <header className="flex items-center justify-between gap-3 px-4 py-4 sm:px-6">
+          <div className="flex min-w-0 items-center gap-3">
+            <img src={stamp.src} alt="" className="h-14 w-14 shrink-0 object-contain" />
+            <div className="min-w-0">
+              <h1 className="text-2xl leading-tight sm:text-4xl">{book.name ? `Привет, ${book.name}` : 'Today Cat'}</h1>
+              <p className="mt-1 text-sm text-muted">{formatLocalDate(dateFromKey(today))}</p>
+              <p className="text-sm text-muted">{stamp.hint}</p>
+            </div>
           </div>
-          <button type="button" aria-expanded={settings} onClick={() => setSettings((value) => !value)} className={`min-h-11 rounded-xl px-4 text-sm font-extrabold ${settings ? 'bg-primary' : 'bg-card text-ink'}`}>Настройки</button>
+          <button type="button" aria-expanded={settings} onClick={() => setSettings((value) => !value)} className={`min-h-11 shrink-0 px-1 text-sm font-semibold underline underline-offset-4 ${settings ? 'decoration-primary' : 'decoration-line'}`}>Настройки</button>
         </header>
         <ModeSwitch mode={mode} onChange={notebook.chooseMode} />
         {settings ? <SettingsPanel name={book.name} theme={book.theme} onName={notebook.setName} onTheme={notebook.setTheme} /> : null}
-        {notebook.error ? <p role="alert" className="mt-4 rounded-2xl bg-danger-soft px-4 py-3 text-sm font-bold text-danger">{notebook.error}</p> : null}
-        <div className="mt-4">
-          {mode === 'habits' ? (
-            <HabitsScreen book={book} today={today} onCreate={notebook.createHabit} onMark={notebook.setHabitMark} />
-          ) : null}
-          {mode === 'planner' ? (
-            <PlannerScreen
-              book={book}
-              today={today}
-              onCreate={notebook.createTask}
-              onToggle={toggle}
-              onMove={notebook.moveTask}
-              onPart={notebook.setPart}
-              onPriority={notebook.setPriority}
-              onUpdate={notebook.updateTask}
-            />
-          ) : null}
-          {mode === 'focus' ? (
-            <FocusScreen
-              book={book}
-              today={today}
-              onCreate={(title, priority: Priority) => notebook.createTask({ title, date: today, dayPart: 'anytime', priority, repeatKind: 'none', weekdays: [] })}
-              onToggle={toggle}
-              onPriority={notebook.setPriority}
-              onFocus={(id) => notebook.setFocus(id, today)}
-            />
-          ) : null}
-        </div>
+        {notebook.error ? <p role="alert" className="border-b border-line px-4 py-3 text-sm font-semibold text-danger sm:px-6">{notebook.error}</p> : null}
+        {mode === 'habits' ? (
+          <HabitsScreen book={book} today={today} onCreate={notebook.createHabit} onMark={notebook.setHabitMark} />
+        ) : null}
+        {mode === 'planner' ? (
+          <PlannerScreen
+            book={book}
+            today={today}
+            onCreate={notebook.createTask}
+            onToggle={toggle}
+            onMove={notebook.moveTask}
+            onPart={notebook.setPart}
+            onPriority={notebook.setPriority}
+            onUpdate={notebook.updateTask}
+          />
+        ) : null}
+        {mode === 'focus' ? (
+          <FocusScreen
+            book={book}
+            today={today}
+            onCreate={(title, priority: Priority) => notebook.createTask({ title, date: today, dayPart: 'anytime', priority, repeatKind: 'none', weekdays: [] })}
+            onToggle={toggle}
+            onPriority={notebook.setPriority}
+            onFocus={(id) => notebook.setFocus(id, today)}
+          />
+        ) : null}
       </div>
-      <aside className="lg:sticky lg:top-6">
-        <MascotPanel mode={mascotMode} burstKey={burst} total={todayTasks.length} />
-      </aside>
     </div>
   );
 }

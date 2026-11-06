@@ -19,16 +19,16 @@ export function ThemePicker({ theme, onChange }: ThemePickerProps) {
             role="option"
             aria-selected={selected}
             onClick={() => onChange(option.id)}
-            className={`relative min-h-24 rounded-3xl border px-3 py-3 text-left ${selected ? 'border-primary bg-card ring-2 ring-primary' : 'border-line bg-cream'}`}
+            className={`relative min-h-24 border px-3 py-3 text-left ${selected ? 'border-primary bg-field' : 'border-line bg-card'}`}
           >
-            <span className="flex h-10 overflow-hidden rounded-xl border border-line" aria-hidden="true">
+            <span className="flex h-8 overflow-hidden border border-line" aria-hidden="true">
               <span className="w-2/3" style={{ backgroundColor: option.page }} />
               <span className="w-1/3" style={{ backgroundColor: option.accent }} />
             </span>
-            <span className="mt-2 block text-sm font-extrabold text-ink">{option.label}</span>
+            <span className="mt-2 block text-sm font-semibold text-ink">{option.label}</span>
             {selected ? (
-              <span className="absolute right-3 top-3 grid h-7 w-7 place-items-center rounded-full bg-primary" aria-hidden="true">
-                <Check size={16} strokeWidth={3} />
+              <span className="absolute top-3 right-3 grid h-6 w-6 place-items-center bg-primary" aria-hidden="true">
+                <Check size={14} strokeWidth={3} />
               </span>
             ) : null}
           </button>

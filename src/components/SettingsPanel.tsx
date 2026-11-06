@@ -25,17 +25,17 @@ export function SettingsPanel({ name, theme, onName, onTheme }: SettingsPanelPro
   }
 
   return (
-    <section className="mt-4 rounded-[28px] border border-line bg-card p-4 sm:p-6">
-      <h2 className="text-lg font-extrabold text-ink">Настройки</h2>
+    <section className="border-b border-line px-4 py-5 sm:px-6">
+      <h2 className="text-3xl text-ink">Настройки</h2>
       <form className="mt-4" onSubmit={(event) => { event.preventDefault(); saveName(); }}>
-        <label htmlFor="settings-name" className="text-sm font-extrabold text-ink">Имя</label>
-        <div className="mt-2 flex flex-col gap-2 sm:flex-row">
-          <input id="settings-name" value={draft} onChange={(event) => { setDraft(event.target.value); setHint(false); }} maxLength={40} className="min-h-12 flex-1 rounded-2xl border border-line bg-field px-4 text-ink" />
-          <button type="submit" className="min-h-12 rounded-2xl bg-primary px-5 font-extrabold">Сохранить</button>
+        <label htmlFor="settings-name" className="text-sm font-semibold text-ink">Имя</label>
+        <div className="mt-1 flex flex-col gap-3 sm:flex-row sm:items-end">
+          <input id="settings-name" value={draft} onChange={(event) => { setDraft(event.target.value); setHint(false); }} maxLength={40} className="paper-field" />
+          <button type="submit" className="paper-submit">Сохранить</button>
         </div>
-        {hint ? <p role="alert" className="mt-2 text-sm font-bold text-danger">Введи имя, чтобы продолжить</p> : null}
+        {hint ? <p role="alert" className="mt-2 text-sm font-semibold text-danger">Введи имя, чтобы продолжить</p> : null}
       </form>
-      <p className="mt-5 text-sm font-extrabold text-ink">Цвет приложения</p>
+      <h3 className="mt-6 text-2xl text-ink">Цвет приложения</h3>
       <div className="mt-3">
         <ThemePicker theme={theme ?? 'yellow'} onChange={onTheme} />
       </div>

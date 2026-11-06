@@ -16,6 +16,7 @@
   "dependencies": {
     "@fontsource/nunito": "^5.2.7",
     "@fontsource/press-start-2p": "^5.2.8",
+    "@fontsource/source-serif-4": "^5.3.1",
     "@neondatabase/serverless": "^1.2.0",
     "lucide-react": "^0.553.0",
     "motion": "^12.23.24",

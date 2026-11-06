@@ -13,14 +13,14 @@ type ModeSwitchProps = {
 
 export function ModeSwitch({ mode, onChange }: ModeSwitchProps) {
   return (
-    <nav aria-label="Режим" className="grid grid-cols-3 gap-2">
+    <nav aria-label="Режим" className="grid grid-cols-3 border-y border-line">
       {MODES.map((item) => (
         <button
           key={item.id}
           type="button"
           aria-pressed={mode === item.id}
           onClick={() => onChange(item.id)}
-          className={`min-h-11 rounded-xl px-2 text-sm font-extrabold ${mode === item.id ? 'bg-primary' : 'bg-card text-ink'}`}
+          className={`min-h-11 text-sm font-semibold ${mode === item.id ? 'text-ink shadow-[inset_0_-2px_0_var(--color-primary)]' : 'text-muted'}`}
         >
           {item.label}
         </button>
