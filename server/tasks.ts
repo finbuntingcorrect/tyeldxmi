@@ -129,14 +129,12 @@ export async function handleTaskRequest(method: string | undefined, body: unknow
       const updated = await sql.query(
         `UPDATE tasks
          SET completed = NOT completed,
-             completed_at = CASE WHEN NOT completed THEN now() ELSE NULL END
-         WHERE id = $1`,
+             completed_at = CASE WHEN completed THEN NULL ELSE now() END
+         WHERE id = $1
+         RETURNING id`,
         [id],
       );
-      if ((updated as unknown[]).length === 0) {
-        const existing = await sql.query('SELECT id FROM tasks WHERE id = $1', [id]);
-        if ((existing as unknown[]).length === 0) return { status: 404, body: { error: 'missing' } };
-      }
+      if (updated.length === 0) return { status: 404, body: { error: 'missing' } };
       return { status: 200, body: { tasks: await listTasks(sql) } };
     }
 

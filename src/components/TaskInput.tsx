@@ -8,17 +8,24 @@ type TaskInputProps = {
 export function TaskInput({ onAdd }: TaskInputProps) {
   const [value, setValue] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
   const errorId = useId();
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const added = await onAdd(value);
-    if (!added) {
-      setError('Введите название задачи');
-      return;
+    if (pending) return;
+    setPending(true);
+    try {
+      const added = await onAdd(value);
+      if (!added) {
+        setError(value.trim() ? 'Не удалось сохранить задачу' : 'Введите название задачи');
+        return;
+      }
+      setValue('');
+      setError(null);
+    } finally {
+      setPending(false);
     }
-    setValue('');
-    setError(null);
   }
 
   return (
@@ -50,7 +57,8 @@ export function TaskInput({ onAdd }: TaskInputProps) {
       </div>
       <button
         type="submit"
-        className="inline-flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-2xl bg-primary px-5 text-base font-extrabold text-ink transition hover:bg-primary-hover"
+        disabled={pending}
+        className="inline-flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-2xl bg-primary px-5 text-base font-extrabold text-ink transition hover:bg-primary-hover disabled:opacity-60"
       >
         <Plus aria-hidden="true" size={18} strokeWidth={2.75} />
         Добавить

@@ -49,8 +49,10 @@ export function useTasks() {
         let next = (await fetchTasks()).tasks;
         const local = listStoredTasks();
         if (local.length > 0) {
-          next = (await importStoredTasks(local)).tasks;
-          forgetStoredTasks();
+          const imported = await importStoredTasks(local);
+          const savedIds = new Set(imported.tasks.map((task) => task.id));
+          if (local.every((task) => savedIds.has(task.id))) forgetStoredTasks();
+          next = imported.tasks;
         }
         if (!cancelled) {
           setTasks(next);
@@ -89,7 +91,7 @@ export function useTasks() {
       const next = await toggleStoredTask(id);
       setTasks(next.tasks);
       setStorageError(null);
-      return !current.completed;
+      return next.tasks.find((task) => task.id === id)?.completed ?? !current.completed;
     } catch {
       setStorageError(SAVE_ERROR);
       return false;
@@ -115,8 +117,10 @@ export function useTasks() {
       const next = await deleteStoredTask(id);
       setTasks(next.tasks);
       setStorageError(null);
+      return true;
     } catch {
       setStorageError(SAVE_ERROR);
+      return false;
     }
   }, []);
 

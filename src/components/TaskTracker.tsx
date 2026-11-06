@@ -77,9 +77,9 @@ export function TaskTracker() {
     return added;
   }
 
-  function handleDelete(id: string) {
-    deleteTask(id);
-    setStatusMessage('Задача удалена');
+  async function handleDelete(id: string) {
+    const deleted = await deleteTask(id);
+    if (deleted) setStatusMessage('Задача удалена');
   }
 
   async function handleCarry() {
