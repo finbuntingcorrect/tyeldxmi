@@ -43,7 +43,7 @@ npm run preview
 
 ## Публикация на Vercel
 
-В репозитории есть `vercel.json`: сборка `npm run build`, каталог `dist`, фреймворк Vite. Функции лежат в `api/` и в production читают `DATABASE_URL` из настроек проекта Vercel. Значение не записывается в репозиторий и не отдаётся в браузер.
+В репозитории есть `vercel.json`: сборка `npm run build`, каталог `dist`, фреймворк Vite. Функции лежат в `api/` и в production читают `DATABASE_URL` из настроек проекта Vercel. Значение не записывается в репозиторий и не отдаётся в браузер. Сборка упаковывает эти функции в один файл, чтобы Vercel мог их запустить.
 
 Продакшен публикует ветку `main`: [https://tyeldxmi-seven.vercel.app](https://tyeldxmi-seven.vercel.app).
 
