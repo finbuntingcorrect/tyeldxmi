@@ -53,6 +53,14 @@ export type HabitMark = {
   status: HabitStatus;
 };
 
+export type WeekItem = {
+  id: string;
+  week: string;
+  kind: 'goal' | 'inbox';
+  title: string;
+  completed: boolean;
+};
+
 export type Notebook = {
   version: 1;
   greeted: boolean;
@@ -65,6 +73,7 @@ export type Notebook = {
   skips: SeriesSkip[];
   habits: Habit[];
   marks: HabitMark[];
+  weekItems: WeekItem[];
 };
 
 export type TaskDraft = {
@@ -99,6 +108,7 @@ export function emptyNotebook(): Notebook {
     skips: [],
     habits: [],
     marks: [],
+    weekItems: [],
   };
 }
 
@@ -165,6 +175,15 @@ export function tasksForDate(book: Notebook, date: string) {
     .sort((a, b) => priorityRank(a.priority) - priorityRank(b.priority) || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
 }
 
+export function habitSpan(start: string): string[] {
+  if (!isDateKey(start)) return [];
+  return Array.from({ length: 30 }, (_, index) => addDays(start, index));
+}
+
+export function trackerProgressLabel(done: number) {
+  return `${done} из 30 дней выполнено`;
+}
+
 export function habitProgressLabel(done: number, total: number) {
   const noun = total % 10 === 1 && total % 100 !== 11 ? 'привычки' : 'привычек';
   const verb = done % 10 === 1 && done % 100 !== 11 ? 'выполнена' : 'выполнено';
@@ -190,6 +209,32 @@ export function setName(book: Notebook, name: string): Notebook {
 
 export function setTheme(book: Notebook, theme: AppTheme): Notebook {
   return { ...book, theme };
+}
+
+export function addWeekItem(book: Notebook, week: string, kind: WeekItem['kind'], title: string): Notebook {
+  const name = title.trim().slice(0, 160);
+  if (!name || !isDateKey(week) || (kind !== 'goal' && kind !== 'inbox')) return book;
+  return { ...book, weekItems: [...book.weekItems, { id: createId(), week, kind, title: name, completed: false }] };
+}
+
+export function toggleWeekItem(book: Notebook, id: string): Notebook {
+  return {
+    ...book,
+    weekItems: book.weekItems.map((item) => item.id === id ? { ...item, completed: !item.completed } : item),
+  };
+}
+
+export function assignWeekItem(book: Notebook, id: string, date: string, now = new Date().toISOString()): Notebook {
+  const item = book.weekItems.find((entry) => entry.id === id && entry.kind === 'inbox');
+  if (!item || !isDateKey(date)) return book;
+  const next = createTask(
+    { ...book, weekItems: book.weekItems.filter((entry) => entry.id !== id) },
+    { title: item.title, date, dayPart: 'anytime', priority: 'normal', repeatKind: 'none', weekdays: [] },
+    now,
+  );
+  if (!item.completed) return next;
+  const created = [...next.tasks].reverse().find((task) => task.title === item.title && task.date === date && !task.deleted && !task.completed);
+  return created ? toggleTask(next, created.id, now) : next;
 }
 
 export function createTask(book: Notebook, draft: TaskDraft, now = new Date().toISOString()): Notebook {
@@ -528,6 +573,21 @@ export function parseNotebook(value: unknown): Notebook | null {
       if (typeof mark.habitId !== 'string' || typeof mark.date !== 'string' || !isDateKey(mark.date)) continue;
       if (mark.status !== 'done' && mark.status !== 'missed') continue;
       book.marks.push({ habitId: mark.habitId, date: mark.date, status: mark.status });
+    }
+  }
+  if (Array.isArray(raw.weekItems)) {
+    for (const item of raw.weekItems) {
+      if (!item || typeof item !== 'object') continue;
+      const entry = item as Record<string, unknown>;
+      if (typeof entry.id !== 'string' || typeof entry.title !== 'string' || typeof entry.week !== 'string' || !isDateKey(entry.week)) continue;
+      if (entry.kind !== 'goal' && entry.kind !== 'inbox') continue;
+      book.weekItems.push({
+        id: entry.id,
+        week: entry.week,
+        kind: entry.kind,
+        title: entry.title.trim().slice(0, 160),
+        completed: entry.completed === true,
+      });
     }
   }
   if (!book.mode) book.greeted = false;

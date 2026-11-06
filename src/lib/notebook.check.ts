@@ -8,13 +8,17 @@ import {
   createTask,
   emptyNotebook,
   fromLegacyTasks,
+  addWeekItem,
+  assignWeekItem,
   habitProgressLabel,
+  habitSpan,
   habitsForDate,
   materialize,
   moveTask,
   setHabitMark,
   tasksForDate,
   toggleTask,
+  trackerProgressLabel,
   weekDates,
 } from './notebook';
 
@@ -82,5 +86,37 @@ const named = parseNotebook({ greeted: true, mode: 'focus', name: '  Катя ',
 assert.equal(named?.name, 'Катя');
 assert.equal(named?.theme, 'pink');
 assert.equal(parseNotebook({ greeted: true, mode: 'habits', theme: 'purple' })?.theme, null);
+
+const wednesday = createTask(emptyNotebook(), {
+  title: 'Собрание',
+  date: '2026-11-04',
+  dayPart: 'anytime',
+  priority: 'high',
+  repeatKind: 'none',
+  weekdays: [],
+});
+assert.equal(tasksForDate(wednesday, '2026-11-04')[0].title, 'Собрание');
+assert.equal(weekDates('2026-11-04').every((day) => day === '2026-11-04' || !tasksForDate(wednesday, day).some((task) => task.title === 'Собрание')), true);
+const kept = parseNotebook(JSON.parse(JSON.stringify(wednesday)));
+assert.equal(kept?.tasks[0].title, 'Собрание');
+assert.equal(kept?.weekItems.length, 0);
+
+let notes = addWeekItem(emptyNotebook(), '2026-11-02', 'inbox', 'Без даты');
+notes = addWeekItem(notes, '2026-11-09', 'goal', 'Другая неделя');
+assert.equal(notes.weekItems.filter((item) => item.week === '2026-11-02').length, 1);
+const assigned = assignWeekItem(notes, notes.weekItems[0].id, '2026-11-04');
+assert.equal(assigned.weekItems.some((item) => item.kind === 'inbox'), false);
+assert.equal(tasksForDate(assigned, '2026-11-04')[0].title, 'Без даты');
+assert.equal(assigned.weekItems[0].title, 'Другая неделя');
+
+const first = createHabit(emptyNotebook(), 'Читать 20 минут', 'daily', [], '2026-11-01');
+const second = createHabit(first, '10 минут зарядки', 'daily', [], '2026-11-06');
+assert.equal(habitSpan(first.habits[0].start).length, 30);
+assert.equal(habitSpan(second.habits[1].start)[0], '2026-11-06');
+assert.equal(habitSpan(second.habits[0].start)[0], '2026-11-01');
+const marked = setHabitMark(second, second.habits[0].id, '2026-11-01', 'done');
+assert.equal(marked.marks.filter((mark) => mark.habitId === second.habits[1].id).length, 0);
+assert.equal(marked.marks.filter((mark) => mark.habitId === second.habits[0].id).length, 1);
+assert.equal(trackerProgressLabel(8), '8 из 30 дней выполнено');
 
 console.log('notebook ok');

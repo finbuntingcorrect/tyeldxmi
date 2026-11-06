@@ -3,9 +3,9 @@ import type { AppMode, AppTheme } from '../lib/notebook';
 import { ThemePicker } from './ThemePicker';
 
 const CHOICES: { id: AppMode; label: string; text: string }[] = [
-  { id: 'habits', label: 'Я хочу вести трекер привычек', text: 'Недельная сетка и отметка на каждый день' },
-  { id: 'planner', label: 'Хочу вести рабочий планер', text: 'Неделя слева и план выбранного дня справа' },
-  { id: 'focus', label: 'Не терять фокус дня', text: 'Одна главная задача над остальными делами' },
+  { id: 'habits', label: 'Я хочу вести трекер привычек', text: 'Отдельная карточка и 30 дней на каждую привычку' },
+  { id: 'planner', label: 'Хочу вести рабочий планер', text: 'Семь дней недели, цели и список дел' },
+  { id: 'focus', label: 'Не терять фокус дня', text: 'Задачи сегодняшнего дня и одно главное дело' },
 ];
 
 type WelcomeProps = {

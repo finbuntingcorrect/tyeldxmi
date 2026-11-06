@@ -37,11 +37,13 @@ export function PlanTask({ task, onToggle, onMove, onPart, onPriority, onUpdate 
         <PaperCheck checked={task.completed} label={task.completed ? `Вернуть «${task.title}»` : `Выполнить «${task.title}»`} onClick={() => onToggle(task.id)} />
         <div className="min-w-0 flex-1 py-2.5">
           <p id={titleId} className={`text-base leading-snug ${task.completed ? 'text-muted line-through' : 'text-ink'}`}>{task.title}</p>
-          <p className="mt-1 text-xs text-muted">
-            {PRIORITIES.find((item) => item.id === task.priority)?.label}
-            {repeat}
-            {task.exception && task.originalDate && task.originalDate !== task.date ? ' · перенесено отдельно' : ''}
-          </p>
+          {repeat || (task.exception && task.originalDate && task.originalDate !== task.date) || task.priority !== 'normal' ? (
+            <p className="pb-2 text-xs text-muted">
+              {PRIORITIES.find((item) => item.id === task.priority)?.label}
+              {repeat}
+              {task.exception && task.originalDate && task.originalDate !== task.date ? ' · перенесено отдельно' : ''}
+            </p>
+          ) : null}
         </div>
         <button type="button" aria-expanded={open} aria-label={`Действия: ${task.title}`} onClick={() => setOpen((value) => !value)} className="min-h-11 px-2 text-sm font-semibold text-muted">Ещё</button>
       </div>

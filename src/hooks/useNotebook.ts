@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { loadNotebook, prepareNotebook, saveNotebook } from '../lib/notebookStore';
 import {
+  addWeekItem,
+  assignWeekItem,
   chooseMode,
   createHabit,
   createTask,
@@ -12,12 +14,14 @@ import {
   setTaskPriority,
   setTheme,
   toggleTask,
+  toggleWeekItem,
   updateTask,
   type AppMode,
   type AppTheme,
   type HabitStatus,
   type Notebook,
   type TaskDraft,
+  type WeekItem,
 } from '../lib/notebook';
 import { applyTheme } from '../lib/theme';
 import type { DayPart, Priority, RepeatKind } from '../types';
@@ -54,5 +58,8 @@ export function useNotebook() {
     setFocus: (id: string | null, today: string) => commit((book) => setFocus(book, id, today)),
     createHabit: (title: string, repeatKind: RepeatKind, weekdays: number[], start: string) => commit((book) => createHabit(book, title, repeatKind, weekdays, start)),
     setHabitMark: (habitId: string, date: string, status: HabitStatus | null) => commit((book) => setHabitMark(book, habitId, date, status)),
+    addWeekItem: (week: string, kind: WeekItem['kind'], title: string) => commit((book) => addWeekItem(book, week, kind, title)),
+    toggleWeekItem: (id: string) => commit((book) => toggleWeekItem(book, id)),
+    assignWeekItem: (id: string, date: string) => commit((book) => assignWeekItem(book, id, date)),
   };
 }

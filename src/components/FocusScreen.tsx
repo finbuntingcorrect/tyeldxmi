@@ -25,6 +25,7 @@ export function FocusScreen({ book, today, onCreate, onToggle, onPriority, onFoc
       <header className="border-b border-line px-4 py-4 sm:px-6">
         <p className="text-xs font-semibold tracking-[0.16em] text-muted uppercase">Сегодня</p>
         <h2 className="mt-1 text-3xl">Главное сегодня</h2>
+        <p className="mt-2 text-sm text-muted">Задачи на сегодня из дневника, сначала важные.</p>
       </header>
       <div className="border-b border-line px-4 py-4 sm:px-6">
         {main ? (

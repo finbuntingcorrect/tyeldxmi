@@ -51,7 +51,7 @@ export function Home() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-5xl px-3 py-6 sm:px-6 sm:py-10">
+    <div className="mx-auto w-full max-w-6xl px-3 py-6 sm:px-6 sm:py-10">
       <div className="border border-line bg-card">
         <header className="flex items-center justify-between gap-3 px-4 py-4 sm:px-6">
           <div className="flex min-w-0 items-center gap-3">
@@ -80,6 +80,9 @@ export function Home() {
             onPart={notebook.setPart}
             onPriority={notebook.setPriority}
             onUpdate={notebook.updateTask}
+            onAddWeekItem={notebook.addWeekItem}
+            onToggleWeekItem={notebook.toggleWeekItem}
+            onAssignWeekItem={notebook.assignWeekItem}
           />
         ) : null}
         {mode === 'focus' ? (
