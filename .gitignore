@@ -3,7 +3,6 @@ dist
 dist-ssr
 .vite
 .vercel
-/api/*.mjs
 .DS_Store
 *.local
 *.tsbuildinfo

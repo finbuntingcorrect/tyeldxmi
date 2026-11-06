@@ -1,4 +1,4 @@
-import { insertComment } from '../server/comments';
+import { insertComment } from '../comments';
 
 type RequestLike = {
   method?: string;

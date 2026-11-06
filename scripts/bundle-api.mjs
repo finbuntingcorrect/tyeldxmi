@@ -1,19 +1,24 @@
 import { build } from 'esbuild';
 import { rm } from 'node:fs/promises';
 
-const entries = ['api/tasks.ts', 'api/comments.ts'];
-
 await build({
-  entryPoints: entries,
+  entryPoints: {
+    tasks: 'server/http/tasks.ts',
+    comments: 'server/http/comments.ts',
+  },
   bundle: true,
   platform: 'node',
-  format: 'esm',
+  format: 'cjs',
   outdir: 'api',
-  outbase: 'api',
   entryNames: '[name]',
-  outExtension: { '.js': '.mjs' },
+  footer: {
+    js: 'module.exports = module.exports.default || module.exports;',
+  },
 });
 
-if (process.env.VERCEL) {
-  await Promise.all(entries.map((file) => rm(file, { force: true })));
-}
+await Promise.all([
+  rm('api/tasks.ts', { force: true }),
+  rm('api/comments.ts', { force: true }),
+  rm('api/tasks.mjs', { force: true }),
+  rm('api/comments.mjs', { force: true }),
+]);

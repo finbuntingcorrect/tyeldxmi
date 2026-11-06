@@ -1,4 +1,4 @@
-import { handleTaskRequest } from '../server/tasks';
+import { handleTaskRequest } from '../tasks';
 
 type RequestLike = {
   method?: string;
