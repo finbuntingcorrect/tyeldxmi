@@ -5,7 +5,7 @@ type TaskListProps = {
   tasks: Task[];
   emptyLabel: string;
   onToggle: (id: string) => void;
-  onRename: (id: string, title: string) => boolean;
+  onRename: (id: string, title: string) => Promise<boolean>;
   onDelete: (id: string) => void;
 };
 

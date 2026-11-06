@@ -2,7 +2,7 @@ import { Plus } from 'lucide-react';
 import { useId, useState, type FormEvent } from 'react';
 
 type TaskInputProps = {
-  onAdd: (title: string) => boolean;
+  onAdd: (title: string) => Promise<boolean>;
 };
 
 export function TaskInput({ onAdd }: TaskInputProps) {
@@ -10,9 +10,9 @@ export function TaskInput({ onAdd }: TaskInputProps) {
   const [error, setError] = useState<string | null>(null);
   const errorId = useId();
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const added = onAdd(value);
+    const added = await onAdd(value);
     if (!added) {
       setError('Введите название задачи');
       return;

@@ -84,6 +84,10 @@ export function loadTasks(): LoadResult {
   }
 }
 
+export function clearStoredTasks() {
+  localStorage.removeItem(STORAGE_KEY);
+}
+
 export function saveTasks(tasks: Task[]): string | null {
   try {
     localStorage.setItem(

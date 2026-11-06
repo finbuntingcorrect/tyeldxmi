@@ -66,13 +66,13 @@ export function TaskTracker() {
     }, CELEBRATION_MS);
   }
 
-  function handleToggle(id: string) {
-    const completed = toggleTask(id);
+  async function handleToggle(id: string) {
+    const completed = await toggleTask(id);
     if (completed) startCelebration();
   }
 
-  function handleAdd(title: string) {
-    const added = addTask(title);
+  async function handleAdd(title: string) {
+    const added = await addTask(title);
     if (added) setStatusMessage('Задача добавлена');
     return added;
   }
@@ -82,8 +82,8 @@ export function TaskTracker() {
     setStatusMessage('Задача удалена');
   }
 
-  function handleCarry() {
-    const moved = carryIncompleteForward();
+  async function handleCarry() {
+    const moved = await carryIncompleteForward();
     if (moved > 0) {
       setStatusMessage(
         moved === 1 ? 'Задача перенесена на сегодня' : 'Задачи перенесены на сегодня',
@@ -189,7 +189,7 @@ export function TaskTracker() {
             </div>
 
             <p className="mt-4 text-xs font-semibold text-muted">
-              Задачи хранятся только в этом браузере. Прошлые дни никуда не деваются и сами на сегодня не переезжают.
+              Задачи хранятся в базе и видны всем, кто открывает этот список. Прошлые дни сами на сегодня не переезжают.
             </p>
           </div>
           <CommentForm />

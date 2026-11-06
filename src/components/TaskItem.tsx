@@ -5,7 +5,7 @@ import type { Task } from '../types';
 type TaskItemProps = {
   task: Task;
   onToggle: (id: string) => void;
-  onRename: (id: string, title: string) => boolean;
+  onRename: (id: string, title: string) => Promise<boolean>;
   onDelete: (id: string) => void;
 };
 
@@ -30,10 +30,10 @@ export function TaskItem({ task, onToggle, onRename, onDelete }: TaskItemProps) 
     if (confirming) keepRef.current?.focus();
   }, [confirming]);
 
-  function save() {
-    const renamed = onRename(task.id, draft);
+  async function save() {
+    const renamed = await onRename(task.id, draft);
     if (!renamed) {
-      setEditError('Название не может быть пустым');
+      setEditError(draft.trim() ? 'Не удалось сохранить название' : 'Название не может быть пустым');
       inputRef.current?.focus();
       return;
     }
