@@ -3,6 +3,7 @@ import { useTasks } from '../hooks/useTasks';
 import { dateFromKey, formatLocalDate } from '../lib/date';
 import { earlierTasksPrompt, emptyCopy, filterTasks } from '../lib/tasks';
 import type { MascotMode, TaskFilter } from '../types';
+import { CommentForm } from './CommentForm';
 import { MascotPanel } from './MascotPanel';
 import { ProgressBar } from './ProgressBar';
 import { TaskInput } from './TaskInput';
@@ -191,6 +192,7 @@ export function TaskTracker() {
               Задачи хранятся только в этом браузере. Прошлые дни никуда не деваются и сами на сегодня не переезжают.
             </p>
           </div>
+          <CommentForm />
         </section>
 
         <aside className="lg:sticky lg:top-6">
