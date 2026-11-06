@@ -27,6 +27,48 @@ module.exports = __toCommonJS(tasks_exports);
 // server/tasks.ts
 var import_node_crypto = require("node:crypto");
 
+// server/recurrence.ts
+var DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+function isDateKey(value) {
+  if (!DATE_PATTERN.test(value)) return false;
+  const [year, month, day] = value.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+}
+function addDays(key, days) {
+  const [year, month, day] = key.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+function weekday(key) {
+  const [year, month, day] = key.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+}
+function occurrenceDates(input) {
+  if (!isDateKey(input.start) || !isDateKey(input.from) || !isDateKey(input.to)) return [];
+  const end = input.until && isDateKey(input.until) && input.until < input.to ? input.until : input.to;
+  let cursor = input.start > input.from ? input.start : input.from;
+  if (cursor > end) return [];
+  const allowed = new Set(input.weekdays.filter((day) => day >= 0 && day <= 6));
+  const dates = [];
+  while (cursor <= end && dates.length < 400) {
+    const day = weekday(cursor);
+    const include = input.kind === "daily" || input.kind === "weekdays" && day >= 1 && day <= 5 || input.kind === "weekly" && allowed.has(day);
+    if (include) dates.push(cursor);
+    cursor = addDays(cursor, 1);
+  }
+  return dates;
+}
+function dateKeyInTimeZone(timeZone, date = /* @__PURE__ */ new Date()) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  }).format(date);
+}
+
 // node_modules/@neondatabase/serverless/index.mjs
 var Po = Object.create;
 var Ie = Object.defineProperty;
@@ -5341,147 +5383,436 @@ function getSql() {
   return ys(url);
 }
 
-// server/tasks.ts
-var TITLE_LIMIT = 160;
-var DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+// server/schema.ts
 var schemaReady = null;
-function ensureSchema(sql) {
-  schemaReady ??= sql`CREATE TABLE IF NOT EXISTS tasks (
-    id text PRIMARY KEY,
-    title text NOT NULL,
-    completed boolean NOT NULL DEFAULT false,
-    created_at timestamptz NOT NULL,
-    completed_at timestamptz,
-    task_date date NOT NULL
-  )`.then(() => void 0).catch((error) => {
+async function ensureSchema() {
+  const sql = getSql();
+  schemaReady ??= (async () => {
+    await sql`CREATE TABLE IF NOT EXISTS users (
+      id text PRIMARY KEY,
+      email text NOT NULL UNIQUE,
+      name text NOT NULL DEFAULT '',
+      timezone text NOT NULL DEFAULT 'Europe/Moscow',
+      occupation text,
+      purpose text,
+      cat_name text NOT NULL DEFAULT 'Котёнок',
+      cat_look text NOT NULL DEFAULT 'classic',
+      cat_role text NOT NULL DEFAULT 'planner',
+      onboarding_done boolean NOT NULL DEFAULT false,
+      created_at timestamptz NOT NULL DEFAULT now()
+    )`;
+    await sql`CREATE TABLE IF NOT EXISTS magic_links (
+      id text PRIMARY KEY,
+      email text NOT NULL,
+      token_hash text NOT NULL UNIQUE,
+      expires_at timestamptz NOT NULL,
+      used_at timestamptz
+    )`;
+    await sql`CREATE TABLE IF NOT EXISTS sessions (
+      id text PRIMARY KEY,
+      user_id text NOT NULL,
+      token_hash text NOT NULL UNIQUE,
+      expires_at timestamptz NOT NULL
+    )`;
+    await sql`CREATE TABLE IF NOT EXISTS series (
+      id text PRIMARY KEY,
+      user_id text NOT NULL,
+      title text NOT NULL,
+      day_part text NOT NULL,
+      priority text NOT NULL,
+      kind text NOT NULL,
+      weekdays text NOT NULL DEFAULT '',
+      start_date date NOT NULL,
+      until_date date,
+      created_at timestamptz NOT NULL DEFAULT now()
+    )`;
+    await sql`CREATE TABLE IF NOT EXISTS tasks (
+      id text PRIMARY KEY,
+      title text NOT NULL,
+      completed boolean NOT NULL DEFAULT false,
+      created_at timestamptz NOT NULL,
+      completed_at timestamptz,
+      task_date date NOT NULL
+    )`;
+    await sql`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS user_id text`;
+    await sql`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS day_part text NOT NULL DEFAULT 'anytime'`;
+    await sql`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS priority text NOT NULL DEFAULT 'normal'`;
+    await sql`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS in_focus boolean NOT NULL DEFAULT false`;
+    await sql`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS series_id text`;
+    await sql`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS original_date date`;
+    await sql`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS exception boolean NOT NULL DEFAULT false`;
+    await sql`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS deleted boolean NOT NULL DEFAULT false`;
+    await sql`CREATE UNIQUE INDEX IF NOT EXISTS tasks_series_original_idx
+      ON tasks (series_id, original_date)
+      WHERE series_id IS NOT NULL AND original_date IS NOT NULL`;
+  })().catch((error) => {
     schemaReady = null;
     throw error;
   });
-  return schemaReady;
+  await schemaReady;
+  return sql;
 }
-function toIso(value) {
-  if (value instanceof Date) return value.toISOString();
-  return new Date(value).toISOString();
+
+// server/tasks.ts
+var TITLE_LIMIT = 160;
+var PARTS = /* @__PURE__ */ new Set(["morning", "afternoon", "evening", "anytime"]);
+var PRIORITIES = /* @__PURE__ */ new Set(["high", "normal", "low"]);
+var REPEATS = /* @__PURE__ */ new Set(["daily", "weekdays", "weekly"]);
+function dateKey(value) {
+  if (value == null) return null;
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  return String(value).slice(0, 10);
 }
-function toDateKey(value) {
-  if (value instanceof Date) {
-    const year = value.getUTCFullYear();
-    const month = String(value.getUTCMonth() + 1).padStart(2, "0");
-    const day = String(value.getUTCDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
-  }
-  return value.slice(0, 10);
+function iso(value) {
+  if (value == null) return null;
+  return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+}
+function partOf(value, fallback = "anytime") {
+  return typeof value === "string" && PARTS.has(value) ? value : fallback;
+}
+function priorityOf(value, fallback = "normal") {
+  return typeof value === "string" && PRIORITIES.has(value) ? value : fallback;
+}
+function repeatOf(value) {
+  if (value === "none" || value == null) return "none";
+  return typeof value === "string" && REPEATS.has(value) ? value : "none";
+}
+function weekdaysOf(value) {
+  const source = Array.isArray(value) ? value : [];
+  return [...new Set(source.map(Number).filter((day) => day >= 0 && day <= 6))].sort((a2, b2) => a2 - b2);
+}
+function titleOf(value) {
+  if (typeof value !== "string") return "";
+  return value.trim().slice(0, TITLE_LIMIT);
 }
 function mapTask(row) {
+  const kind = row.kind && REPEATS.has(row.kind) ? row.kind : null;
   return {
     id: row.id,
     title: row.title,
     completed: Boolean(row.completed),
-    createdAt: toIso(row.created_at),
-    completedAt: row.completed_at == null ? null : toIso(row.completed_at),
-    date: toDateKey(row.task_date)
+    createdAt: iso(row.created_at) || (/* @__PURE__ */ new Date()).toISOString(),
+    completedAt: iso(row.completed_at),
+    date: dateKey(row.task_date) || "",
+    dayPart: partOf(row.day_part),
+    priority: priorityOf(row.priority),
+    inFocus: Boolean(row.in_focus),
+    seriesId: row.series_id,
+    originalDate: dateKey(row.original_date),
+    exception: Boolean(row.exception),
+    repeatKind: kind,
+    weekdays: (row.weekdays || "").split(",").map(Number).filter((day) => day >= 0 && day <= 6)
   };
 }
-async function listTasks(sql) {
-  const rows = await sql`SELECT id, title, completed, created_at, completed_at, task_date
-    FROM tasks
-    ORDER BY created_at, id`;
+async function listTasks(sql, userId, today) {
+  const from = addDays(today, -14);
+  const to2 = addDays(today, 21);
+  const rows = await sql.query(
+    `SELECT t.id, t.title, t.completed, t.created_at, t.completed_at, t.task_date, t.day_part, t.priority,
+            t.in_focus, t.series_id, t.original_date, t.exception, s.kind, s.weekdays
+     FROM tasks t
+     LEFT JOIN series s ON s.id = t.series_id
+     WHERE t.user_id = $1 AND t.deleted = false
+       AND (
+         (t.completed = false AND t.task_date < $2)
+         OR t.task_date BETWEEN $3 AND $4
+       )
+     ORDER BY t.task_date, t.created_at, t.id`,
+    [userId, today, from, to2]
+  );
   return rows.map(mapTask);
 }
-function trimmedTitle(value) {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim().slice(0, TITLE_LIMIT);
-  return trimmed || null;
-}
-function dateKey(value) {
-  return typeof value === "string" && DATE_PATTERN.test(value) ? value : null;
-}
-function isImportTask(value) {
-  if (!value || typeof value !== "object") return false;
-  const task = value;
-  return typeof task.id === "string" && task.id.length > 0 && task.id.length <= 80 && trimmedTitle(task.title) !== null && typeof task.completed === "boolean" && typeof task.createdAt === "string" && !Number.isNaN(Date.parse(task.createdAt)) && (task.completedAt === null || typeof task.completedAt === "string" && !Number.isNaN(Date.parse(task.completedAt))) && dateKey(task.date) !== null;
-}
-async function handleTaskRequest(method, body) {
-  try {
-    const sql = getSql();
-    await ensureSchema(sql);
-    if (method === "GET") {
-      return { status: 200, body: { tasks: await listTasks(sql) } };
-    }
-    if (method !== "POST" || !body || typeof body !== "object") {
-      return { status: 405, body: { error: "method not allowed" } };
-    }
-    const action = body.action;
-    if (action === "create") {
-      const title = trimmedTitle(body.title);
-      const date = dateKey(body.date);
-      if (!title || !date) return { status: 400, body: { error: "title" } };
+async function materializeUser(sql, userId, today) {
+  const series = await sql.query(
+    `SELECT id, title, day_part, priority, kind, weekdays, start_date, until_date
+     FROM series WHERE user_id = $1`,
+    [userId]
+  );
+  const from = addDays(today, -21);
+  const to2 = addDays(today, 21);
+  for (const rule of series) {
+    const kind = repeatOf(rule.kind);
+    if (kind === "none") continue;
+    const dates = occurrenceDates({
+      kind,
+      weekdays: weekdaysOf(rule.weekdays.split(",")),
+      start: dateKey(rule.start_date) || today,
+      until: dateKey(rule.until_date),
+      from,
+      to: to2
+    });
+    for (const original of dates) {
       await sql.query(
-        `INSERT INTO tasks (id, title, completed, created_at, completed_at, task_date)
-         VALUES ($1, $2, false, $3, NULL, $4)`,
-        [(0, import_node_crypto.randomUUID)(), title, (/* @__PURE__ */ new Date()).toISOString(), date]
+        `INSERT INTO tasks (id, title, completed, created_at, completed_at, task_date, user_id, day_part, priority, in_focus, series_id, original_date, exception, deleted)
+         VALUES ($1, $2, false, now(), NULL, $3, $4, $5, $6, false, $7, $3, false, false)
+         ON CONFLICT DO NOTHING`,
+        [(0, import_node_crypto.randomUUID)(), rule.title, original, userId, partOf(rule.day_part), priorityOf(rule.priority), rule.id]
       );
-      return { status: 201, body: { tasks: await listTasks(sql) } };
+    }
+  }
+}
+async function ownedTask(sql, userId, id) {
+  const rows = await sql.query(
+    `SELECT t.id, t.title, t.completed, t.created_at, t.completed_at, t.task_date, t.day_part, t.priority,
+            t.in_focus, t.series_id, t.original_date, t.exception, s.kind, s.weekdays
+     FROM tasks t
+     LEFT JOIN series s ON s.id = t.series_id
+     WHERE t.id = $1 AND t.user_id = $2 AND t.deleted = false`,
+    [id, userId]
+  );
+  const row = rows[0];
+  return row ? mapTask(row) : null;
+}
+async function snapshot(sql, user) {
+  const today = dateKeyInTimeZone(user.timezone);
+  await materializeUser(sql, user.id, today);
+  const legacy = await sql.query("SELECT id FROM tasks WHERE user_id IS NULL AND deleted = false", []);
+  return {
+    status: 200,
+    body: {
+      tasks: await listTasks(sql, user.id, today),
+      today,
+      legacyCount: legacy.length
+    }
+  };
+}
+function payload(body) {
+  return body && typeof body === "object" ? body : {};
+}
+async function insertPlain(sql, userId, title, date, dayPart, priority, id = (0, import_node_crypto.randomUUID)()) {
+  await sql.query(
+    `INSERT INTO tasks (id, title, completed, created_at, completed_at, task_date, user_id, day_part, priority, original_date)
+     VALUES ($1, $2, false, now(), NULL, $3, $4, $5, $6, $3)`,
+    [id, title, date, userId, dayPart, priority]
+  );
+  return id;
+}
+async function handleTasks(user, body, method) {
+  try {
+    const sql = await ensureSchema();
+    if (method === "GET") return snapshot(sql, user);
+    const input = payload(body);
+    const action = input.action;
+    if (action === "create") {
+      const title = titleOf(input.title);
+      const date = typeof input.date === "string" && isDateKey(input.date) ? input.date : "";
+      if (!title || !date) return { status: 400, body: { error: "title" } };
+      const dayPart = partOf(input.dayPart);
+      const priority = priorityOf(input.priority);
+      const repeat = repeatOf(input.repeatKind);
+      const days = weekdaysOf(input.weekdays);
+      if (repeat === "weekly" && days.length === 0) return { status: 400, body: { error: "weekdays" } };
+      if (repeat === "none") {
+        await insertPlain(sql, user.id, title, date, dayPart, priority);
+      } else {
+        const seriesId = (0, import_node_crypto.randomUUID)();
+        await sql.query(
+          `INSERT INTO series (id, user_id, title, day_part, priority, kind, weekdays, start_date)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          [seriesId, user.id, title, dayPart, priority, repeat, days.join(","), date]
+        );
+      }
+      return snapshot(sql, user);
     }
     if (action === "toggle") {
-      const id = body.id;
-      if (typeof id !== "string" || !id) return { status: 400, body: { error: "id" } };
+      const id = typeof input.id === "string" ? input.id : "";
       const updated = await sql.query(
         `UPDATE tasks
          SET completed = NOT completed,
              completed_at = CASE WHEN completed THEN NULL ELSE now() END
-         WHERE id = $1
+         WHERE id = $1 AND user_id = $2 AND deleted = false
          RETURNING id`,
-        [id]
+        [id, user.id]
       );
       if (updated.length === 0) return { status: 404, body: { error: "missing" } };
-      return { status: 200, body: { tasks: await listTasks(sql) } };
+      return snapshot(sql, user);
     }
-    if (action === "rename") {
-      const id = body.id;
-      const title = trimmedTitle(body.title);
-      if (typeof id !== "string" || !id || !title) return { status: 400, body: { error: "title" } };
-      const updated = await sql.query("UPDATE tasks SET title = $2 WHERE id = $1 RETURNING id", [id, title]);
-      if (updated.length === 0) return { status: 404, body: { error: "missing" } };
-      return { status: 200, body: { tasks: await listTasks(sql) } };
-    }
-    if (action === "delete") {
-      const id = body.id;
-      if (typeof id !== "string" || !id) return { status: 400, body: { error: "id" } };
-      await sql.query("DELETE FROM tasks WHERE id = $1", [id]);
-      return { status: 200, body: { tasks: await listTasks(sql) } };
-    }
-    if (action === "carry") {
-      const date = dateKey(body.date);
-      if (!date) return { status: 400, body: { error: "date" } };
-      const moved = await sql.query(
-        `UPDATE tasks
-         SET task_date = $1
-         WHERE completed = false AND task_date < $1
-         RETURNING id`,
-        [date]
+    if (action === "focus") {
+      const id = typeof input.id === "string" ? input.id : "";
+      const task = await ownedTask(sql, user.id, id);
+      if (!task) return { status: 404, body: { error: "missing" } };
+      const today = dateKeyInTimeZone(user.timezone);
+      if (input.on === false) {
+        await sql.query("UPDATE tasks SET in_focus = false WHERE id = $1 AND user_id = $2", [id, user.id]);
+        return snapshot(sql, user);
+      }
+      if (task.date !== today) return { status: 400, body: { error: "focus-date" } };
+      const focused = await sql.query(
+        `SELECT id FROM tasks WHERE user_id = $1 AND task_date = $2 AND in_focus = true AND deleted = false AND id <> $3`,
+        [user.id, today, id]
       );
-      return { status: 200, body: { tasks: await listTasks(sql), moved: moved.length } };
+      if (focused.length >= 3) return { status: 400, body: { error: "focus-limit" } };
+      await sql.query("UPDATE tasks SET in_focus = true WHERE id = $1 AND user_id = $2", [id, user.id]);
+      return snapshot(sql, user);
     }
-    if (action === "import") {
-      const incoming = body.tasks;
-      const tasks = Array.isArray(incoming) ? incoming.filter(isImportTask).slice(0, 500) : [];
-      for (const task of tasks) {
+    if (action === "move" || action === "part" || action === "priority") {
+      const id = typeof input.id === "string" ? input.id : "";
+      const task = await ownedTask(sql, user.id, id);
+      if (!task) return { status: 404, body: { error: "missing" } };
+      if (action === "move") {
+        const date = typeof input.date === "string" && isDateKey(input.date) ? input.date : "";
+        if (!date) return { status: 400, body: { error: "date" } };
         await sql.query(
-          `INSERT INTO tasks (id, title, completed, created_at, completed_at, task_date)
-           VALUES ($1, $2, $3, $4, $5, $6)
-           ON CONFLICT (id) DO NOTHING`,
-          [
-            task.id,
-            task.title.trim().slice(0, TITLE_LIMIT),
-            task.completed,
-            task.createdAt,
-            task.completedAt,
-            task.date
-          ]
+          `UPDATE tasks SET task_date = $3, exception = true, in_focus = CASE WHEN $3 = $4 THEN in_focus ELSE false END
+           WHERE id = $1 AND user_id = $2`,
+          [id, user.id, date, dateKeyInTimeZone(user.timezone)]
+        );
+      } else if (action === "part") {
+        await sql.query("UPDATE tasks SET day_part = $3, exception = true WHERE id = $1 AND user_id = $2", [
+          id,
+          user.id,
+          partOf(input.dayPart, task.dayPart)
+        ]);
+      } else {
+        await sql.query("UPDATE tasks SET priority = $3, exception = true WHERE id = $1 AND user_id = $2", [
+          id,
+          user.id,
+          priorityOf(input.priority, task.priority)
+        ]);
+      }
+      return snapshot(sql, user);
+    }
+    if (action === "update") {
+      const id = typeof input.id === "string" ? input.id : "";
+      const task = await ownedTask(sql, user.id, id);
+      if (!task) return { status: 404, body: { error: "missing" } };
+      const title = titleOf(input.title) || task.title;
+      const dayPart = partOf(input.dayPart, task.dayPart);
+      const priority = priorityOf(input.priority, task.priority);
+      const date = typeof input.date === "string" && isDateKey(input.date) ? input.date : task.date;
+      const scope = input.scope === "future" ? "future" : "one";
+      const repeat = repeatOf(input.repeatKind ?? task.repeatKind ?? "none");
+      const days = input.weekdays == null && task.repeatKind ? task.weekdays : weekdaysOf(input.weekdays);
+      if (scope === "one" || !task.seriesId) {
+        await sql.query(
+          `UPDATE tasks
+           SET title = $3, day_part = $4, priority = $5, task_date = $6, exception = true,
+               in_focus = CASE WHEN $6 = $7 THEN in_focus ELSE false END
+           WHERE id = $1 AND user_id = $2`,
+          [id, user.id, title, dayPart, priority, date, dateKeyInTimeZone(user.timezone)]
+        );
+        if (!task.seriesId && repeat !== "none" && scope === "future") {
+          if (repeat === "weekly" && days.length === 0) return { status: 400, body: { error: "weekdays" } };
+          const seriesId = (0, import_node_crypto.randomUUID)();
+          await sql.query(
+            `INSERT INTO series (id, user_id, title, day_part, priority, kind, weekdays, start_date)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+            [seriesId, user.id, title, dayPart, priority, repeat, days.join(","), task.originalDate || task.date]
+          );
+          await sql.query("UPDATE tasks SET series_id = $2, original_date = COALESCE(original_date, task_date) WHERE id = $1", [
+            id,
+            seriesId
+          ]);
+        }
+        return snapshot(sql, user);
+      }
+      const original = task.originalDate || task.date;
+      const patternSame = repeat !== "none" && repeat === task.repeatKind && days.join(",") === task.weekdays.join(",");
+      if (repeat === "weekly" && days.length === 0) return { status: 400, body: { error: "weekdays" } };
+      if (patternSame) {
+        await sql.query(
+          `UPDATE series SET title = $3, day_part = $4, priority = $5 WHERE id = $1 AND user_id = $2`,
+          [task.seriesId, user.id, title, dayPart, priority]
+        );
+        await sql.query(
+          `UPDATE tasks SET title = $3, day_part = $4, priority = $5
+           WHERE series_id = $1 AND user_id = $2 AND original_date >= $6 AND exception = false AND completed = false AND deleted = false`,
+          [task.seriesId, user.id, title, dayPart, priority, original]
+        );
+        await sql.query(
+          `UPDATE tasks SET title = $3, day_part = $4, priority = $5, task_date = $6 WHERE id = $1 AND user_id = $2`,
+          [id, user.id, title, dayPart, priority, date]
+        );
+        return snapshot(sql, user);
+      }
+      await sql.query("UPDATE series SET until_date = $3 WHERE id = $1 AND user_id = $2", [
+        task.seriesId,
+        user.id,
+        addDays(original, -1)
+      ]);
+      await sql.query(
+        `UPDATE tasks SET deleted = true
+         WHERE series_id = $1 AND user_id = $2 AND original_date >= $3 AND completed = false AND exception = false`,
+        [task.seriesId, user.id, original]
+      );
+      if (repeat === "none") {
+        await sql.query(
+          `UPDATE tasks SET series_id = NULL, exception = true, deleted = false, title = $3, day_part = $4, priority = $5, task_date = $6
+           WHERE id = $1 AND user_id = $2`,
+          [id, user.id, title, dayPart, priority, date]
+        );
+      } else {
+        const seriesId = (0, import_node_crypto.randomUUID)();
+        await sql.query(
+          `INSERT INTO series (id, user_id, title, day_part, priority, kind, weekdays, start_date)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+          [seriesId, user.id, title, dayPart, priority, repeat, days.join(","), original]
+        );
+        await sql.query(
+          `UPDATE tasks SET series_id = $3, exception = $4, deleted = false, title = $5, day_part = $6, priority = $7, task_date = $8
+           WHERE id = $1 AND user_id = $2`,
+          [id, user.id, seriesId, date !== original, title, dayPart, priority, date]
         );
       }
-      return { status: 200, body: { tasks: await listTasks(sql) } };
+      return snapshot(sql, user);
+    }
+    if (action === "delete") {
+      const id = typeof input.id === "string" ? input.id : "";
+      const task = await ownedTask(sql, user.id, id);
+      if (!task) return { status: 404, body: { error: "missing" } };
+      if (input.scope === "future" && task.seriesId) {
+        const original = task.originalDate || task.date;
+        await sql.query("UPDATE series SET until_date = $3 WHERE id = $1 AND user_id = $2", [
+          task.seriesId,
+          user.id,
+          addDays(original, -1)
+        ]);
+        await sql.query(
+          `UPDATE tasks SET deleted = true, in_focus = false
+           WHERE user_id = $1 AND series_id = $2 AND original_date >= $3 AND completed = false`,
+          [user.id, task.seriesId, original]
+        );
+      } else if (task.seriesId) {
+        await sql.query("UPDATE tasks SET deleted = true, exception = true, in_focus = false WHERE id = $1 AND user_id = $2", [
+          id,
+          user.id
+        ]);
+      } else {
+        await sql.query("DELETE FROM tasks WHERE id = $1 AND user_id = $2", [id, user.id]);
+      }
+      return snapshot(sql, user);
+    }
+    if (action === "import") {
+      const incoming = Array.isArray(input.tasks) ? input.tasks.slice(0, 500) : [];
+      const saved = [];
+      for (const item of incoming) {
+        if (!item || typeof item !== "object") continue;
+        const row = item;
+        const id = typeof row.id === "string" && /^[A-Za-z0-9-]{1,80}$/.test(row.id) ? row.id : "";
+        const title = titleOf(row.title);
+        const date = typeof row.date === "string" && isDateKey(row.date) ? row.date : "";
+        if (!id || !title || !date || typeof row.completed !== "boolean") continue;
+        const createdAt = typeof row.createdAt === "string" && !Number.isNaN(Date.parse(row.createdAt)) ? row.createdAt : (/* @__PURE__ */ new Date()).toISOString();
+        const completedAt = row.completedAt == null ? null : typeof row.completedAt === "string" && !Number.isNaN(Date.parse(row.completedAt)) ? row.completedAt : null;
+        const inserted = await sql.query(
+          `INSERT INTO tasks (id, title, completed, created_at, completed_at, task_date, user_id, day_part, priority, original_date)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, 'anytime', 'normal', $6)
+           ON CONFLICT (id) DO NOTHING
+           RETURNING id`,
+          [id, title, row.completed, createdAt, row.completed ? completedAt : null, date, user.id]
+        );
+        if (inserted.length > 0) saved.push(id);
+        else {
+          const own = await sql.query("SELECT id FROM tasks WHERE id = $1 AND user_id = $2", [id, user.id]);
+          if (own.length > 0) saved.push(id);
+        }
+      }
+      const result = await snapshot(sql, user);
+      return { status: 200, body: { ...result.body, importedIds: saved } };
+    }
+    if (action === "claim-legacy") {
+      await sql.query("UPDATE tasks SET user_id = $1 WHERE user_id IS NULL", [user.id]);
+      return snapshot(sql, user);
     }
     return { status: 400, body: { error: "action" } };
   } catch {
@@ -5489,7 +5820,55 @@ async function handleTaskRequest(method, body) {
   }
 }
 
-// server/http/tasks.ts
+// server/account.ts
+var import_node_crypto2 = require("node:crypto");
+var OCCUPATIONS = /* @__PURE__ */ new Set(["team", "solo", "study", "other"]);
+var PURPOSES = /* @__PURE__ */ new Set(["work", "study", "personal", "habits", "mix"]);
+var LOOKS = /* @__PURE__ */ new Set(["classic", "warm", "sage", "night"]);
+var ROLES = /* @__PURE__ */ new Set(["planner", "focus", "habits"]);
+function hashToken(value) {
+  return (0, import_node_crypto2.createHash)("sha256").update(value).digest("hex");
+}
+function readCookie(header, name) {
+  const raw = Array.isArray(header) ? header.join(";") : header || "";
+  for (const part of raw.split(";")) {
+    const [key, ...rest] = part.trim().split("=");
+    if (key === name) return decodeURIComponent(rest.join("="));
+  }
+  return "";
+}
+function asEnum(value, allowed) {
+  return typeof value === "string" && allowed.has(value) ? value : null;
+}
+function mapUser(row) {
+  return {
+    id: row.id,
+    email: row.email,
+    name: row.name || "",
+    timezone: row.timezone || "Europe/Moscow",
+    occupation: asEnum(row.occupation, OCCUPATIONS),
+    purpose: asEnum(row.purpose, PURPOSES),
+    catName: row.cat_name || "\u041A\u043E\u0442\u0451\u043D\u043E\u043A",
+    catLook: asEnum(row.cat_look, LOOKS) || "classic",
+    catRole: asEnum(row.cat_role, ROLES) || "planner",
+    onboardingDone: Boolean(row.onboarding_done)
+  };
+}
+async function userFromToken(rawToken) {
+  if (!rawToken) return null;
+  const sql = await ensureSchema();
+  const rows = await sql.query(
+    `SELECT u.id, u.email, u.name, u.timezone, u.occupation, u.purpose, u.cat_name, u.cat_look, u.cat_role, u.onboarding_done
+     FROM sessions s
+     JOIN users u ON u.id = s.user_id
+     WHERE s.token_hash = $1 AND s.expires_at > now()`,
+    [hashToken(rawToken)]
+  );
+  const row = rows[0];
+  return row ? mapUser(row) : null;
+}
+
+// server/http/node.ts
 function readBody(body) {
   if (typeof body === "string") {
     if (!body) return void 0;
@@ -5501,12 +5880,33 @@ function readBody(body) {
   }
   return body;
 }
+function cookieHeader(req) {
+  return req.headers?.cookie ?? req.headers?.Cookie;
+}
+async function sessionUser(req) {
+  return userFromToken(readCookie(cookieHeader(req), "today_cat_session"));
+}
+function send(res, status, body, cookie) {
+  if (cookie) res.setHeader("set-cookie", cookie);
+  res.status(status).json(body);
+}
+
+// server/http/tasks.ts
 async function handler(req, res) {
   try {
-    const result = await handleTaskRequest(req.method, readBody(req.body));
-    res.status(result.status).json(result.body);
+    const user = await sessionUser(req);
+    if (!user) {
+      send(res, 401, { error: "auth" });
+      return;
+    }
+    if (req.method !== "GET" && req.method !== "POST") {
+      send(res, 405, { error: "method" });
+      return;
+    }
+    const result = await handleTasks(user, req.method === "GET" ? void 0 : readBody(req.body), req.method);
+    send(res, result.status, result.body, result.cookie);
   } catch {
-    res.status(400).json({ error: "json" });
+    send(res, 500, { error: "failed" });
   }
 }
 /*! Bundled license information:

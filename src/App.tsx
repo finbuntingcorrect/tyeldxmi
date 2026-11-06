@@ -1,5 +1,5 @@
-import { TaskTracker } from './components/TaskTracker';
+import { Planner } from './components/Planner';
 
 export default function App() {
-  return <TaskTracker />;
+  return <Planner />;
 }

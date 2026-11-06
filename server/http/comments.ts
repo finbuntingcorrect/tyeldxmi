@@ -3,10 +3,12 @@ import { insertComment } from '../comments';
 type RequestLike = {
   method?: string;
   body?: unknown;
+  headers?: Record<string, string | string[] | undefined>;
 };
 
 type ResponseLike = {
   status: (code: number) => ResponseLike;
+  setHeader?: (name: string, value: string) => void;
   json: (body: unknown) => void;
 };
 

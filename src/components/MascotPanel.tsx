@@ -1,5 +1,6 @@
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import type { MascotMode } from '../types';
+import type { CatLook, MascotMode } from '../types';
+import { LOOKS } from '../lib/plannerCopy';
 import { SuccessAnimation } from './SuccessAnimation';
 import { ThoughtBubble } from './ThoughtBubble';
 
@@ -28,6 +29,8 @@ type MascotPanelProps = {
   mode: MascotMode;
   burstKey: number;
   total: number;
+  look?: CatLook;
+  catName?: string;
 };
 
 function detailLine(mode: MascotMode, total: number): string {
@@ -76,9 +79,10 @@ function imageTransition(mode: MascotMode, reduce: boolean | null) {
   return { duration: 0.45, ease: 'easeOut' as const };
 }
 
-export function MascotPanel({ mode, burstKey, total }: MascotPanelProps) {
+export function MascotPanel({ mode, burstKey, total, look = 'classic', catName }: MascotPanelProps) {
   const reduce = useReducedMotion();
   const art = ART[mode];
+  const filter = LOOKS.find((item) => item.id === look)?.filter || 'none';
 
   return (
     <section
@@ -94,6 +98,7 @@ export function MascotPanel({ mode, burstKey, total }: MascotPanelProps) {
               width={1254}
               height={1254}
               draggable={false}
+              style={{ filter }}
               className="mascot-art block h-auto w-full"
             />
           ) : (
@@ -107,6 +112,7 @@ export function MascotPanel({ mode, burstKey, total }: MascotPanelProps) {
                   width={1254}
                   height={1254}
                   draggable={false}
+                  style={{ filter }}
                   className="mascot-art absolute inset-0 h-full w-full object-contain"
                   initial={
                     reduce
@@ -140,7 +146,7 @@ export function MascotPanel({ mode, burstKey, total }: MascotPanelProps) {
       </div>
 
       <div id="mascot-caption" className="px-2 pb-1 pt-4 text-center" aria-live="polite">
-        <p className="text-lg font-extrabold text-ink">{CAPTION[mode]}</p>
+        <p className="text-lg font-extrabold text-ink">{catName ? `${catName}: ${CAPTION[mode]}` : CAPTION[mode]}</p>
         <p className="mt-1 text-sm font-semibold text-muted">{detailLine(mode, total)}</p>
       </div>
     </section>

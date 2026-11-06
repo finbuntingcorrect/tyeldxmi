@@ -1,14 +1,14 @@
-import type { Task } from '../types';
+import type { LegacyStoredTask } from '../types';
 
 const STORAGE_KEY = 'today-cat.tasks.v1';
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 export type LoadResult = {
-  tasks: Task[];
+  tasks: LegacyStoredTask[];
   error: string | null;
 };
 
-function isTask(value: unknown): value is Task {
+function isTask(value: unknown): value is LegacyStoredTask {
   if (!value || typeof value !== 'object') return false;
   const task = value as Record<string, unknown>;
   return (
@@ -88,7 +88,7 @@ export function clearStoredTasks() {
   localStorage.removeItem(STORAGE_KEY);
 }
 
-export function saveTasks(tasks: Task[]): string | null {
+export function saveTasks(tasks: LegacyStoredTask[]): string | null {
   try {
     localStorage.setItem(
       STORAGE_KEY,

@@ -1,32 +1,20 @@
-import { handleTaskRequest } from '../tasks';
+import { handleTasks } from '../tasks';
+import { readBody, send, sessionUser, type NodeRequest, type NodeResponse } from './node';
 
-type RequestLike = {
-  method?: string;
-  body?: unknown;
-};
-
-type ResponseLike = {
-  status: (code: number) => ResponseLike;
-  json: (body: unknown) => void;
-};
-
-function readBody(body: unknown): unknown {
-  if (typeof body === 'string') {
-    if (!body) return undefined;
-    return JSON.parse(body) as unknown;
-  }
-  if (body instanceof Uint8Array) {
-    const text = new TextDecoder().decode(body);
-    return text ? (JSON.parse(text) as unknown) : undefined;
-  }
-  return body;
-}
-
-export default async function handler(req: RequestLike, res: ResponseLike) {
+export default async function handler(req: NodeRequest, res: NodeResponse) {
   try {
-    const result = await handleTaskRequest(req.method, readBody(req.body));
-    res.status(result.status).json(result.body);
+    const user = await sessionUser(req);
+    if (!user) {
+      send(res, 401, { error: 'auth' });
+      return;
+    }
+    if (req.method !== 'GET' && req.method !== 'POST') {
+      send(res, 405, { error: 'method' });
+      return;
+    }
+    const result = await handleTasks(user, req.method === 'GET' ? undefined : readBody(req.body), req.method);
+    send(res, result.status, result.body, result.cookie);
   } catch {
-    res.status(400).json({ error: 'json' });
+    send(res, 500, { error: 'failed' });
   }
 }

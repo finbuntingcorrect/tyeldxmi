@@ -3,6 +3,8 @@ import { rm } from 'node:fs/promises';
 
 await build({
   entryPoints: {
+    auth: 'server/http/auth.ts',
+    profile: 'server/http/profile.ts',
     tasks: 'server/http/tasks.ts',
     comments: 'server/http/comments.ts',
   },
