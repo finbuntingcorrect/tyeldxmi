@@ -1,0 +1,79 @@
+import assert from 'node:assert/strict';
+import { addDays } from '../../server/recurrence';
+import {
+  chooseMode,
+  createHabit,
+  createTask,
+  emptyNotebook,
+  fromLegacyTasks,
+  habitProgressLabel,
+  habitsForDate,
+  materialize,
+  moveTask,
+  setHabitMark,
+  tasksForDate,
+  toggleTask,
+  weekDates,
+} from './notebook';
+
+const week = weekDates('2026-11-06');
+assert.deepEqual(week, ['2026-11-02', '2026-11-03', '2026-11-04', '2026-11-05', '2026-11-06', '2026-11-07', '2026-11-08']);
+
+let book = createTask(emptyNotebook(), {
+  title: 'Тренировка',
+  date: '2026-11-06',
+  dayPart: 'morning',
+  priority: 'normal',
+  repeatKind: 'weekdays',
+  weekdays: [],
+}, '2026-11-06T08:00:00.000Z');
+book = materialize(book, '2026-11-06', '2026-11-13');
+const friday = tasksForDate(book, '2026-11-06').filter((task) => task.title === 'Тренировка');
+const monday = tasksForDate(book, '2026-11-09').filter((task) => task.title === 'Тренировка');
+assert.equal(friday.length, 1);
+assert.equal(monday.length, 1);
+assert.equal(tasksForDate(book, '2026-11-07').some((task) => task.title === 'Тренировка'), false);
+
+book = moveTask(book, friday[0].id, '2026-11-07');
+book = materialize(book, '2026-11-06', '2026-11-16');
+const saturday = tasksForDate(book, '2026-11-07').filter((task) => task.title === 'Тренировка');
+assert.equal(saturday.length, 1);
+assert.equal(saturday[0].originalDate, '2026-11-06');
+assert.equal(saturday[0].dayPart, 'morning');
+assert.equal(tasksForDate(book, '2026-11-09').length, 1);
+assert.equal(tasksForDate(book, '2026-11-13').length, 1);
+assert.equal(tasksForDate(book, '2026-11-06').some((task) => task.title === 'Тренировка'), false);
+
+const focusBook = toggleTask(book, saturday[0].id, '2026-11-07T12:00:00.000Z');
+assert.equal(tasksForDate(focusBook, '2026-11-07')[0].completed, true);
+
+let habits = createHabit(emptyNotebook(), 'Почитать 20 минут', 'daily', [], '2026-11-06');
+const habitId = habits.habits[0].id;
+habits = setHabitMark(habits, habitId, '2026-11-06', 'done');
+assert.equal(habitsForDate(habits, '2026-11-06')[0].status, 'done');
+assert.equal(habitsForDate(habits, '2026-11-07')[0].status, null);
+assert.equal(habits.marks.find((mark) => mark.date === '2026-11-06')?.status, 'done');
+habits = setHabitMark(habits, habitId, '2026-11-06', null);
+assert.equal(habitsForDate(habits, '2026-11-06')[0].status, null);
+
+const weekdayHabit = createHabit(emptyNotebook(), 'Зарядка', 'weekdays', [], '2026-11-06');
+assert.equal(habitsForDate(weekdayHabit, '2026-11-06').length, 1);
+assert.equal(habitsForDate(weekdayHabit, '2026-11-07').length, 0);
+assert.equal(habitsForDate(weekdayHabit, addDays('2026-11-06', 3)).length, 1);
+
+assert.equal(habitProgressLabel(2, 4), '2 из 4 привычек выполнено');
+assert.equal(habitProgressLabel(1, 1), '1 из 1 привычки выполнена');
+
+const legacy = fromLegacyTasks([{
+  id: 'local-1',
+  title: 'Старая задача',
+  completed: true,
+  createdAt: '2026-11-01T00:00:00.000Z',
+  completedAt: '2026-11-01T01:00:00.000Z',
+  date: '2026-11-01',
+}]);
+assert.equal(legacy.tasks[0].completed, true);
+assert.equal(legacy.tasks[0].date, '2026-11-01');
+assert.equal(chooseMode(legacy, 'planner').greeted, true);
+
+console.log('notebook ok');
