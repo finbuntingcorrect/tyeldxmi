@@ -30,11 +30,11 @@ export function HabitsScreen({ book, today, onCreate, onMark }: HabitsScreenProp
       <p className="mt-2 text-base font-bold text-ink">{rows.length === 0 ? 'На сегодня привычек нет' : habitProgressLabel(done, rows.length)}</p>
       <div className="mt-4 grid gap-3">
         {rows.map(({ habit, status }) => (
-          <article key={habit.id} className="rounded-2xl border border-line bg-white p-3">
+          <article key={habit.id} className="rounded-2xl border border-line bg-field p-3">
             <h3 className="text-base font-extrabold">{habit.title}</h3>
             <div className="mt-3 flex flex-wrap gap-2">
               <button type="button" aria-pressed={status === 'done'} onClick={() => onMark(habit.id, today, status === 'done' ? null : 'done')} className={`min-h-11 rounded-xl px-4 text-sm font-extrabold ${status === 'done' ? 'bg-success text-white' : 'bg-cream'}`}>Сделано</button>
-              <button type="button" aria-pressed={status === 'missed'} onClick={() => onMark(habit.id, today, status === 'missed' ? null : 'missed')} className={`min-h-11 rounded-xl px-4 text-sm font-extrabold ${status === 'missed' ? 'bg-[#A24B3A] text-white' : 'bg-cream'}`}>Не сделано</button>
+              <button type="button" aria-pressed={status === 'missed'} onClick={() => onMark(habit.id, today, status === 'missed' ? null : 'missed')} className={`min-h-11 rounded-xl px-4 text-sm font-extrabold ${status === 'missed' ? 'bg-danger text-white' : 'bg-cream text-ink'}`}>Не сделано</button>
             </div>
           </article>
         ))}
@@ -43,7 +43,7 @@ export function HabitsScreen({ book, today, onCreate, onMark }: HabitsScreenProp
       {open ? (
         <form className="mt-3 grid gap-3 rounded-2xl bg-cream p-3" onSubmit={(event) => { event.preventDefault(); submit(); }}>
           <label htmlFor="habit-title" className="text-sm font-extrabold">Название</label>
-          <input id="habit-title" value={title} onChange={(event) => setTitle(event.target.value)} maxLength={160} className="min-h-12 rounded-2xl border border-line bg-white px-4" />
+          <input id="habit-title" value={title} onChange={(event) => setTitle(event.target.value)} maxLength={160} className="min-h-12 rounded-2xl border border-line bg-field px-4 text-ink" />
           <div className="flex flex-wrap gap-2">
             {(['daily', 'weekdays', 'weekly'] as const).map((kind) => (
               <button key={kind} type="button" onClick={() => setRepeatKind(kind)} className={`min-h-11 rounded-xl px-3 text-sm font-extrabold ${repeatKind === kind ? 'bg-primary' : 'bg-card'}`}>

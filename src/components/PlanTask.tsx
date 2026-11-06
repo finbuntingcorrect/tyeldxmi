@@ -31,7 +31,7 @@ export function PlanTask({ task, onToggle, onMove, onPart, onPriority, onUpdate 
   };
 
   return (
-    <article className="rounded-2xl border border-line bg-white">
+    <article className="rounded-2xl border border-line bg-field">
       <div className="flex items-start gap-2 px-2 py-2">
         <button
           type="button"
@@ -96,7 +96,7 @@ export function PlanTask({ task, onToggle, onMove, onPart, onPriority, onUpdate 
               </div>
             ) : null}
             <label className="mt-2 block text-sm font-extrabold" htmlFor={`${titleId}-title`}>Название</label>
-            <input id={`${titleId}-title`} value={title} onChange={(event) => setTitle(event.target.value)} maxLength={160} className="mt-1 min-h-11 w-full rounded-xl border border-line bg-white px-3" />
+            <input id={`${titleId}-title`} value={title} onChange={(event) => setTitle(event.target.value)} maxLength={160} className="mt-1 min-h-11 w-full rounded-xl border border-line bg-field px-3 text-ink" />
             <div className="mt-2 flex flex-wrap gap-2">
               <button type="button" onClick={() => onUpdate(task.id, draft, 'one')} className="min-h-11 rounded-xl bg-card px-3 text-sm font-extrabold">Только эту задачу</button>
               <button type="button" onClick={() => onUpdate(task.id, draft, 'future')} className="min-h-11 rounded-xl bg-primary px-3 text-sm font-extrabold">Эту и будущие</button>

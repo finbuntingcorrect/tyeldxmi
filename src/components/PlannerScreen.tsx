@@ -42,8 +42,8 @@ export function PlannerScreen(props: PlannerScreenProps) {
           const count = tasksForDate(book, day).length;
           const active = day === selected;
           return (
-            <button key={day} type="button" aria-pressed={active} aria-current={day === today ? 'date' : undefined} onClick={() => { setSelected(day); setDate(day); }} className={`min-h-16 min-w-14 shrink-0 rounded-2xl px-3 py-2 text-left ${active ? 'bg-primary' : 'bg-card'} ${day === today && !active ? 'ring-2 ring-primary' : ''}`}>
-              <span className="block text-xs font-extrabold text-muted">{WEEK_LABELS[index]}</span>
+            <button key={day} type="button" aria-pressed={active} aria-current={day === today ? 'date' : undefined} onClick={() => { setSelected(day); setDate(day); }} className={`min-h-16 min-w-14 shrink-0 rounded-2xl px-3 py-2 text-left ${active ? 'bg-primary' : 'bg-card text-ink'} ${day === today && !active ? 'ring-2 ring-primary' : ''}`}>
+              <span className={`block text-xs font-extrabold ${active ? 'text-on-primary' : 'text-muted'}`}>{WEEK_LABELS[index]}</span>
               <span className="block text-lg font-extrabold">{Number(day.slice(8))}</span>
               {count > 0 ? <span className="mt-1 block h-1.5 w-1.5 rounded-full bg-sage" /> : null}
             </button>
@@ -55,7 +55,7 @@ export function PlannerScreen(props: PlannerScreenProps) {
         <form className="mt-4 grid gap-2" onSubmit={(event) => { event.preventDefault(); submit(); }}>
           <label htmlFor="plan-task" className="sr-only">Новая задача</label>
           <div className="flex flex-col gap-2 sm:flex-row">
-            <input id="plan-task" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Что нужно сделать?" maxLength={160} className="min-h-12 flex-1 rounded-2xl border border-line px-4" />
+            <input id="plan-task" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Что нужно сделать?" maxLength={160} className="min-h-12 flex-1 rounded-2xl border border-line bg-field px-4 text-ink" />
             <button type="submit" className="min-h-12 rounded-2xl bg-primary px-5 font-extrabold">Добавить</button>
           </div>
           <div className="flex flex-wrap gap-2">

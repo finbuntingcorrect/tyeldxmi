@@ -34,7 +34,7 @@ export function FocusScreen({ book, today, onCreate, onToggle, onPriority, onFoc
       )}
       <form className="mt-5 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]" onSubmit={(event) => { event.preventDefault(); onCreate(title, priority); setTitle(''); }}>
         <label htmlFor="focus-task" className="sr-only">Новая задача на сегодня</label>
-        <input id="focus-task" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Задача на сегодня" maxLength={160} className="min-h-12 rounded-2xl border border-line px-4" />
+        <input id="focus-task" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Задача на сегодня" maxLength={160} className="min-h-12 rounded-2xl border border-line bg-field px-4 text-ink" />
         <button type="submit" className="min-h-12 rounded-2xl bg-primary px-5 font-extrabold">Добавить</button>
       </form>
       <div className="mt-3 flex flex-wrap gap-2">
@@ -45,7 +45,7 @@ export function FocusScreen({ book, today, onCreate, onToggle, onPriority, onFoc
       <div className="mt-5 grid gap-2">
         {tasks.length === 0 ? <p className="text-sm font-semibold text-muted">На сегодня задач пока нет.</p> : null}
         {tasks.map((task) => (
-          <article key={task.id} className="rounded-2xl border border-line bg-white p-3">
+          <article key={task.id} className="rounded-2xl border border-line bg-field p-3">
             <div className="flex items-start gap-2">
               <button type="button" aria-pressed={task.completed} aria-label={task.completed ? `Вернуть «${task.title}»` : `Выполнить «${task.title}»`} onClick={() => onToggle(task.id)} className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl border-2 ${task.completed ? 'border-success bg-success text-white' : 'border-line bg-cream'}`}>
                 {task.completed ? '✓' : ''}

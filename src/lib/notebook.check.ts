@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { addDays } from '../../server/recurrence';
 import {
   chooseMode,
+  parseNotebook,
+  setName,
   createHabit,
   createTask,
   emptyNotebook,
@@ -75,5 +77,10 @@ const legacy = fromLegacyTasks([{
 assert.equal(legacy.tasks[0].completed, true);
 assert.equal(legacy.tasks[0].date, '2026-11-01');
 assert.equal(chooseMode(legacy, 'planner').greeted, true);
+assert.equal(setName(emptyNotebook(), '  Аня  ').name, 'Аня');
+const named = parseNotebook({ greeted: true, mode: 'focus', name: '  Катя ', theme: 'pink', tasks: [] });
+assert.equal(named?.name, 'Катя');
+assert.equal(named?.theme, 'pink');
+assert.equal(parseNotebook({ greeted: true, mode: 'habits', theme: 'purple' })?.theme, null);
 
 console.log('notebook ok');

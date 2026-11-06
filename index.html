@@ -5,6 +5,27 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#F7F1E7" />
     <meta name="color-scheme" content="light" />
+    <script>
+      (function () {
+        try {
+          var raw = localStorage.getItem('today-cat.notebook.v1');
+          if (!raw) return;
+          var theme = JSON.parse(raw).theme;
+          if (theme !== 'blue' && theme !== 'pink' && theme !== 'yellow' && theme !== 'dark') return;
+          document.documentElement.dataset.theme = theme;
+          document.documentElement.style.colorScheme = theme === 'dark' ? 'dark' : 'light';
+          var meta = document.querySelector('meta[name="theme-color"]');
+          var color = { blue: '#e3f2fb', pink: '#fde7f1', yellow: '#f7f1e7', dark: '#1c1b19' }[theme];
+          if (meta) meta.setAttribute('content', color);
+        } catch (error) {}
+      })();
+    </script>
+    <style>
+      html[data-theme='blue'], html[data-theme='blue'] body { background: #e3f2fb; }
+      html[data-theme='pink'], html[data-theme='pink'] body { background: #fde7f1; }
+      html[data-theme='yellow'], html[data-theme='yellow'] body { background: #f7f1e7; }
+      html[data-theme='dark'], html[data-theme='dark'] body { background: #1c1b19; color: #f6f1ea; }
+    </style>
     <meta
       name="description"
       content="Today Cat — знакомство с котёнком, привычки, рабочий планер и фокус дня. Данные остаются в этом браузере."

@@ -20,7 +20,7 @@ export function ModeSwitch({ mode, onChange }: ModeSwitchProps) {
           type="button"
           aria-pressed={mode === item.id}
           onClick={() => onChange(item.id)}
-          className={`min-h-11 rounded-xl px-2 text-sm font-extrabold ${mode === item.id ? 'bg-primary text-ink' : 'bg-card text-ink'}`}
+          className={`min-h-11 rounded-xl px-2 text-sm font-extrabold ${mode === item.id ? 'bg-primary' : 'bg-card text-ink'}`}
         >
           {item.label}
         </button>

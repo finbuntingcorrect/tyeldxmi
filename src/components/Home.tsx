@@ -8,16 +8,28 @@ import { HabitsScreen } from './HabitsScreen';
 import { MascotPanel } from './MascotPanel';
 import { ModeSwitch } from './ModeSwitch';
 import { PlannerScreen } from './PlannerScreen';
+import { SettingsPanel } from './SettingsPanel';
 import { Welcome } from './Welcome';
 
 export function Home() {
   const notebook = useNotebook();
   const today = localDateKey();
   const [burst, setBurst] = useState(0);
+  const [settings, setSettings] = useState(false);
   const book = notebook.book;
   const mode = book.mode;
 
-  if (!book.greeted || !mode) return <Welcome onChoose={notebook.chooseMode} />;
+  if (!book.greeted || !mode) {
+    return (
+      <Welcome
+        name={book.name}
+        theme={book.theme}
+        onName={notebook.setName}
+        onTheme={notebook.setTheme}
+        onChoose={notebook.chooseMode}
+      />
+    );
+  }
 
   const todayTasks = tasksForDate(book, today);
   const open = todayTasks.some((task) => !task.completed) || (mode === 'habits' && book.habits.length > 0 && book.marks.filter((mark) => mark.date === today && mark.status === 'done').length < book.habits.length);
@@ -38,11 +50,13 @@ export function Home() {
         <header className="mb-4 flex flex-wrap items-end justify-between gap-3">
           <div>
             <h1 className="text-3xl font-extrabold">Today Cat</h1>
-            <p className="mt-1 text-sm font-bold text-muted">{formatLocalDate(dateFromKey(today))}</p>
+            <p className="mt-1 text-sm font-bold text-muted">{book.name ? `Привет, ${book.name}. ` : ''}{formatLocalDate(dateFromKey(today))}</p>
           </div>
+          <button type="button" aria-expanded={settings} onClick={() => setSettings((value) => !value)} className={`min-h-11 rounded-xl px-4 text-sm font-extrabold ${settings ? 'bg-primary' : 'bg-card text-ink'}`}>Настройки</button>
         </header>
         <ModeSwitch mode={mode} onChange={notebook.chooseMode} />
-        {notebook.error ? <p role="alert" className="mt-4 rounded-2xl bg-[#FBF1EA] px-4 py-3 text-sm font-bold text-[#8C3F32]">{notebook.error}</p> : null}
+        {settings ? <SettingsPanel name={book.name} theme={book.theme} onName={notebook.setName} onTheme={notebook.setTheme} /> : null}
+        {notebook.error ? <p role="alert" className="mt-4 rounded-2xl bg-danger-soft px-4 py-3 text-sm font-bold text-danger">{notebook.error}</p> : null}
         <div className="mt-4">
           {mode === 'habits' ? (
             <HabitsScreen book={book} today={today} onCreate={notebook.createHabit} onMark={notebook.setHabitMark} />

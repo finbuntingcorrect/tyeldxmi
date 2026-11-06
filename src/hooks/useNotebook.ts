@@ -7,19 +7,27 @@ import {
   moveTask,
   setFocus,
   setHabitMark,
+  setName,
   setTaskPart,
   setTaskPriority,
+  setTheme,
   toggleTask,
   updateTask,
   type AppMode,
+  type AppTheme,
   type HabitStatus,
   type Notebook,
   type TaskDraft,
 } from '../lib/notebook';
+import { applyTheme } from '../lib/theme';
 import type { DayPart, Priority, RepeatKind } from '../types';
 
 export function useNotebook() {
-  const [state, setState] = useState(loadNotebook);
+  const [state, setState] = useState(() => {
+    const loaded = loadNotebook();
+    applyTheme(loaded.book.theme ?? 'yellow');
+    return loaded;
+  });
 
   function commit(recipe: (book: Notebook) => Notebook) {
     setState((current) => {
@@ -32,6 +40,11 @@ export function useNotebook() {
     book: state.book,
     error: state.error,
     chooseMode: (mode: AppMode) => commit((book) => chooseMode(book, mode)),
+    setName: (name: string) => commit((book) => setName(book, name)),
+    setTheme: (theme: AppTheme) => {
+      applyTheme(theme);
+      commit((book) => setTheme(book, theme));
+    },
     createTask: (draft: TaskDraft) => commit((book) => createTask(book, draft)),
     toggleTask: (id: string) => commit((book) => toggleTask(book, id)),
     moveTask: (id: string, date: string) => commit((book) => moveTask(book, id, date)),

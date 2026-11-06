@@ -3,38 +3,127 @@
 @theme {
   --color-cream: #f7f1e7;
   --color-card: #fff8ef;
+  --color-field: #fffdf8;
   --color-primary: #e6a04b;
   --color-primary-hover: #c97a2b;
+  --color-on-primary: #2e211b;
   --color-ink: #2e211b;
   --color-muted: #7a6a5c;
-  --color-success: #6fae4a;
-  --color-sage: #8a9b6e;
+  --color-success: #2f7d46;
+  --color-sage: #6d8a52;
   --color-line: #e6d8c7;
+  --color-danger: #a24b3a;
+  --color-danger-soft: #f8ebe6;
   --font-sans: 'Nunito', ui-sans-serif, system-ui, sans-serif;
   --font-pixel: 'Press Start 2P', ui-monospace, monospace;
 }
 
+:root {
+  --dot: rgb(180 140 90 / 0.35);
+}
+
+html[data-theme='blue'] {
+  --color-cream: #e3f2fb;
+  --color-card: #f4faff;
+  --color-field: #ffffff;
+  --color-primary: #2176c7;
+  --color-primary-hover: #185f9f;
+  --color-on-primary: #ffffff;
+  --color-ink: #143049;
+  --color-muted: #4a6276;
+  --color-success: #1f7a48;
+  --color-sage: #3d8ec4;
+  --color-line: #c5dff0;
+  --color-danger: #c4473d;
+  --color-danger-soft: #fdeceb;
+  --dot: rgb(40 110 170 / 0.28);
+  color-scheme: light;
+}
+
+html[data-theme='pink'] {
+  --color-cream: #fde7f1;
+  --color-card: #fff5f9;
+  --color-field: #ffffff;
+  --color-primary: #c73b6f;
+  --color-primary-hover: #a42d5a;
+  --color-on-primary: #ffffff;
+  --color-ink: #3c2230;
+  --color-muted: #75475c;
+  --color-success: #1f7a48;
+  --color-sage: #d56b96;
+  --color-line: #f3c6d8;
+  --color-danger: #a33b55;
+  --color-danger-soft: #fdecef;
+  --dot: rgb(180 70 110 / 0.22);
+  color-scheme: light;
+}
+
+html[data-theme='yellow'] {
+  --color-cream: #f7f1e7;
+  --color-card: #fff8ef;
+  --color-field: #fffdf8;
+  --color-primary: #e6a04b;
+  --color-primary-hover: #c97a2b;
+  --color-on-primary: #2e211b;
+  --color-ink: #2e211b;
+  --color-muted: #7a6a5c;
+  --color-success: #2f7d46;
+  --color-sage: #6d8a52;
+  --color-line: #e6d8c7;
+  --color-danger: #a24b3a;
+  --color-danger-soft: #f8ebe6;
+  --dot: rgb(180 140 90 / 0.35);
+  color-scheme: light;
+}
+
+html[data-theme='dark'] {
+  --color-cream: #1c1b19;
+  --color-card: #2a2926;
+  --color-field: #34322e;
+  --color-primary: #e6a04b;
+  --color-primary-hover: #f0b56a;
+  --color-on-primary: #23180f;
+  --color-ink: #f6f1ea;
+  --color-muted: #c4b6a6;
+  --color-success: #1f7a48;
+  --color-sage: #e6a04b;
+  --color-line: #4c483f;
+  --color-danger: #c4473d;
+  --color-danger-soft: #3c2c2a;
+  --dot: rgb(255 244 220 / 0.12);
+  color-scheme: dark;
+}
+
 @layer base {
-  html {
-    color-scheme: light;
+  html,
+  body {
+    background-color: var(--color-cream);
+    color: var(--color-ink);
   }
 
   body {
-    @apply bg-cream font-sans text-ink antialiased;
+    @apply font-sans antialiased;
     margin: 0;
     min-height: 100vh;
-    background-image: radial-gradient(rgb(230 216 199 / 0.7) 0.7px, transparent 0.7px);
+    background-image: radial-gradient(var(--dot) 0.7px, transparent 0.7px);
     background-size: 18px 18px;
   }
 
   ::selection {
-    background: #e6a04b;
-    color: #2e211b;
+    background: var(--color-primary);
+    color: var(--color-on-primary);
   }
 
   :focus-visible {
-    outline: 2px solid #c97a2b;
+    outline: 2px solid var(--color-primary-hover);
     outline-offset: 3px;
+  }
+
+  input,
+  textarea,
+  select {
+    color: var(--color-ink);
+    background-color: var(--color-field);
   }
 
   /*
@@ -46,6 +135,10 @@
     image-rendering: auto;
     background-color: #fdf1e3;
   }
+}
+
+.bg-primary {
+  color: var(--color-on-primary);
 }
 
 @media (prefers-reduced-motion: reduce) {

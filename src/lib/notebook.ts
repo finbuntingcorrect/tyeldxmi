@@ -3,6 +3,7 @@ import type { DayPart, Priority, RepeatKind } from '../types';
 import type { LegacyStoredTask } from '../types';
 
 export type AppMode = 'habits' | 'planner' | 'focus';
+export type AppTheme = 'blue' | 'pink' | 'yellow' | 'dark';
 export type HabitStatus = 'done' | 'missed';
 
 export type SeriesRule = {
@@ -56,6 +57,8 @@ export type Notebook = {
   version: 1;
   greeted: boolean;
   mode: AppMode | null;
+  name: string;
+  theme: AppTheme | null;
   focusId: string | null;
   tasks: NotebookTask[];
   series: SeriesRule[];
@@ -77,6 +80,7 @@ const PARTS = new Set<DayPart>(['morning', 'afternoon', 'evening', 'anytime']);
 const PRIORITIES = new Set<Priority>(['high', 'normal', 'low']);
 const REPEATS = new Set<RepeatKind>(['daily', 'weekdays', 'weekly']);
 const MODES = new Set<AppMode>(['habits', 'planner', 'focus']);
+const THEMES = new Set<AppTheme>(['blue', 'pink', 'yellow', 'dark']);
 
 export function createId() {
   return globalThis.crypto.randomUUID();
@@ -87,6 +91,8 @@ export function emptyNotebook(): Notebook {
     version: 1,
     greeted: false,
     mode: null,
+    name: '',
+    theme: null,
     focusId: null,
     tasks: [],
     series: [],
@@ -176,6 +182,14 @@ export function habitsForDate(book: Notebook, date: string) {
 
 export function chooseMode(book: Notebook, mode: AppMode): Notebook {
   return { ...book, greeted: true, mode };
+}
+
+export function setName(book: Notebook, name: string): Notebook {
+  return { ...book, name: name.trim().slice(0, 40) };
+}
+
+export function setTheme(book: Notebook, theme: AppTheme): Notebook {
+  return { ...book, theme };
 }
 
 export function createTask(book: Notebook, draft: TaskDraft, now = new Date().toISOString()): Notebook {
@@ -428,12 +442,18 @@ function asMode(value: unknown): AppMode | null {
   return typeof value === 'string' && MODES.has(value as AppMode) ? value as AppMode : null;
 }
 
+function asTheme(value: unknown): AppTheme | null {
+  return typeof value === 'string' && THEMES.has(value as AppTheme) ? value as AppTheme : null;
+}
+
 export function parseNotebook(value: unknown): Notebook | null {
   if (!value || typeof value !== 'object') return null;
   const raw = value as Record<string, unknown>;
   const book = emptyNotebook();
   book.greeted = raw.greeted === true;
   book.mode = asMode(raw.mode);
+  book.name = typeof raw.name === 'string' ? raw.name.trim().slice(0, 40) : '';
+  book.theme = asTheme(raw.theme);
   book.focusId = typeof raw.focusId === 'string' ? raw.focusId : null;
   if (Array.isArray(raw.tasks)) {
     for (const item of raw.tasks) {
