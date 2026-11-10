@@ -438,6 +438,12 @@ export function createHabit(book: Notebook, title: string, repeatKind: RepeatKin
   };
 }
 
+export function nextHabitStatus(status: HabitStatus | null): HabitStatus | null {
+  if (status === 'done') return 'missed';
+  if (status === 'missed') return null;
+  return 'done';
+}
+
 export function setHabitMark(book: Notebook, habitId: string, date: string, status: HabitStatus | null): Notebook {
   if (!book.habits.some((habit) => habit.id === habitId) || !isDateKey(date)) return book;
   const marks = book.marks.filter((mark) => !(mark.habitId === habitId && mark.date === date));
