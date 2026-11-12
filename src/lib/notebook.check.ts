@@ -17,6 +17,7 @@ import {
   moveTask,
   nextHabitStatus,
   notebookIsEmpty,
+  applyFocus,
   setHabitMark,
   tasksForDate,
   toggleTask,
@@ -125,5 +126,25 @@ assert.equal(notebookIsEmpty(first), false);
 assert.equal(nextHabitStatus(null), 'done');
 assert.equal(nextHabitStatus('done'), 'missed');
 assert.equal(nextHabitStatus('missed'), null);
+
+const timed = createTask(emptyNotebook(), {
+  title: 'Письмо',
+  date: '2026-11-12',
+  dayPart: 'anytime',
+  priority: 'normal',
+  repeatKind: 'none',
+  weekdays: [],
+});
+const timedId = timed.tasks[0].id;
+const banked = applyFocus(timed, { taskId: timedId, phase: 'focus', focusMinutes: 20, durationMs: 1_200_000, endsAt: null, pausedRemainingMs: 1_140_000, paused: true, sliceAppliedMs: 60_000, settled: false, reminded: false, signalId: 'sig' }, { taskId: timedId, addMs: 60_000 }, 50);
+assert.equal(banked.tasks[0].focusMs, 60_000);
+const same = applyFocus(banked, banked.focusSession, { taskId: timedId, focusMs: 60_000 }, 60);
+assert.equal(same.tasks[0].focusMs, 60_000);
+const restored = parseNotebook(JSON.parse(JSON.stringify(same)));
+assert.equal(restored?.focusSession?.paused, true);
+assert.equal(restored?.focusSession?.taskId, timedId);
+assert.equal(restored?.tasks[0].focusMs, 60_000);
+assert.equal(restored?.cat.reminders, false);
+assert.equal(restored?.cat.sound, false);
 
 console.log('notebook ok');

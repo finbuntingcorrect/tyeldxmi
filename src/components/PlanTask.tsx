@@ -7,14 +7,16 @@ import { PaperCheck } from './PaperCheck';
 
 type PlanTaskProps = {
   task: NotebookTask;
+  today: string;
   onToggle: (id: string) => void;
   onMove: (id: string, date: string) => void;
   onPart: (id: string, part: DayPart) => void;
   onPriority: (id: string, priority: Priority) => void;
   onUpdate: (id: string, draft: TaskDraft, scope: 'one' | 'future') => void;
+  onFocus: (id: string) => void;
 };
 
-export function PlanTask({ task, onToggle, onMove, onPart, onPriority, onUpdate }: PlanTaskProps) {
+export function PlanTask({ task, today, onToggle, onMove, onPart, onPriority, onUpdate, onFocus }: PlanTaskProps) {
   const titleId = useId();
   const [open, setOpen] = useState(false);
   const [customDate, setCustomDate] = useState(task.date);
@@ -45,6 +47,7 @@ export function PlanTask({ task, onToggle, onMove, onPart, onPriority, onUpdate 
             </p>
           ) : null}
         </div>
+        {task.date === today ? <button type="button" onClick={() => onFocus(task.id)} className="paper-submit my-2">В фокус</button> : null}
         <button type="button" aria-expanded={open} aria-label={`Действия: ${task.title}`} onClick={() => setOpen((value) => !value)} className="min-h-11 px-2 text-sm font-semibold text-muted">Ещё</button>
       </div>
       {open ? (

@@ -22,6 +22,7 @@ type PlannerScreenProps = {
   onAddWeekItem: (week: string, kind: WeekItem['kind'], title: string) => void;
   onToggleWeekItem: (id: string) => void;
   onAssignWeekItem: (id: string, date: string) => void;
+  onFocus: (id: string) => void;
 };
 
 function rangeLabel(week: string[]) {
@@ -95,7 +96,7 @@ export function PlannerScreen(props: PlannerScreenProps) {
                 <h3 className="text-2xl">{part.label}</h3>
                 <div className="mt-2 border-t border-line">
                   {rows.map((task) => (
-                    <PlanTask key={task.id} task={task} onToggle={props.onToggle} onMove={props.onMove} onPart={props.onPart} onPriority={props.onPriority} onUpdate={props.onUpdate} />
+                    <PlanTask key={task.id} task={task} today={props.today} onToggle={props.onToggle} onMove={props.onMove} onPart={props.onPart} onPriority={props.onPriority} onUpdate={props.onUpdate} onFocus={props.onFocus} />
                   ))}
                   <AddRow label={`Новая задача, ${part.label}`} onAdd={(title) => createOn(detail, part.id, title)} />
                 </div>
@@ -133,7 +134,7 @@ export function PlannerScreen(props: PlannerScreenProps) {
                 </button>
                 <div className="mt-1 border-t border-line">
                   {tasks.map((task) => (
-                    <PlanTask key={task.id} task={task} onToggle={props.onToggle} onMove={props.onMove} onPart={props.onPart} onPriority={props.onPriority} onUpdate={props.onUpdate} />
+                    <PlanTask key={task.id} task={task} today={props.today} onToggle={props.onToggle} onMove={props.onMove} onPart={props.onPart} onPriority={props.onPriority} onUpdate={props.onUpdate} onFocus={props.onFocus} />
                   ))}
                   <AddRow label={`Новая задача, ${DAY_NAMES[index]}`} onAdd={(title) => createOn(day, 'anytime', title)} />
                 </div>

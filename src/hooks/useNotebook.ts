@@ -17,6 +17,8 @@ import {
   moveTask,
   notebookIsEmpty,
   parseNotebook,
+  applyFocus,
+  setCatPrefs,
   setFocus,
   setHabitMark,
   setName,
@@ -33,6 +35,7 @@ import {
   type TaskDraft,
   type WeekItem,
 } from '../lib/notebook';
+import type { CatPrefs, FocusSession } from '../lib/focusSession';
 import { applyTheme } from '../lib/theme';
 import type { DayPart, Priority, RepeatKind } from '../types';
 
@@ -49,6 +52,8 @@ export function useNotebook() {
   const mounted = useRef(true);
   const generation = useRef(0);
   const chain = useRef(Promise.resolve());
+  const bookRef = useRef(state.book);
+  bookRef.current = state.book;
 
   useEffect(() => {
     mounted.current = true;
@@ -111,11 +116,11 @@ export function useNotebook() {
   }
 
   function commit(recipe: (book: Notebook) => Notebook) {
-    setState((current) => {
-      const book = prepareNotebook(recipe(current.book));
-      persist(book);
-      return { book, error: null };
-    });
+    const book = prepareNotebook(recipe(bookRef.current));
+    bookRef.current = book;
+    setState({ book, error: null });
+    persist(book);
+    return book;
   }
 
   async function register(nextLogin: string, password: string) {
@@ -183,5 +188,10 @@ export function useNotebook() {
     addWeekItem: (week: string, kind: WeekItem['kind'], title: string) => commit((book) => addWeekItem(book, week, kind, title)),
     toggleWeekItem: (id: string) => commit((book) => toggleWeekItem(book, id)),
     assignWeekItem: (id: string, date: string) => commit((book) => assignWeekItem(book, id, date)),
+    applyFocus: (session: FocusSession | null, change?: { taskId: string; addMs?: number; focusMs?: number }, at?: number) => {
+      const next = commit((book) => applyFocus(book, session, change, at));
+      return change ? next.tasks.find((task) => task.id === change.taskId)?.focusMs ?? 0 : 0;
+    },
+    setCat: (cat: CatPrefs) => commit((book) => setCatPrefs(book, cat)),
   };
 }

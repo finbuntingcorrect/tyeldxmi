@@ -106,6 +106,7 @@ html[data-theme='dark'] {
     @apply font-sans antialiased;
     margin: 0;
     min-height: 100vh;
+    overflow-x: clip;
   }
 
   h1,
@@ -140,7 +141,7 @@ html[data-theme='dark'] {
   */
   .mascot-art {
     image-rendering: auto;
-    background-color: #fdf1e3;
+    background-color: transparent;
   }
 }
 
@@ -180,8 +181,17 @@ html[data-theme='dark'] {
   font-weight: 600;
 }
 
+.paper-choice:hover {
+  color: var(--color-primary-hover);
+}
+
 .paper-choice[aria-pressed='true'] {
   border-bottom-color: var(--color-primary);
+}
+
+.paper-choice:disabled,
+.paper-submit:disabled {
+  opacity: 0.45;
 }
 
 .paper-submit {
@@ -201,8 +211,32 @@ html[data-theme='dark'] {
   background: color-mix(in srgb, var(--color-primary) 16%, var(--color-card));
 }
 
+.cat-arrive {
+  animation: cat-arrive 900ms ease-out;
+}
+
+@keyframes cat-arrive {
+  from { transform: translateX(-36vw); }
+  to { transform: translateX(0); }
+}
+
+.cat-breathe {
+  animation: cat-breathe 3.4s ease-in-out infinite;
+}
+
+@keyframes cat-breathe {
+  0%,
+  100% { transform: translateY(0); }
+  50% { transform: translateY(3px); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
+  }
+
+  .cat-arrive,
+  .cat-breathe {
+    animation: none;
   }
 }

@@ -1,6 +1,7 @@
 import { addDays, isDateKey, occurrenceDates, weekday } from '../../server/recurrence';
 import type { DayPart, Priority, RepeatKind } from '../types';
 import type { LegacyStoredTask } from '../types';
+import { defaultCatPrefs, parseCatPrefs, parseFocusSession, type CatPrefs, type FocusSession } from './focusSession';
 
 export type AppMode = 'habits' | 'planner' | 'focus';
 export type AppTheme = 'blue' | 'pink' | 'yellow' | 'dark';
@@ -37,6 +38,7 @@ export type NotebookTask = {
   repeatKind: RepeatKind | null;
   weekdays: number[];
   deleted: boolean;
+  focusMs: number;
 };
 
 export type Habit = {
@@ -68,6 +70,9 @@ export type Notebook = {
   name: string;
   theme: AppTheme | null;
   focusId: string | null;
+  focusSession: FocusSession | null;
+  focusAt: number;
+  cat: CatPrefs;
   tasks: NotebookTask[];
   series: SeriesRule[];
   skips: SeriesSkip[];
@@ -112,6 +117,9 @@ export function emptyNotebook(): Notebook {
     name: '',
     theme: null,
     focusId: null,
+    focusSession: null,
+    focusAt: 0,
+    cat: defaultCatPrefs(),
     tasks: [],
     series: [],
     skips: [],
@@ -172,6 +180,7 @@ export function materialize(book: Notebook, from: string, to: string, now = new 
         repeatKind: rule.repeatKind,
         weekdays: rule.weekdays,
         deleted: false,
+        focusMs: 0,
       });
     }
   }
@@ -269,6 +278,7 @@ export function createTask(book: Notebook, draft: TaskDraft, now = new Date().to
         repeatKind: null,
         weekdays: [],
         deleted: false,
+        focusMs: 0,
       }],
     };
   }
@@ -481,9 +491,25 @@ export function fromLegacyTasks(tasks: LegacyStoredTask[]): Notebook {
       repeatKind: null,
       weekdays: [],
       deleted: false,
+      focusMs: 0,
     });
   }
   return book;
+}
+
+export function applyFocus(book: Notebook, session: FocusSession | null, change?: { taskId: string; addMs?: number; focusMs?: number }, at = Date.now()): Notebook {
+  const tasks = change
+    ? book.tasks.map((task) => {
+        if (task.id !== change.taskId) return task;
+        const focusMs = typeof change.focusMs === 'number' ? change.focusMs : task.focusMs + (change.addMs ?? 0);
+        return { ...task, focusMs: Math.max(0, Math.round(focusMs)) };
+      })
+    : book.tasks;
+  return { ...book, tasks, focusSession: session, focusAt: at };
+}
+
+export function setCatPrefs(book: Notebook, cat: CatPrefs): Notebook {
+  return { ...book, cat };
 }
 
 function asPart(value: unknown): DayPart {
@@ -515,6 +541,9 @@ export function parseNotebook(value: unknown): Notebook | null {
   book.name = typeof raw.name === 'string' ? raw.name.trim().slice(0, 40) : '';
   book.theme = asTheme(raw.theme);
   book.focusId = typeof raw.focusId === 'string' ? raw.focusId : null;
+  book.focusSession = parseFocusSession(raw.focusSession);
+  book.focusAt = typeof raw.focusAt === 'number' && raw.focusAt > 0 ? raw.focusAt : 0;
+  book.cat = parseCatPrefs(raw.cat);
   if (Array.isArray(raw.tasks)) {
     for (const item of raw.tasks) {
       if (!item || typeof item !== 'object') continue;
@@ -536,6 +565,7 @@ export function parseNotebook(value: unknown): Notebook | null {
         repeatKind: repeat,
         weekdays: Array.isArray(task.weekdays) ? cleanWeekdays(task.weekdays.map(Number)) : [],
         deleted: task.deleted === true,
+        focusMs: typeof task.focusMs === 'number' && task.focusMs > 0 ? Math.round(task.focusMs) : 0,
       });
     }
   }
