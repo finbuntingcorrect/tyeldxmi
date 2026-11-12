@@ -16,6 +16,7 @@ import {
   materialize,
   moveTask,
   nextHabitStatus,
+  notebookIsEmpty,
   setHabitMark,
   tasksForDate,
   toggleTask,
@@ -119,6 +120,8 @@ const marked = setHabitMark(second, second.habits[0].id, '2026-11-01', 'done');
 assert.equal(marked.marks.filter((mark) => mark.habitId === second.habits[1].id).length, 0);
 assert.equal(marked.marks.filter((mark) => mark.habitId === second.habits[0].id).length, 1);
 assert.equal(trackerProgressLabel(8), '8 из 30 дней выполнено');
+assert.equal(notebookIsEmpty(emptyNotebook()), true);
+assert.equal(notebookIsEmpty(first), false);
 assert.equal(nextHabitStatus(null), 'done');
 assert.equal(nextHabitStatus('done'), 'missed');
 assert.equal(nextHabitStatus('missed'), null);

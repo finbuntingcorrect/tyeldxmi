@@ -1,9 +1,32 @@
 import { loadTasks } from './storage';
-import { emptyNotebook, fromLegacyTasks, materialize, parseNotebook, type Notebook } from './notebook';
+import { emptyNotebook, fromLegacyTasks, materialize, notebookIsEmpty, parseNotebook, type Notebook } from './notebook';
 import { addDays } from '../../server/recurrence';
 import { localDateKey } from './date';
 
 const STORAGE_KEY = 'today-cat.notebook.v1';
+const CLAIM_KEY = 'today-cat.claim-login';
+
+export function peekLocalNotebook(): Notebook | null {
+  const loaded = loadNotebook();
+  return notebookIsEmpty(loaded.book) ? null : loaded.book;
+}
+
+export function rememberClaim(login: string) {
+  localStorage.setItem(CLAIM_KEY, login.trim().toLocaleLowerCase('ru-RU'));
+}
+
+export function claimMatches(login: string) {
+  try {
+    return localStorage.getItem(CLAIM_KEY) === login.trim().toLocaleLowerCase('ru-RU');
+  } catch {
+    return false;
+  }
+}
+
+export function clearClaim() {
+  localStorage.removeItem(CLAIM_KEY);
+  localStorage.removeItem(STORAGE_KEY);
+}
 
 export function prepareNotebook(book: Notebook, today = localDateKey()) {
   return materialize(book, addDays(today, -21), addDays(today, 120));

@@ -1,12 +1,22 @@
-import { useState } from 'react';
-import { loadNotebook, prepareNotebook, saveNotebook } from '../lib/notebookStore';
+import { useEffect, useRef, useState } from 'react';
+import { cabinetError, fetchCabinet, loginCabinet, logoutCabinet, registerCabinet, saveCabinet } from '../lib/cabinetApi';
+import {
+  claimMatches,
+  clearClaim,
+  peekLocalNotebook,
+  prepareNotebook,
+  rememberClaim,
+} from '../lib/notebookStore';
 import {
   addWeekItem,
   assignWeekItem,
   chooseMode,
   createHabit,
   createTask,
+  emptyNotebook,
   moveTask,
+  notebookIsEmpty,
+  parseNotebook,
   setFocus,
   setHabitMark,
   setName,
@@ -26,23 +36,135 @@ import {
 import { applyTheme } from '../lib/theme';
 import type { DayPart, Priority, RepeatKind } from '../types';
 
+type Status = 'loading' | 'anon' | 'ready';
+
+function named(book: Notebook, login: string) {
+  return book.name.trim() ? book : { ...book, name: login.slice(0, 40) };
+}
+
 export function useNotebook() {
-  const [state, setState] = useState(() => {
-    const loaded = loadNotebook();
-    applyTheme(loaded.book.theme ?? 'yellow');
-    return loaded;
-  });
+  const [status, setStatus] = useState<Status>('loading');
+  const [login, setLogin] = useState('');
+  const [state, setState] = useState<{ book: Notebook; error: string | null }>({ book: emptyNotebook(), error: null });
+  const mounted = useRef(true);
+  const generation = useRef(0);
+  const chain = useRef(Promise.resolve());
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
+  function show(accountLogin: string, book: Notebook, error: string | null) {
+    applyTheme(book.theme ?? 'yellow');
+    setLogin(accountLogin);
+    setState({ book: prepareNotebook(book), error });
+    setStatus('ready');
+  }
+
+  async function adopt(accountLogin: string, raw: unknown, claim: boolean) {
+    let book = named(parseNotebook(raw) ?? emptyNotebook(), accountLogin);
+    if (notebookIsEmpty(book) && (claim || claimMatches(accountLogin))) {
+      const local = peekLocalNotebook();
+      if (local) {
+        rememberClaim(accountLogin);
+        book = named(local, accountLogin);
+        const message = await saveCabinet(book);
+        if (!message) clearClaim();
+        show(accountLogin, book, message);
+        return;
+      }
+    }
+    show(accountLogin, book, null);
+  }
+
+  const adoptRef = useRef(adopt);
+  adoptRef.current = adopt;
+
+  useEffect(() => {
+    const generationAtLoad = generation.current;
+    fetchCabinet()
+      .then((result) => {
+        if (!mounted.current || generation.current !== generationAtLoad) return;
+        if (!result) {
+          setStatus('anon');
+          return;
+        }
+        return adoptRef.current(result.login, result.notebook, false);
+      })
+      .catch((error: unknown) => {
+        if (!mounted.current || generation.current !== generationAtLoad) return;
+        setState({ book: emptyNotebook(), error: cabinetError(error) });
+        setStatus('anon');
+      });
+  }, []);
+
+  function persist(book: Notebook) {
+    const generationAtSave = generation.current;
+    chain.current = chain.current.then(async () => {
+      const message = await saveCabinet(book);
+      if (!mounted.current || generation.current !== generationAtSave) return;
+      setState((current) => ({ ...current, error: message }));
+    });
+  }
 
   function commit(recipe: (book: Notebook) => Notebook) {
     setState((current) => {
       const book = prepareNotebook(recipe(current.book));
-      return { book, error: saveNotebook(book) };
+      persist(book);
+      return { book, error: null };
     });
   }
 
+  async function register(nextLogin: string, password: string) {
+    try {
+      const result = await registerCabinet(nextLogin, password);
+      generation.current += 1;
+      await adopt(result.login, result.notebook, true);
+      return null;
+    } catch (error) {
+      return cabinetError(error);
+    }
+  }
+
+  async function signIn(nextLogin: string, password: string) {
+    try {
+      const result = await loginCabinet(nextLogin, password);
+      generation.current += 1;
+      await adopt(result.login, result.notebook, false);
+      return null;
+    } catch (error) {
+      return cabinetError(error);
+    }
+  }
+
+  async function signOut() {
+    generation.current += 1;
+    await chain.current.catch(() => undefined);
+    try {
+      await logoutCabinet();
+    } catch (error) {
+      if (!mounted.current) return;
+      setState((current) => ({ ...current, error: cabinetError(error) }));
+      return;
+    }
+    if (!mounted.current) return;
+    setLogin('');
+    setState({ book: emptyNotebook(), error: null });
+    applyTheme('yellow');
+    setStatus('anon');
+  }
+
   return {
+    status,
+    login,
     book: state.book,
     error: state.error,
+    register,
+    signIn,
+    signOut,
     chooseMode: (mode: AppMode) => commit((book) => chooseMode(book, mode)),
     setName: (name: string) => commit((book) => setName(book, name)),
     setTheme: (theme: AppTheme) => {

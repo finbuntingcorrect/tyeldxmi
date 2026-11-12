@@ -14,4 +14,9 @@ export function applyTheme(theme: AppTheme) {
   const meta = document.querySelector('meta[name="theme-color"]');
   const option = THEME_OPTIONS.find((item) => item.id === theme);
   if (meta && option) meta.setAttribute('content', option.meta);
+  try {
+    localStorage.setItem('today-cat.theme', theme);
+  } catch {
+    // The theme still applies for this visit when the browser refuses storage.
+  }
 }
