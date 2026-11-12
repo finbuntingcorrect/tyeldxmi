@@ -167,7 +167,7 @@ export function PlannerScreen(props: PlannerScreenProps) {
                   <label className="mt-1 block text-xs font-semibold text-muted">
                     Назначить день
                     <select aria-label={`Назначить день: ${item.title}`} defaultValue="" onChange={(event) => { if (event.target.value) props.onAssignWeekItem(item.id, event.target.value); }} className="mt-1 min-h-11 w-full border border-line bg-card px-2 text-sm text-ink">
-                      <option value="">Выбрать день</option>
+                      <option value="">Не выбран</option>
                       {week.map((day, index) => <option key={day} value={day}>{WEEKDAYS[index].label}, {dayLabel(day)}</option>)}
                     </select>
                   </label>

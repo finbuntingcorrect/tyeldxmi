@@ -41,17 +41,17 @@ export function SettingsPanel({ login, name, theme, cat, onName, onTheme, onCat 
   async function testSound() {
     const ready = await unlockSound();
     if (!ready) {
-      setSoundNote('Браузер не дал включить звук. Остальное работает как обычно.');
+      setSoundNote('Звук не включился.');
       return;
     }
     const result = await playMeow(volume);
-    setSoundNote(result === 'blocked' ? 'Браузер не дал включить звук. Остальное работает как обычно.' : 'Мяуканье проиграно.');
+    setSoundNote(result === 'blocked' ? 'Звук не включился.' : 'Звук есть.');
   }
 
   return (
     <section className="border-b border-line px-4 py-5 sm:px-6">
       <h2 className="text-3xl text-ink">Настройки</h2>
-      <p className="mt-2 text-sm text-muted">Логин кабинета: {login}. Задачи этого логина видны только тебе.</p>
+      <p className="mt-2 text-sm text-muted">Логин: {login}</p>
       <form className="mt-4" onSubmit={(event) => { event.preventDefault(); saveName(); }}>
         <label htmlFor="settings-name" className="text-sm font-semibold text-ink">Имя</label>
         <div className="mt-1 flex flex-col gap-3 sm:flex-row sm:items-end">
@@ -65,7 +65,7 @@ export function SettingsPanel({ login, name, theme, cat, onName, onTheme, onCat 
         <input type="checkbox" checked={cat.sound} onChange={async (event) => {
           if (event.target.checked) {
             const ready = await unlockSound();
-            if (!ready) setSoundNote('Браузер не дал включить звук. Остальное работает как обычно.');
+            if (!ready) setSoundNote('Звук не включился.');
           }
           onCat({ ...cat, sound: event.target.checked });
         }} />
@@ -80,8 +80,12 @@ export function SettingsPanel({ login, name, theme, cat, onName, onTheme, onCat 
         <input type="checkbox" checked={cat.reminders} onChange={(event) => onCat({ ...cat, reminders: event.target.checked })} />
         Кот напоминает о фокусе
       </label>
-      <p className="text-sm text-muted">Одно тихое напоминание в середине сессии. По умолчанию выключено.</p>
-      {cat.hidden ? <button type="button" onClick={() => onCat({ ...cat, hidden: false })} className="paper-submit mt-3">Вернуть котёнка</button> : <p className="mt-3 text-sm text-muted">Котёнок на экране. Скрыть его можно нажатием на него.</p>}
+      <p className="text-sm text-muted">Один раз в середине сессии.</p>
+      {cat.hidden ? <button type="button" onClick={() => onCat({ ...cat, hidden: false })} className="paper-submit mt-3">Вернуть котёнка</button> : null}
+      <details className="mt-3 text-sm text-ink">
+        <summary className="cursor-pointer font-semibold">Как двигать котёнка</summary>
+        <p className="mt-2 text-muted">Потяни, чтобы переставить. Нажми, чтобы открыть меню.</p>
+      </details>
       <h3 className="mt-6 text-2xl text-ink">Цвет приложения</h3>
       <div className="mt-3">
         <ThemePicker theme={theme ?? 'yellow'} onChange={onTheme} />

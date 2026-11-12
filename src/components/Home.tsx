@@ -155,12 +155,13 @@ export function Home() {
     const next = !book.cat.sound;
     if (next) {
       const ready = await unlockSound();
-      if (!ready) setSoundNote('Браузер не дал включить звук. Сессия идёт без сигнала.');
+      if (!ready) setSoundNote('Звук не включился. Сессия идёт.');
     }
     notebook.setCat({ ...book.cat, sound: next });
   }
 
   return (
+    <div style={{ paddingRight: 'var(--cat-lane, 0px)' }}>
     <div className={`mx-auto w-full max-w-6xl px-3 py-6 sm:px-6 sm:py-10 ${session ? 'pb-40' : ''}`}>
       <div className={`border border-line bg-card ${session ? 'pb-36' : ''}`}>
         <header className="flex items-center justify-between gap-3 px-4 py-4 sm:px-6">
@@ -168,7 +169,6 @@ export function Home() {
             <h1 className="text-2xl leading-tight sm:text-4xl">{book.name ? `Привет, ${book.name}` : 'Today Cat'}</h1>
             <p className="mt-1 text-sm text-muted">{formatLocalDate(dateFromKey(today))}</p>
             <p className="text-sm text-muted">{hint}</p>
-            <p className="text-sm text-muted">Личный кабинет · {notebook.login}</p>
           </div>
           <div className="flex shrink-0 items-center gap-4">
             <button type="button" aria-expanded={settings} onClick={() => setSettings((value) => !value)} className={`min-h-11 px-1 text-sm font-semibold underline underline-offset-4 ${settings ? 'decoration-primary' : 'decoration-line'}`}>Настройки</button>
@@ -261,7 +261,7 @@ export function Home() {
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-[rgb(46_33_27_/_0.28)] px-4 py-6 sm:items-center">
           <div role="dialog" aria-modal="true" aria-labelledby="focus-conflict-title" className="w-full max-w-md border border-line bg-card p-5">
             <h2 id="focus-conflict-title" className="text-2xl">Сначала заверши текущую сессию</h2>
-            <p className="mt-2 text-sm text-ink">Сейчас идёт другая задача. Она не переключится сама.</p>
+            <p className="mt-2 text-sm text-ink">Сейчас идёт другая задача.</p>
             <div className="mt-4 flex flex-wrap gap-2">
               <button type="button" autoFocus onClick={confirmConflict} className="paper-submit">Завершить сессию</button>
               <button type="button" onClick={() => setConflict(null)} className="paper-choice">Оставить</button>
@@ -269,6 +269,7 @@ export function Home() {
           </div>
         </div>
       ) : null}
+    </div>
     </div>
   );
 }

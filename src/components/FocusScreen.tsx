@@ -44,7 +44,6 @@ export function FocusScreen({ book, today, minutes, session, onMinutes, onCreate
       <header className="border-b border-line px-4 py-4 sm:px-6">
         <p className="text-xs font-semibold tracking-[0.16em] text-muted uppercase">Сегодня</p>
         <h2 className="mt-1 text-3xl">Главное сегодня</h2>
-        <p className="mt-2 text-sm text-muted">Одна задача в фокусе. Таймер не закрывает её сам.</p>
       </header>
       <div className="border-b border-line px-4 py-4 sm:px-6">
         {main ? (
@@ -69,14 +68,14 @@ export function FocusScreen({ book, today, minutes, session, onMinutes, onCreate
                 <button type="submit" className="paper-choice" disabled={busy}>Применить</button>
               </form>
               {customError ? <p role="alert" className="mt-1 text-sm font-semibold text-danger">{customError}</p> : null}
-              {focusedHere ? <p className="mt-3 text-sm text-muted">Управление сессией в панели внизу.</p> : (
+              {focusedHere ? null : (
                 <button type="button" onClick={onStart} disabled={main.completed || busy} className="paper-submit mt-3">Начать</button>
               )}
               <button type="button" onClick={() => onFocus(null)} className="paper-choice mt-2 px-0">Убрать из главного</button>
             </div>
           </div>
         ) : (
-          <p className="py-2 text-sm text-muted">Выбери одну задачу из списка и нажми «В фокус».</p>
+          <p className="py-2 text-sm text-muted">{tasks.length === 0 ? 'На сегодня задач нет.' : 'Нет главной задачи.'}</p>
         )}
       </div>
       <form className="border-b border-line px-4 py-4 sm:px-6" onSubmit={(event) => { event.preventDefault(); onCreate(title, priority); setTitle(''); }}>
@@ -94,7 +93,7 @@ export function FocusScreen({ book, today, minutes, session, onMinutes, onCreate
       <div className="px-4 py-4 sm:px-6">
         <h3 className="text-2xl">Остальные дела</h3>
         <div className="mt-2 border-t border-line">
-          {rest.length === 0 ? <p className="py-3 text-sm text-muted">{tasks.length === 0 ? 'На сегодня задач пока нет.' : 'Других дел нет.'}</p> : null}
+          {rest.length === 0 && tasks.length > 0 ? <p className="py-3 text-sm text-muted">Других дел нет.</p> : null}
           {rest.map((task) => (
             <article key={task.id} className="flex items-start gap-1 border-b border-line">
               <PaperCheck checked={task.completed} label={task.completed ? `Вернуть «${task.title}»` : `Выполнить «${task.title}»`} onClick={() => onToggle(task.id)} />

@@ -72,5 +72,7 @@ assert.equal(catPose({ greeting: false, openTasks: true, taskSuccess: false, rem
 assert.equal(catPose({ greeting: false, openTasks: true, taskSuccess: false, remindVisible: false, session: broke, now: start + 26 * 60_000 }), 'break');
 
 assert.deepEqual(clampCatPosition(-20, 4000, 800, 600, 88, 72, 96), { x: 8, y: 416 });
+assert.deepEqual(clampCatPosition(0, 0, 1280, 800, 176, 76, 120, 1088), { x: 1088, y: 76 });
+assert.deepEqual(clampCatPosition(2000, 2000, 1280, 800, 176, 76, 120, 1088), { x: 1096, y: 504 });
 
 console.log('focus session ok');

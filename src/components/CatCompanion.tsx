@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { clampCatPosition, type CatPose } from '../lib/focusSession';
 import { CatSprite, type CatClip } from './CatSprite';
 
@@ -23,44 +23,65 @@ type CatCompanionProps = {
   onPause: () => void;
 };
 
-type Frame = { width: number; height: number; size: number; top: number; bottom: number; tight: boolean };
+type Frame = { width: number; height: number; size: number; top: number; lane: number; minX: number; tight: boolean };
 
-function readFrame(): Frame {
+function readViewport() {
   const viewport = window.visualViewport;
-  const width = viewport?.width ?? window.innerWidth;
-  const height = viewport?.height ?? window.innerHeight;
+  return {
+    width: viewport?.width ?? window.innerWidth,
+    height: viewport?.height ?? window.innerHeight,
+  };
+}
+
+function frameFor(width: number, height: number, bottom: number): Frame {
   const tight = width < 700 || height < 520;
-  return { width, height, size: tight ? 68 : 88, top: 76, bottom: 24, tight };
+  const top = 76;
+  const available = Math.max(48, height - top - bottom - 12);
+  const widthRoom = Math.max(48, width - (tight ? 232 : 336) - 20);
+  const target = tight ? 95 : 176;
+  const size = Math.min(target, available, widthRoom);
+  const lane = size + (tight ? 12 : 16);
+  return { width, height, size, top, lane, minX: Math.max(8, width - lane + 4), tight };
 }
 
 export function CatCompanion(props: CatCompanionProps) {
-  const [frame, setFrame] = useState<Frame>(() => (typeof window === 'undefined' ? { width: 800, height: 600, size: 88, top: 76, bottom: 24, tight: false } : readFrame()));
+  const [viewport, setViewport] = useState(() => (typeof window === 'undefined' ? { width: 1280, height: 800 } : readViewport()));
   const [dragPoint, setDragPoint] = useState<Point | null>(null);
   const [menu, setMenu] = useState(false);
   const [occupiedBottom, setOccupiedBottom] = useState(24);
   const [face, setFace] = useState<1 | -1>(1);
   const [traveling, setTraveling] = useState(false);
   const [grooming, setGrooming] = useState(false);
+  const [gliding, setGliding] = useState(false);
   const drag = useRef<{ x: number; y: number; left: number; top: number; moved: boolean } | null>(null);
   const dragPointRef = useRef<Point | null>(null);
   const suppressClick = useRef(false);
   const moveRef = useRef(props.onMove);
   const placedX = useRef<number | null>(null);
-  const bottom = Math.max(frame.bottom, occupiedBottom);
+  const bottom = Math.max(24, occupiedBottom);
+  const frame = frameFor(viewport.width, viewport.height, bottom);
   const resting = clampCatPosition(
-    props.position.x ?? frame.width - frame.size - 16,
+    props.position.x ?? frame.minX,
     props.position.y ?? frame.height - frame.size - bottom - 12,
     frame.width,
     frame.height,
     frame.size,
     frame.top,
     bottom,
+    frame.minX,
   );
   const point = dragPoint ?? resting;
 
   useEffect(() => {
     moveRef.current = props.onMove;
   });
+
+  useLayoutEffect(() => {
+    document.documentElement.style.setProperty('--cat-lane', props.hidden ? '0px' : `${frame.lane}px`);
+    return () => {
+      document.documentElement.style.removeProperty('--cat-lane');
+    };
+  }, [frame.lane, props.hidden]);
 
   useEffect(() => {
     const previous = placedX.current;
@@ -106,10 +127,10 @@ export function CatCompanion(props: CatCompanionProps) {
 
   useEffect(() => {
     const update = () => {
-      const nextFrame = readFrame();
-      setFrame(nextFrame);
+      const nextFrame = frameFor(readViewport().width, readViewport().height, bottom);
+      setViewport((current) => (current.width === nextFrame.width && current.height === nextFrame.height ? current : { width: nextFrame.width, height: nextFrame.height }));
       if (props.position.x == null || props.position.y == null || drag.current) return;
-      const next = clampCatPosition(props.position.x, props.position.y, nextFrame.width, nextFrame.height, nextFrame.size, nextFrame.top, bottom);
+      const next = clampCatPosition(props.position.x, props.position.y, nextFrame.width, nextFrame.height, nextFrame.size, nextFrame.top, bottom, nextFrame.minX);
       if (next.x !== props.position.x || next.y !== props.position.y) moveRef.current(next);
     };
     const id = window.requestAnimationFrame(update);
@@ -127,16 +148,19 @@ export function CatCompanion(props: CatCompanionProps) {
     if (props.pose !== 'idle' && props.pose !== 'sleep') return;
     const id = window.setInterval(() => {
       if (Math.random() > 0.35 || drag.current) return;
+      setGliding(true);
       const spot = clampCatPosition(
-        12 + Math.random() * Math.max(1, frame.width - frame.size - 24),
-        frame.height - frame.size - bottom - 8,
+        frame.minX + Math.random() * Math.max(1, frame.width - frame.size - 8 - frame.minX),
+        frame.top + Math.random() * Math.max(1, frame.height - frame.size - bottom - frame.top),
         frame.width,
         frame.height,
         frame.size,
         frame.top,
         bottom,
+        frame.minX,
       );
-      moveRef.current(spot);
+      window.requestAnimationFrame(() => moveRef.current(spot));
+      window.setTimeout(() => setGliding(false), 1800);
     }, 32000);
     return () => window.clearInterval(id);
   }, [props.hidden, props.pinned, props.walks, props.reduced, props.pose, frame, bottom, menu]);
@@ -176,7 +200,7 @@ export function CatCompanion(props: CatCompanionProps) {
     const dx = event.clientX - origin.x;
     const dy = event.clientY - origin.y;
     if (Math.hypot(dx, dy) > 6) origin.moved = true;
-    const next = clampCatPosition(origin.left + dx, origin.top + dy, frame.width, frame.height, frame.size, frame.top, bottom);
+    const next = clampCatPosition(origin.left + dx, origin.top + dy, frame.width, frame.height, frame.size, frame.top, bottom, frame.minX);
     dragPointRef.current = next;
     setDragPoint(next);
   }
@@ -202,7 +226,7 @@ export function CatCompanion(props: CatCompanionProps) {
   }
 
   return (
-    <div data-cat-root className={`fixed z-40 ${props.greeting && !props.reduced && !frame.tight ? 'cat-arrive' : ''}`} style={{ left: point.x, top: point.y, width: frame.size, height: frame.size, pointerEvents: 'none', transition: props.reduced || dragPoint ? undefined : 'left 1.8s ease, top 1.8s ease' }}>
+    <div data-cat-root className={`fixed z-40 ${props.greeting && !props.reduced && !frame.tight ? 'cat-arrive' : ''}`} style={{ left: point.x, top: point.y, width: frame.size, height: frame.size, pointerEvents: 'none', transition: props.reduced || dragPoint || !gliding ? undefined : 'left 1.8s ease, top 1.8s ease' }}>
       <CatSprite clip={clip} face={face} reduced={props.reduced} blinkPause={props.pose === 'focus' ? 8000 : 3600} onFinished={() => setGrooming(false)} />
       <button
         type="button"

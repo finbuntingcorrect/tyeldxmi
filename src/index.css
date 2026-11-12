@@ -216,8 +216,8 @@ html[data-theme='dark'] {
 }
 
 @keyframes cat-arrive {
-  from { transform: translateX(-36vw); }
-  to { transform: translateX(0); }
+  from { transform: translateY(12px); }
+  to { transform: translateY(0); }
 }
 
 .cat-breathe {

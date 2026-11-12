@@ -82,7 +82,7 @@ export function useFocusController({ login, session, focusAt, reminders, sound, 
     if (!soundRef.current) return;
     if (!(await claimSignal(id))) return;
     const result = await playChime(volumeRef.current);
-    if (result === 'blocked') setNotice('Браузер не дал включить звук. Сессия на месте.');
+    if (result === 'blocked') setNotice('Звук не включился.');
   }
 
   function showRemind() {
@@ -103,7 +103,7 @@ export function useFocusController({ login, session, focusAt, reminders, sound, 
         void claimSignal(`remind:${next.signalId}`).then(async (won) => {
           if (!won) return;
           const result = await playMeow(volumeRef.current);
-          if (result === 'blocked') setNotice('Браузер не дал включить звук. Напоминание видно на экране.');
+          if (result === 'blocked') setNotice('Звук не включился.');
         });
       }
       return;
@@ -165,7 +165,7 @@ export function useFocusController({ login, session, focusAt, reminders, sound, 
     takeLead(loginRef.current, true);
     if (soundRef.current) {
       void unlockSound().then((ready) => {
-        if (!ready) setNotice('Браузер не дал включить звук. Таймер идёт без сигнала.');
+        if (!ready) setNotice('Звук не включился. Таймер идёт.');
       });
     }
     publish(startFocus(taskId, minutes, Date.now(), signal()));

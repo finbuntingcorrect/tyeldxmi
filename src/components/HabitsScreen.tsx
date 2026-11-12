@@ -47,7 +47,6 @@ function HabitCard({
       <h3 className="text-2xl">{habit.title}</h3>
       <p className="mt-1 text-sm text-muted">{trackerProgressLabel(done)}</p>
       <p className="mt-1 text-xs text-muted">с {shortStart(habit.start)}</p>
-      <p className="mt-3 text-xs text-muted">Нажмите на кружок: галочка, затем пропуск, затем снова пусто.</p>
       <div className="mt-4 grid grid-cols-6 gap-2">
         {days.map((date) => {
           const status = marks.find((mark) => mark.habitId === habit.id && mark.date === date)?.status ?? null;
@@ -95,6 +94,7 @@ export function HabitsScreen({ book, today, onCreate, onMark }: HabitsScreenProp
       <header className="border-b border-line px-4 py-4 sm:px-6">
         <p className="text-xs font-semibold tracking-[0.16em] text-muted uppercase">Привычки</p>
         <h2 className="mt-1 text-3xl sm:text-4xl">Тридцать дней</h2>
+        {book.habits.length > 0 ? <p className="mt-2 text-sm text-muted">Кружок: сделано, пропуск, пусто.</p> : null}
       </header>
       <div className="border-b border-line px-4 py-4 sm:px-6">
         <button type="button" onClick={() => setOpen((value) => !value)} className="paper-submit">Добавить привычку</button>
@@ -115,7 +115,7 @@ export function HabitsScreen({ book, today, onCreate, onMark }: HabitsScreenProp
           </div>
         ) : null}
       </div>
-      {book.habits.length === 0 ? <p className="px-4 py-6 text-sm text-muted sm:px-6">Пока нет привычек. Добавьте первую, и появится карточка на 30 дней.</p> : (
+      {book.habits.length === 0 ? <p className="px-4 py-6 text-sm text-muted sm:px-6">Пока нет привычек.</p> : (
         <div className="grid gap-4 p-4 sm:p-6 lg:grid-cols-2">
           {book.habits.map((habit) => (
             <HabitCard key={habit.id} habit={habit} today={today} marks={book.marks} onMark={onMark} />

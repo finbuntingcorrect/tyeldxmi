@@ -213,11 +213,11 @@ export function catPose(input: {
   return 'idle';
 }
 
-export function clampCatPosition(x: number, y: number, width: number, height: number, size: number, top: number, bottom: number) {
-  const maxX = Math.max(top, width - size - 8);
+export function clampCatPosition(x: number, y: number, width: number, height: number, size: number, top: number, bottom: number, minX = 8) {
+  const maxX = Math.max(minX, width - size - 8);
   const maxY = Math.max(top, height - size - bottom);
   return {
-    x: Math.min(maxX, Math.max(8, x)),
+    x: Math.min(maxX, Math.max(minX, x)),
     y: Math.min(maxY, Math.max(top, y)),
   };
 }
