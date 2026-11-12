@@ -3,7 +3,6 @@ const MEOW_URL = '/sounds/meow.mp3';
 let context: AudioContext | null = null;
 let playing: AudioScheduledSourceNode[] = [];
 let clip: HTMLAudioElement | null = null;
-let meowAvailable: boolean | null = null;
 
 function audioContext(): AudioContext | null {
   const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
@@ -54,7 +53,7 @@ function tone(freq: number, at: number, duration: number, volume: number) {
   playing.push(osc);
 }
 
-/** Soft timer chime. A meow file is optional and is not bundled. */
+/** Soft timer chime. The meow itself is the bundled recording. */
 export async function playChime(volume: number): Promise<'played' | 'blocked'> {
   const ready = await unlockSound();
   if (!ready || !context) return 'blocked';
@@ -66,33 +65,17 @@ export async function playChime(volume: number): Promise<'played' | 'blocked'> {
   return 'played';
 }
 
-export async function playMeow(volume: number): Promise<'played' | 'blocked' | 'missing'> {
+export async function playMeow(volume: number): Promise<'played' | 'blocked'> {
   const ready = await unlockSound();
   if (!ready) return 'blocked';
   stopTones();
-  if (meowAvailable === null) {
-    try {
-      const response = await fetch(MEOW_URL, { method: 'HEAD' });
-      meowAvailable = response.ok;
-    } catch {
-      meowAvailable = false;
-    }
+  const audio = new Audio(MEOW_URL);
+  audio.volume = Math.min(1, Math.max(0, volume));
+  clip = audio;
+  try {
+    await audio.play();
+    return 'played';
+  } catch {
+    return 'blocked';
   }
-  if (meowAvailable && context) {
-    const audio = new Audio(MEOW_URL);
-    audio.volume = Math.min(1, Math.max(0, volume));
-    clip = audio;
-    try {
-      await audio.play();
-      return 'played';
-    } catch {
-      return 'blocked';
-    }
-  }
-  if (!context) return 'blocked';
-  const now = context.currentTime;
-  const level = Math.max(0.001, Math.min(0.1, volume * 0.07));
-  tone(540, now, 0.07, level);
-  tone(360, now + 0.08, 0.1, level);
-  return 'missing';
 }

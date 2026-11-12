@@ -1,16 +1,6 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { clampCatPosition, type CatPose } from '../lib/focusSession';
-
-const ART: Record<CatPose, string> = {
-  greet: '/mascot/cat-wave.png',
-  idle: '/mascot/cat-wave.png',
-  remind: '/mascot/cat-wave.png',
-  focus: '/mascot/cat-working.png',
-  pause: '/mascot/cat-sleeping.png',
-  sleep: '/mascot/cat-sleeping.png',
-  break: '/mascot/cat-sleeping.png',
-  success: '/mascot/cat-success.png',
-};
+import { CatSprite, type CatClip } from './CatSprite';
 
 type Point = { x: number; y: number };
 
@@ -48,10 +38,14 @@ export function CatCompanion(props: CatCompanionProps) {
   const [dragPoint, setDragPoint] = useState<Point | null>(null);
   const [menu, setMenu] = useState(false);
   const [occupiedBottom, setOccupiedBottom] = useState(24);
+  const [face, setFace] = useState<1 | -1>(1);
+  const [traveling, setTraveling] = useState(false);
+  const [grooming, setGrooming] = useState(false);
   const drag = useRef<{ x: number; y: number; left: number; top: number; moved: boolean } | null>(null);
   const dragPointRef = useRef<Point | null>(null);
   const suppressClick = useRef(false);
   const moveRef = useRef(props.onMove);
+  const placedX = useRef<number | null>(null);
   const bottom = Math.max(frame.bottom, occupiedBottom);
   const resting = clampCatPosition(
     props.position.x ?? frame.width - frame.size - 16,
@@ -67,6 +61,32 @@ export function CatCompanion(props: CatCompanionProps) {
   useEffect(() => {
     moveRef.current = props.onMove;
   });
+
+  useEffect(() => {
+    const previous = placedX.current;
+    placedX.current = point.x;
+    if (previous == null || dragPoint) return;
+    const delta = point.x - previous;
+    if (Math.abs(delta) < 2) return;
+    const nextFace: 1 | -1 = delta < 0 ? -1 : 1;
+    const start = window.setTimeout(() => {
+      setFace(nextFace);
+      if (!props.reduced) setTraveling(true);
+    }, 0);
+    const stop = window.setTimeout(() => setTraveling(false), 1800);
+    return () => {
+      window.clearTimeout(start);
+      window.clearTimeout(stop);
+    };
+  }, [point.x, dragPoint, props.reduced]);
+
+  useEffect(() => {
+    if (props.reduced || props.pose !== 'idle' || traveling) return;
+    const id = window.setInterval(() => {
+      if (Math.random() < 0.35) setGrooming(true);
+    }, 18000);
+    return () => window.clearInterval(id);
+  }, [props.pose, props.reduced, traveling]);
 
   useEffect(() => {
     const measure = () => {
@@ -140,6 +160,7 @@ export function CatCompanion(props: CatCompanionProps) {
 
   if (props.hidden) return null;
 
+  const clip = chooseClip(props.pose, props.greeting, traveling, grooming, frame.tight, props.reduced);
   const side = point.x > frame.width / 2;
   const lineAbove = point.y > 150;
 
@@ -181,13 +202,8 @@ export function CatCompanion(props: CatCompanionProps) {
   }
 
   return (
-    <div data-cat-root className="fixed z-40" style={{ left: point.x, top: point.y, width: frame.size, height: frame.size, pointerEvents: 'none', transition: props.reduced || dragPoint ? undefined : 'left 1.8s ease, top 1.8s ease' }}>
-      <img
-        src={ART[props.pose]}
-        alt=""
-        draggable={false}
-        className={`pointer-events-none absolute inset-0 h-full w-full object-contain ${props.pose === 'sleep' && !props.reduced ? 'cat-breathe' : ''} ${props.greeting && !props.reduced && !frame.tight ? 'cat-arrive' : ''}`}
-      />
+    <div data-cat-root className={`fixed z-40 ${props.greeting && !props.reduced && !frame.tight ? 'cat-arrive' : ''}`} style={{ left: point.x, top: point.y, width: frame.size, height: frame.size, pointerEvents: 'none', transition: props.reduced || dragPoint ? undefined : 'left 1.8s ease, top 1.8s ease' }}>
+      <CatSprite clip={clip} face={face} reduced={props.reduced} blinkPause={props.pose === 'focus' ? 8000 : 3600} onFinished={() => setGrooming(false)} />
       <button
         type="button"
         aria-label="Котёнок, открыть меню"
@@ -221,4 +237,12 @@ export function CatCompanion(props: CatCompanionProps) {
       ) : null}
     </div>
   );
+}
+
+function chooseClip(pose: CatPose, greeting: boolean, traveling: boolean, grooming: boolean, tight: boolean, reduced: boolean): CatClip {
+  if (!reduced && !tight && (greeting || traveling) && (pose === 'greet' || pose === 'idle' || pose === 'sleep')) return 'walk';
+  if (pose === 'sleep' || pose === 'pause') return 'sleep';
+  if (pose === 'break' || pose === 'success') return 'stretch';
+  if (pose === 'remind' || (!reduced && grooming && pose === 'idle')) return 'groom';
+  return 'blink';
 }

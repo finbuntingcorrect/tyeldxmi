@@ -1,0 +1,55 @@
+{
+  "image": "/mascot/cat-atlas.png",
+  "imageWidth": 1586,
+  "imageHeight": 992,
+  "columns": 8,
+  "rows": 5,
+  "note": "Rows and frames are zero-indexed. Use fractional CSS background positions; image dimensions are not divisible by grid. Generated art may need registration polish.",
+  "animations": {
+    "walk": {
+      "row": 0,
+      "frames": 8,
+      "fps": 8,
+      "loop": true
+    },
+    "blink": {
+      "row": 1,
+      "frames": 8,
+      "durationsMs": [
+        1300,
+        500,
+        90,
+        100,
+        100,
+        90,
+        250,
+        700
+      ],
+      "loop": false
+    },
+    "groom": {
+      "row": 2,
+      "frames": 8,
+      "fps": 5,
+      "loop": false
+    },
+    "stretch": {
+      "row": 3,
+      "frames": 8,
+      "fps": 5,
+      "loop": false
+    },
+    "sleep": {
+      "row": 4,
+      "frames": 8,
+      "fps": 2,
+      "loop": true
+    }
+  },
+  "sound": {
+    "path": "/sounds/meow.mp3",
+    "synthetic": true,
+    "durationSeconds": 0.82,
+    "recommendedVolume": 0.3
+  }
+}

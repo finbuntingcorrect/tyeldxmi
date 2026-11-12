@@ -37,7 +37,7 @@ export type CatPose = 'greet' | 'sleep' | 'idle' | 'focus' | 'pause' | 'remind' 
 export function defaultCatPrefs(): CatPrefs {
   return {
     sound: false,
-    volume: 0.4,
+    volume: 0.3,
     walks: true,
     pinned: false,
     hidden: false,

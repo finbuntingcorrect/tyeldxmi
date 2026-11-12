@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { CatPrefs } from '../lib/focusSession';
-import { playChime, unlockSound } from '../lib/focusSound';
+import { playMeow, unlockSound } from '../lib/focusSound';
 import type { AppTheme } from '../lib/notebook';
 import { ThemePicker } from './ThemePicker';
 
@@ -44,8 +44,8 @@ export function SettingsPanel({ login, name, theme, cat, onName, onTheme, onCat 
       setSoundNote('Браузер не дал включить звук. Остальное работает как обычно.');
       return;
     }
-    const result = await playChime(volume);
-    setSoundNote(result === 'blocked' ? 'Браузер не дал включить звук. Остальное работает как обычно.' : 'Сигнал проигран.');
+    const result = await playMeow(volume);
+    setSoundNote(result === 'blocked' ? 'Браузер не дал включить звук. Остальное работает как обычно.' : 'Мяуканье проиграно.');
   }
 
   return (
@@ -75,7 +75,6 @@ export function SettingsPanel({ login, name, theme, cat, onName, onTheme, onCat 
       <input id="sound-volume" type="range" min={0} max={100} value={Math.round(volume * 100)} onChange={(event) => setDraftVolume(Number(event.target.value) / 100)} onPointerUp={(event) => commitVolume(Number(event.currentTarget.value) / 100)} onKeyUp={(event) => commitVolume(Number(event.currentTarget.value) / 100)} onBlur={(event) => commitVolume(Number(event.currentTarget.value) / 100)} className="mt-2 w-full max-w-xs" />
       <button type="button" onClick={() => void testSound()} className="paper-choice mt-2 px-0">Проверить звук</button>
       {soundNote ? <p role="status" className="mt-2 text-sm text-ink">{soundNote}</p> : null}
-      <p className="mt-2 max-w-xl text-sm text-muted">Мяуканье берётся из файла sounds/meow.mp3. Пока файла нет, напоминание использует короткий тихий сигнал.</p>
       <h3 className="mt-6 text-2xl text-ink">Котёнок</h3>
       <label className="mt-3 flex min-h-11 items-center gap-3 text-sm font-semibold text-ink">
         <input type="checkbox" checked={cat.reminders} onChange={(event) => onCat({ ...cat, reminders: event.target.checked })} />
