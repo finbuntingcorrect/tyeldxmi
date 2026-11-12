@@ -185,6 +185,7 @@ export function Home() {
             onName={notebook.setName}
             onTheme={notebook.setTheme}
             onCat={notebook.setCat}
+            here={notebook.here}
           />
         ) : null}
         {notebook.error ? <p role="alert" className="border-b border-line px-4 py-3 text-sm font-semibold text-danger sm:px-6">{notebook.error}</p> : null}

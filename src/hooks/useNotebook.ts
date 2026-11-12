@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { cabinetError, fetchCabinet, loginCabinet, logoutCabinet, registerCabinet, saveCabinet } from '../lib/cabinetApi';
+import { cabinetError, cabinetUsesBrowser, fetchCabinet, loginCabinet, logoutCabinet, registerCabinet, saveCabinet } from '../lib/cabinetApi';
 import {
   claimMatches,
   clearClaim,
@@ -165,6 +165,7 @@ export function useNotebook() {
   return {
     status,
     login,
+    here: cabinetUsesBrowser(),
     book: state.book,
     error: state.error,
     register,

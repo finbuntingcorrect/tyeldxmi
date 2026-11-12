@@ -12,9 +12,10 @@ type SettingsPanelProps = {
   onName: (name: string) => void;
   onTheme: (theme: AppTheme) => void;
   onCat: (cat: CatPrefs) => void;
+  here?: boolean;
 };
 
-export function SettingsPanel({ login, name, theme, cat, onName, onTheme, onCat }: SettingsPanelProps) {
+export function SettingsPanel({ login, name, theme, cat, onName, onTheme, onCat, here = false }: SettingsPanelProps) {
   const [draft, setDraft] = useState(name);
   const [hint, setHint] = useState(false);
   const [draftVolume, setDraftVolume] = useState<number | null>(null);
@@ -52,6 +53,7 @@ export function SettingsPanel({ login, name, theme, cat, onName, onTheme, onCat 
     <section className="border-b border-line px-4 py-5 sm:px-6">
       <h2 className="text-3xl text-ink">Настройки</h2>
       <p className="mt-2 text-sm text-muted">Логин: {login}</p>
+      {here ? <p className="mt-1 text-sm text-muted">Кабинет открывается в этом браузере.</p> : null}
       <form className="mt-4" onSubmit={(event) => { event.preventDefault(); saveName(); }}>
         <label htmlFor="settings-name" className="text-sm font-semibold text-ink">Имя</label>
         <div className="mt-1 flex flex-col gap-3 sm:flex-row sm:items-end">
