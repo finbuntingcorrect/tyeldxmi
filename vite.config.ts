@@ -82,7 +82,7 @@ function devApi(): Plugin {
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
-  for (const key of ['DATABASE_URL', 'RESEND_API_KEY', 'EMAIL_FROM', 'APP_URL']) {
+  for (const key of ['DATABASE_URL', 'POSTGRES_URL', 'POSTGRES_PRISMA_URL', 'NEON_DATABASE_URL', 'DATABASE_URL_UNPOOLED', 'POSTGRES_URL_NON_POOLING', 'RESEND_API_KEY', 'EMAIL_FROM', 'APP_URL']) {
     if (!process.env[key] && env[key]) process.env[key] = env[key];
   }
 

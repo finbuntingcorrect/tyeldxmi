@@ -2,6 +2,7 @@ import { randomBytes, randomUUID, createHash } from 'node:crypto';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { sessionCookie, type AccountResult } from './account';
+import { databaseUrl } from './db';
 import { ensureSchema } from './schema';
 import { hashPassword, normalizeLogin, validPassword, verifyPassword } from './password';
 import { emptyNotebook, parseNotebook, type Notebook } from '../src/lib/notebook';
@@ -263,7 +264,7 @@ export function cabinetStore() {
 }
 
 export async function openCabinetStore() {
-  if (process.env.DATABASE_URL) return createNeonStore();
+  if (databaseUrl()) return createNeonStore();
   if (process.env.VERCEL === '1') throw new Error('storage');
   return createFileStore(localFile);
 }
