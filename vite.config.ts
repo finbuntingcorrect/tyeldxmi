@@ -4,12 +4,14 @@ import tailwindcss from '@tailwindcss/vite';
 import type { ServerResponse } from 'node:http';
 import authHandler from './server/http/auth';
 import commentsHandler from './server/http/comments';
+import notebookHandler from './server/http/notebook';
 import profileHandler from './server/http/profile';
 import tasksHandler from './server/http/tasks';
 import type { NodeRequest, NodeResponse } from './server/http/node';
 
 const routes: Record<string, (req: NodeRequest, res: NodeResponse) => Promise<void>> = {
   '/api/auth': authHandler,
+  '/api/notebook': notebookHandler,
   '/api/profile': profileHandler,
   '/api/tasks': tasksHandler,
   '/api/comments': commentsHandler,

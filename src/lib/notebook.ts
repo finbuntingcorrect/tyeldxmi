@@ -95,6 +95,15 @@ export function createId() {
   return globalThis.crypto.randomUUID();
 }
 
+export function notebookIsEmpty(book: Notebook) {
+  return book.tasks.every((task) => task.deleted)
+    && book.series.length === 0
+    && book.skips.length === 0
+    && book.habits.length === 0
+    && book.marks.length === 0
+    && book.weekItems.length === 0;
+}
+
 export function emptyNotebook(): Notebook {
   return {
     version: 1,

@@ -8,9 +8,11 @@
     <script>
       (function () {
         try {
-          var raw = localStorage.getItem('today-cat.notebook.v1');
-          if (!raw) return;
-          var theme = JSON.parse(raw).theme;
+          var theme = localStorage.getItem('today-cat.theme');
+          if (theme !== 'blue' && theme !== 'pink' && theme !== 'yellow' && theme !== 'dark') {
+            var raw = localStorage.getItem('today-cat.notebook.v1');
+            theme = raw ? JSON.parse(raw).theme : '';
+          }
           if (theme !== 'blue' && theme !== 'pink' && theme !== 'yellow' && theme !== 'dark') return;
           document.documentElement.dataset.theme = theme;
           document.documentElement.style.colorScheme = theme === 'dark' ? 'dark' : 'light';
@@ -28,12 +30,12 @@
     </style>
     <meta
       name="description"
-      content="Today Cat — знакомство с котёнком, привычки, рабочий планер и фокус дня. Данные остаются в этом браузере."
+      content="Today Cat — котёнок встречает по логину и паролю. Привычки, планер и фокус дня хранятся в личном кабинете."
     />
     <meta property="og:title" content="Today Cat" />
     <meta
       property="og:description"
-      content="Котёнок встречает фразой и открывает привычки, планер или фокус дня. Всё хранится в этом браузере."
+      content="Котёнок спрашивает логин и пароль, а затем открывает личный кабинет: привычки, планер или фокус дня."
     />
     <meta property="og:type" content="website" />
     <meta property="og:locale" content="ru_RU" />

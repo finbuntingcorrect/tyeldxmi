@@ -3,6 +3,7 @@ import { localDateKey, dateFromKey, formatLocalDate } from '../lib/date';
 import { habitsForDate, tasksForDate } from '../lib/notebook';
 import { useNotebook } from '../hooks/useNotebook';
 import type { Priority } from '../types';
+import { AccountGate, CabinetSplash } from './AccountGate';
 import { FocusScreen } from './FocusScreen';
 import { HabitsScreen } from './HabitsScreen';
 import { ModeSwitch } from './ModeSwitch';
@@ -17,6 +18,9 @@ export function Home() {
   const [settings, setSettings] = useState(false);
   const book = notebook.book;
   const mode = book.mode;
+
+  if (notebook.status === 'loading') return <CabinetSplash />;
+  if (notebook.status === 'anon') return <AccountGate onRegister={notebook.register} onLogin={notebook.signIn} />;
 
   if (!book.greeted || !mode) {
     return (
@@ -60,12 +64,16 @@ export function Home() {
               <h1 className="text-2xl leading-tight sm:text-4xl">{book.name ? `Привет, ${book.name}` : 'Today Cat'}</h1>
               <p className="mt-1 text-sm text-muted">{formatLocalDate(dateFromKey(today))}</p>
               <p className="text-sm text-muted">{stamp.hint}</p>
+              <p className="text-sm text-muted">Личный кабинет · {notebook.login}</p>
             </div>
           </div>
-          <button type="button" aria-expanded={settings} onClick={() => setSettings((value) => !value)} className={`min-h-11 shrink-0 px-1 text-sm font-semibold underline underline-offset-4 ${settings ? 'decoration-primary' : 'decoration-line'}`}>Настройки</button>
+          <div className="flex shrink-0 items-center gap-4">
+            <button type="button" aria-expanded={settings} onClick={() => setSettings((value) => !value)} className={`min-h-11 px-1 text-sm font-semibold underline underline-offset-4 ${settings ? 'decoration-primary' : 'decoration-line'}`}>Настройки</button>
+            <button type="button" onClick={() => void notebook.signOut()} className="min-h-11 px-1 text-sm font-semibold underline underline-offset-4 decoration-line">Выйти</button>
+          </div>
         </header>
         <ModeSwitch mode={mode} onChange={notebook.chooseMode} />
-        {settings ? <SettingsPanel name={book.name} theme={book.theme} onName={notebook.setName} onTheme={notebook.setTheme} /> : null}
+        {settings ? <SettingsPanel login={notebook.login} name={book.name} theme={book.theme} onName={notebook.setName} onTheme={notebook.setTheme} /> : null}
         {notebook.error ? <p role="alert" className="border-b border-line px-4 py-3 text-sm font-semibold text-danger sm:px-6">{notebook.error}</p> : null}
         {mode === 'habits' ? (
           <HabitsScreen book={book} today={today} onCreate={notebook.createHabit} onMark={notebook.setHabitMark} />
