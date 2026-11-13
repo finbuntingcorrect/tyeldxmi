@@ -65,7 +65,7 @@ export function Home() {
   }, [conflict]);
 
   if (notebook.status === 'loading') return <CabinetSplash />;
-  if (notebook.status === 'anon') return <AccountGate onRegister={notebook.register} onLogin={notebook.signIn} />;
+  if (notebook.status === 'anon') return <AccountGate notice={notebook.error} onRequest={notebook.requestEmail} />;
 
   if (!book.greeted || !mode) {
     return (

@@ -1,5 +1,6 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import type { CatLook, CatRole, Occupation, Profile, Purpose } from '../src/types';
+import { emptyNotebook } from '../src/lib/notebook';
 import { ensureSchema } from './schema';
 import { sendMagicLink } from './mail';
 
@@ -173,6 +174,17 @@ export async function verifyLink(raw: unknown, timezoneValue: unknown, secure: b
   );
   const user = mapUser((users as UserRow[])[0]);
   const session = token();
+  await sql.query(
+    `CREATE TABLE IF NOT EXISTS notebooks (
+      user_id text PRIMARY KEY,
+      data jsonb NOT NULL,
+      updated_at timestamptz NOT NULL DEFAULT now()
+    )`,
+  );
+  await sql.query(
+    `INSERT INTO notebooks (user_id, data) VALUES ($1, $2::jsonb) ON CONFLICT (user_id) DO NOTHING`,
+    [user.id, JSON.stringify({ ...emptyNotebook(), name: email.slice(0, 40) })],
+  );
   await sql.query(
     `INSERT INTO sessions (id, user_id, token_hash, expires_at) VALUES ($1, $2, $3, now() + interval '30 days')`,
     [randomUUID(), user.id, hashToken(session)],

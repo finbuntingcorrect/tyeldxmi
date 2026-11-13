@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { cabinetError, cabinetUsesBrowser, fetchCabinet, loginCabinet, logoutCabinet, registerCabinet, saveCabinet } from '../lib/cabinetApi';
+import { cabinetError, cabinetUsesBrowser, fetchCabinet, loginCabinet, logoutCabinet, registerCabinet, requestEmailLink, saveCabinet, verifyEmailLink } from '../lib/cabinetApi';
 import {
   claimMatches,
   clearClaim,
@@ -90,7 +90,15 @@ export function useNotebook() {
 
   useEffect(() => {
     const generationAtLoad = generation.current;
-    fetchCabinet()
+    const magic = new URLSearchParams(window.location.search).get('magic');
+    const boot = (async () => {
+      if (magic) {
+        await verifyEmailLink(magic);
+        window.history.replaceState({}, '', window.location.pathname);
+      }
+      return fetchCabinet();
+    })();
+    boot
       .then((result) => {
         if (!mounted.current || generation.current !== generationAtLoad) return;
         if (!result) {
@@ -121,6 +129,15 @@ export function useNotebook() {
     setState({ book, error: null });
     persist(book);
     return book;
+  }
+
+  async function requestEmail(email: string) {
+    try {
+      await requestEmailLink(email);
+      return null;
+    } catch (error) {
+      return cabinetError(error);
+    }
   }
 
   async function register(nextLogin: string, password: string) {
@@ -168,6 +185,7 @@ export function useNotebook() {
     here: cabinetUsesBrowser(),
     book: state.book,
     error: state.error,
+    requestEmail,
     register,
     signIn,
     signOut,
