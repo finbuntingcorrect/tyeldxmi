@@ -11,12 +11,6 @@ const DATABASE_KEYS = [
 
 const DATABASE_NAME = /DATABASE_URL|POSTGRES_URL|POSTGRES_PRISMA_URL|POSTGRES_URL_NON_POOLING|DATABASE_URL_UNPOOLED/;
 
-export function databaseEnvNames() {
-  return Object.keys(process.env)
-    .filter((key) => /DATABASE|POSTGRES|NEON|PGHOST|PGUSER|PGDATABASE|PGPASSWORD/.test(key))
-    .sort();
-}
-
 export function databaseUrl() {
   const seen = new Set<string>();
   const ranked = [
