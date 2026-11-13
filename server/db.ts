@@ -9,10 +9,25 @@ const DATABASE_KEYS = [
   'POSTGRES_URL_NON_POOLING',
 ];
 
+const DATABASE_NAME = /DATABASE_URL|POSTGRES_URL|POSTGRES_PRISMA_URL|POSTGRES_URL_NON_POOLING|DATABASE_URL_UNPOOLED/;
+
+export function databaseEnvNames() {
+  return Object.keys(process.env)
+    .filter((key) => /DATABASE|POSTGRES|NEON|PGHOST|PGUSER|PGDATABASE|PGPASSWORD/.test(key))
+    .sort();
+}
+
 export function databaseUrl() {
-  for (const key of DATABASE_KEYS) {
+  const seen = new Set<string>();
+  const ranked = [
+    ...DATABASE_KEYS,
+    ...Object.keys(process.env).filter((key) => DATABASE_NAME.test(key)),
+  ];
+  for (const key of ranked) {
+    if (seen.has(key)) continue;
+    seen.add(key);
     const value = process.env[key]?.trim();
-    if (value) return value;
+    if (value && /^postgres(ql)?:\/\//i.test(value)) return value;
   }
   return '';
 }
