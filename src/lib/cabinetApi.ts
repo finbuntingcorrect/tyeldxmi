@@ -17,6 +17,10 @@ const MESSAGES: Record<string, string> = {
   browser: 'Браузер не дал сохранить кабинет.',
   cabinet: 'Кабинет в этом браузере не открылся.',
   auth: 'Нужно снова войти.',
+  email: 'Введи почту в обычном виде.',
+  mail: 'Письма ещё не подключены.',
+  mail_failed: 'Письмо не отправилось. Попробуй ещё раз.',
+  token: 'Ссылка уже не действует. Запроси новую.',
 };
 
 let preferBrowser = false;
@@ -80,6 +84,15 @@ export async function fetchCabinet(): Promise<CabinetPayload | null> {
     throw new Error(error);
   }
   return asCabinet(payload || {});
+}
+
+export function requestEmailLink(email: string) {
+  return request('/api/auth', 'POST', { action: 'request', email });
+}
+
+export function verifyEmailLink(token: string) {
+  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Moscow';
+  return request('/api/auth', 'POST', { action: 'verify', token, timezone });
 }
 
 export async function registerCabinet(login: string, password: string) {

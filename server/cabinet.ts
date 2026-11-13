@@ -221,18 +221,22 @@ async function createNeonStore(): Promise<CabinetStore> {
     },
     async userForToken(tokenHash) {
       const rows = asRows(await sql.query(
-        `SELECT u.id, u.login, u.login_key, u.password_hash
+        `SELECT u.id, u.email, u.login, u.login_key, u.password_hash
          FROM sessions s
          JOIN users u ON u.id = s.user_id
-         WHERE s.token_hash = $1 AND s.expires_at > now() AND u.login IS NOT NULL`,
+         WHERE s.token_hash = $1 AND s.expires_at > now()`,
         [tokenHash],
       ));
       const row = rows[0];
       if (!row) return null;
-      const login = textField(row, 'login');
-      const passwordHash = textField(row, 'password_hash');
-      if (!login || !passwordHash) return null;
-      return { id: textField(row, 'id'), login, loginKey: textField(row, 'login_key'), passwordHash };
+      const login = textField(row, 'login') || textField(row, 'email');
+      if (!login) return null;
+      return {
+        id: textField(row, 'id'),
+        login,
+        loginKey: textField(row, 'login_key') || login.toLowerCase(),
+        passwordHash: textField(row, 'password_hash'),
+      };
     },
     async readNotebook(userId) {
       const rows = asRows(await sql.query(
