@@ -1,5 +1,4 @@
 import { readCookie, requestLink, userFromToken, verifyLink } from '../account';
-import { databaseEnvNames } from '../db';
 import { cabinetStore, loginAccount, logoutAccount, registerAccount } from '../cabinet';
 import { cookieHeader, originOf, readBody, secureRequest, send, type NodeRequest, type NodeResponse } from './node';
 
@@ -85,6 +84,6 @@ export default async function handler(req: NodeRequest, res: NodeResponse) {
     send(res, 400, { error: 'action' });
   } catch (error) {
     const storage = error instanceof Error && error.message === 'storage';
-    send(res, storage ? 503 : 500, storage ? { error: 'storage', present: databaseEnvNames() } : { error: 'failed' });
+    send(res, storage ? 503 : 500, { error: storage ? 'storage' : 'failed' });
   }
 }
