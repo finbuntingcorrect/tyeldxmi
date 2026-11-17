@@ -23,6 +23,7 @@ type PlannerScreenProps = {
   onToggleWeekItem: (id: string) => void;
   onAssignWeekItem: (id: string, date: string) => void;
   onCarry: (from: string, to: string) => void;
+  onSkip: (id: string) => void;
   onFocus: (id: string) => void;
 };
 
@@ -61,32 +62,54 @@ function CarryLine({ count, label, onCarry }: { count: number; label: string; on
   );
 }
 
-function CaptureLine({ onAdd }: { onAdd: (title: string) => void }) {
+function CaptureLine({ week, inbox, onAdd, onToggle, onAssign }: {
+  week: string[];
+  inbox: WeekItem[];
+  onAdd: (title: string) => void;
+  onToggle: (id: string) => void;
+  onAssign: (id: string, date: string) => void;
+}) {
   const [title, setTitle] = useState('');
+  const [placing, setPlacing] = useState<string | null>(null);
   return (
-    <form
-      className="flex items-end gap-2 border-b border-line px-4 py-3 sm:px-5"
-      onSubmit={(event) => {
-        event.preventDefault();
-        const next = title.trim();
-        if (!next) return;
-        onAdd(next);
-        setTitle('');
-      }}
-    >
-      <label className="min-w-0 flex-1 text-sm font-semibold text-muted">
-        Записать в список
+    <div className="border-b border-line px-4 py-3 sm:px-5">
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          const next = title.trim();
+          if (!next) return;
+          onAdd(next);
+          setTitle('');
+        }}
+      >
         <input
           value={title}
           onChange={(event) => setTitle(event.target.value)}
-          aria-label="Записать в список недели"
-          placeholder="Разберём, когда будет время"
+          aria-label="Записать и забыть"
+          placeholder="Записать и забыть"
           maxLength={160}
-          className="paper-field mt-1"
+          className="paper-field"
         />
-      </label>
-      <button type="submit" className="paper-submit">Ок</button>
-    </form>
+      </form>
+      {inbox.map((item) => (
+        <div key={item.id} className="border-b border-line">
+          <div className="flex items-start">
+            <PaperCheck checked={item.completed} label={item.completed ? `Вернуть «${item.title}»` : `Отметить «${item.title}»`} onClick={() => onToggle(item.id)} />
+            <p className={`min-w-0 flex-1 py-2.5 text-base ${item.completed ? 'text-muted line-through' : 'text-ink'}`}>{item.title}</p>
+            <button type="button" aria-expanded={placing === item.id} onClick={() => setPlacing((current) => current === item.id ? null : item.id)} className="paper-choice shrink-0">на день</button>
+          </div>
+          {placing === item.id ? (
+            <div className="flex flex-wrap pb-2 pl-11">
+              {week.map((day, index) => (
+                <button key={day} type="button" onClick={() => { onAssign(item.id, day); setPlacing(null); }} className="paper-choice">
+                  {WEEKDAYS[index].label} {dateFromKey(day).getDate()}
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -153,7 +176,7 @@ export function PlannerScreen(props: PlannerScreenProps) {
                 <h3 className="text-2xl">{part.label}</h3>
                 <div className="mt-2 border-t border-line">
                   {rows.map((task) => (
-                    <PlanTask key={task.id} task={task} today={props.today} onToggle={props.onToggle} onMove={props.onMove} onPart={props.onPart} onPriority={props.onPriority} onUpdate={props.onUpdate} onFocus={props.onFocus} />
+                    <PlanTask key={task.id} task={task} today={props.today} onToggle={props.onToggle} onMove={props.onMove} onPart={props.onPart} onPriority={props.onPriority} onUpdate={props.onUpdate} onSkip={props.onSkip} onFocus={props.onFocus} />
                   ))}
                   <AddRow label={`Новая задача, ${part.label}`} onAdd={(title) => createOn(detail, part.id, title)} />
                 </div>
@@ -182,7 +205,13 @@ export function PlannerScreen(props: PlannerScreenProps) {
           <ChevronRight aria-hidden="true" size={22} />
         </button>
       </header>
-      <CaptureLine onAdd={(title) => props.onAddWeekItem(weekKey, 'inbox', title)} />
+      <CaptureLine
+        week={week}
+        inbox={inbox}
+        onAdd={(title) => props.onAddWeekItem(weekKey, 'inbox', title)}
+        onToggle={props.onToggleWeekItem}
+        onAssign={props.onAssignWeekItem}
+      />
       <div className="lg:grid lg:grid-cols-[minmax(0,1.5fr)_18rem]">
         <div className="lg:border-r lg:border-line">
           {week.map((day, index) => {
@@ -194,8 +223,19 @@ export function PlannerScreen(props: PlannerScreenProps) {
                   <span className="text-sm text-muted">{dayLabel(day)}{day === today ? ' · сегодня' : ''}{openCount(tasks) > 0 ? ` · ${openCount(tasks)} открыто` : ''}</span>
                 </button>
                 <div className="mt-1 border-t border-line">
-                  {tasks.map((task) => (
-                    <PlanTask key={task.id} task={task} today={props.today} onToggle={props.onToggle} onMove={props.onMove} onPart={props.onPart} onPriority={props.onPriority} onUpdate={props.onUpdate} onFocus={props.onFocus} />
+                  {day === today ? DAY_PARTS.map((part) => {
+                    const rows = tasks.filter((task) => task.dayPart === part.id);
+                    if (rows.length === 0) return null;
+                    return (
+                      <div key={part.id}>
+                        <p className="px-1 pt-3 text-sm text-ink">{part.label}</p>
+                        {rows.map((task) => (
+                          <PlanTask key={task.id} task={task} today={props.today} shelves={part.id === 'anytime'} onToggle={props.onToggle} onMove={props.onMove} onPart={props.onPart} onPriority={props.onPriority} onUpdate={props.onUpdate} onSkip={props.onSkip} onFocus={props.onFocus} />
+                        ))}
+                      </div>
+                    );
+                  }) : tasks.map((task) => (
+                    <PlanTask key={task.id} task={task} today={props.today} onToggle={props.onToggle} onMove={props.onMove} onPart={props.onPart} onPriority={props.onPriority} onUpdate={props.onUpdate} onSkip={props.onSkip} onFocus={props.onFocus} />
                   ))}
                   <CarryLine
                     count={day > today ? 0 : openCount(tasks)}
@@ -219,27 +259,6 @@ export function PlannerScreen(props: PlannerScreenProps) {
                 </div>
               ))}
               <AddRow label="Новая цель недели" onAdd={(title) => props.onAddWeekItem(weekKey, 'goal', title)} />
-            </div>
-          </div>
-          <div className="px-4 py-4 sm:px-5">
-            <h3 className="text-2xl">Список дел</h3>
-            <div className="mt-2 border-t border-line">
-              {inbox.map((item) => (
-                <div key={item.id} className="border-b border-line py-2">
-                  <div className="flex items-start">
-                    <PaperCheck checked={item.completed} label={item.completed ? `Вернуть «${item.title}»` : `Отметить «${item.title}»`} onClick={() => props.onToggleWeekItem(item.id)} />
-                    <p className={`py-2.5 text-base ${item.completed ? 'text-muted line-through' : 'text-ink'}`}>{item.title}</p>
-                  </div>
-                  <label className="mt-1 block text-xs font-semibold text-muted">
-                    Назначить день
-                    <select aria-label={`Назначить день: ${item.title}`} defaultValue="" onChange={(event) => { if (event.target.value) props.onAssignWeekItem(item.id, event.target.value); }} className="mt-1 min-h-11 w-full border border-line bg-card px-2 text-sm text-ink">
-                      <option value="">Не выбран</option>
-                      {week.map((day, index) => <option key={day} value={day}>{WEEKDAYS[index].label}, {dayLabel(day)}</option>)}
-                    </select>
-                  </label>
-                </div>
-              ))}
-              <AddRow label="Новое дело без даты" onAdd={(title) => props.onAddWeekItem(weekKey, 'inbox', title)} />
             </div>
           </div>
         </aside>

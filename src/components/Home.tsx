@@ -206,6 +206,7 @@ export function Home() {
             onToggleWeekItem={notebook.toggleWeekItem}
             onAssignWeekItem={notebook.assignWeekItem}
             onCarry={notebook.carryOpen}
+            onSkip={notebook.skipThis}
             onFocus={requestFocus}
           />
         ) : null}

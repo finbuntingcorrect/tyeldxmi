@@ -318,6 +318,19 @@ export function moveTask(book: Notebook, id: string, date: string): Notebook {
   };
 }
 
+export function skipThisOccurrence(book: Notebook, id: string): Notebook {
+  const task = book.tasks.find((item) => item.id === id && !item.deleted);
+  if (!task?.seriesId) return book;
+  const originalDate = task.originalDate || task.date;
+  const listed = book.skips.some((skip) => skip.seriesId === task.seriesId && skip.originalDate === originalDate);
+  return {
+    ...book,
+    focusId: book.focusId === id ? null : book.focusId,
+    skips: listed ? book.skips : [...book.skips, { seriesId: task.seriesId, originalDate }],
+    tasks: book.tasks.map((item) => item.id === id ? { ...item, deleted: true } : item),
+  };
+}
+
 export function carryOpenTasks(book: Notebook, from: string, to: string): Notebook {
   if (!isDateKey(from) || !isDateKey(to) || from === to) return book;
   return tasksForDate(book, from)

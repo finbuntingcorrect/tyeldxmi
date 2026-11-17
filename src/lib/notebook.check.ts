@@ -16,6 +16,7 @@ import {
   materialize,
   carryOpenTasks,
   moveTask,
+  skipThisOccurrence,
   nextHabitStatus,
   notebookIsEmpty,
   applyFocus,
@@ -78,6 +79,55 @@ assert.equal(tasksForDate(carried, '2026-11-17').some((task) => task.title === '
 assert.equal(tasksForDate(carried, '2026-11-16').some((task) => task.title === 'Отчёт'), false);
 assert.equal(tasksForDate(carried, '2026-11-16').some((task) => task.title === 'Закрыто' && task.completed), true);
 assert.equal(carryOpenTasks(carried, '2026-11-16', '2026-11-16'), carried);
+
+let seriesBook = createTask(emptyNotebook(), {
+  title: 'Тренировка',
+  date: '2026-11-06',
+  dayPart: 'morning',
+  priority: 'normal',
+  repeatKind: 'weekdays',
+  weekdays: [],
+}, '2026-11-06T08:00:00.000Z');
+seriesBook = materialize(seriesBook, '2026-11-06', '2026-11-20');
+const ruleBefore = JSON.parse(JSON.stringify(seriesBook.series[0])) as typeof seriesBook.series[0];
+const seriesFriday = tasksForDate(seriesBook, '2026-11-06')[0];
+const seriesMonday = tasksForDate(seriesBook, '2026-11-09')[0];
+seriesBook = moveTask(seriesBook, seriesFriday.id, addDays(seriesFriday.date, 1));
+seriesBook = moveTask(seriesBook, seriesMonday.id, addDays(seriesMonday.date, 7));
+assert.deepEqual(seriesBook.series[0], ruleBefore);
+assert.equal(tasksForDate(seriesBook, '2026-11-07')[0].seriesId, ruleBefore.id);
+assert.equal(tasksForDate(seriesBook, '2026-11-07')[0].originalDate, '2026-11-06');
+assert.equal(tasksForDate(seriesBook, '2026-11-07')[0].exception, true);
+assert.equal(tasksForDate(seriesBook, '2026-11-16').some((task) => task.originalDate === '2026-11-09' && task.exception), true);
+assert.equal(tasksForDate(seriesBook, '2026-11-13')[0].date, '2026-11-13');
+assert.equal(tasksForDate(seriesBook, '2026-11-13')[0].exception, false);
+
+let skipped = createTask(emptyNotebook(), {
+  title: 'Тренировка',
+  date: '2026-11-06',
+  dayPart: 'morning',
+  priority: 'normal',
+  repeatKind: 'weekdays',
+  weekdays: [],
+}, '2026-11-06T08:00:00.000Z');
+skipped = materialize(skipped, '2026-11-06', '2026-11-13');
+const skipRule = JSON.parse(JSON.stringify(skipped.series[0])) as typeof skipped.series[0];
+const skipFriday = tasksForDate(skipped, '2026-11-06')[0];
+skipped = { ...skipped, focusId: skipFriday.id };
+skipped = skipThisOccurrence(skipped, skipFriday.id);
+assert.equal(skipped.focusId, null);
+assert.equal(skipped.tasks.find((task) => task.id === skipFriday.id)?.deleted, true);
+assert.deepEqual(skipped.skips, [{ seriesId: skipRule.id, originalDate: '2026-11-06' }]);
+assert.deepEqual(skipped.series[0], skipRule);
+assert.equal(tasksForDate(skipped, '2026-11-09').length, 1);
+skipped = materialize(skipped, '2026-11-06', '2026-11-13');
+assert.equal(tasksForDate(skipped, '2026-11-06').length, 0);
+assert.equal(tasksForDate(skipped, '2026-11-09')[0].deleted, false);
+assert.equal(skipped.series[0].start, skipRule.start);
+assert.equal(skipped.series[0].until, skipRule.until);
+assert.equal(skipped.series[0].repeatKind, skipRule.repeatKind);
+assert.deepEqual(skipped.series[0].weekdays, skipRule.weekdays);
+assert.equal(skipThisOccurrence(skipped, 'missing'), skipped);
 
 const focusBook = toggleTask(book, saturday[0].id, '2026-11-07T12:00:00.000Z');
 assert.equal(tasksForDate(focusBook, '2026-11-07')[0].completed, true);

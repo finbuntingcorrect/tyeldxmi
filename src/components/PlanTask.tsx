@@ -13,10 +13,12 @@ type PlanTaskProps = {
   onPart: (id: string, part: DayPart) => void;
   onPriority: (id: string, priority: Priority) => void;
   onUpdate: (id: string, draft: TaskDraft, scope: 'one' | 'future') => void;
+  onSkip: (id: string) => void;
   onFocus: (id: string) => void;
+  shelves?: boolean;
 };
 
-export function PlanTask({ task, today, onToggle, onMove, onPart, onPriority, onUpdate, onFocus }: PlanTaskProps) {
+export function PlanTask({ task, today, onToggle, onMove, onPart, onPriority, onUpdate, onSkip, onFocus, shelves = false }: PlanTaskProps) {
   const titleId = useId();
   const [open, setOpen] = useState(false);
   const [customDate, setCustomDate] = useState(task.date);
@@ -44,9 +46,17 @@ export function PlanTask({ task, today, onToggle, onMove, onPart, onPriority, on
           <p id={titleId} className={`text-base leading-snug ${task.completed ? 'text-muted line-through' : 'text-ink'}`}>{task.title}</p>
           {notes ? <p className="pb-2 text-xs text-muted">{notes}</p> : null}
         </div>
+        <button type="button" onClick={() => onMove(task.id, addDays(task.date, 1))} className="paper-choice shrink-0">завтра</button>
         {task.date === today ? <button type="button" onClick={() => onFocus(task.id)} className="paper-submit my-2">В фокус</button> : null}
         <button type="button" aria-expanded={open} aria-label={`Действия: ${task.title}`} onClick={() => setOpen((value) => !value)} className="min-h-11 px-2 text-sm font-semibold text-muted">Ещё</button>
       </div>
+      {shelves && task.dayPart === 'anytime' ? (
+        <div className="flex flex-wrap pb-1 pl-11">
+          {DAY_PARTS.map((part) => (
+            <button key={part.id} type="button" aria-pressed={task.dayPart === part.id} onClick={() => onPart(task.id, part.id)} className="paper-choice">{part.label}</button>
+          ))}
+        </div>
+      ) : null}
       {open ? (
         <div className="mb-3 ml-11 border-t border-line pt-2" role="group" aria-label="Меню задачи">
           <div className="flex flex-wrap">
@@ -60,7 +70,8 @@ export function PlanTask({ task, today, onToggle, onMove, onPart, onPriority, on
             ))}
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-2">
-            <button type="button" onClick={() => onMove(task.id, addDays(task.date, 1))} className="paper-choice">Перенести на завтра</button>
+            <button type="button" onClick={() => onMove(task.id, addDays(task.date, 7))} className="paper-choice">на следующую неделю</button>
+            {task.seriesId ? <button type="button" onClick={() => onSkip(task.id)} className="paper-choice">этот раз не надо</button> : null}
             <label className="flex min-h-11 items-center gap-2 text-sm font-semibold">
               Выбрать дату
               <input type="date" value={customDate} onChange={(event) => setCustomDate(event.target.value)} className="bg-transparent" />
