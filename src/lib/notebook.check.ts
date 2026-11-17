@@ -14,6 +14,7 @@ import {
   habitSpan,
   habitsForDate,
   materialize,
+  carryOpenTasks,
   moveTask,
   nextHabitStatus,
   notebookIsEmpty,
@@ -52,6 +53,31 @@ assert.equal(saturday[0].dayPart, 'morning');
 assert.equal(tasksForDate(book, '2026-11-09').length, 1);
 assert.equal(tasksForDate(book, '2026-11-13').length, 1);
 assert.equal(tasksForDate(book, '2026-11-06').some((task) => task.title === 'Тренировка'), false);
+
+let tail = createTask(emptyNotebook(), {
+  title: 'Отчёт',
+  date: '2026-11-16',
+  dayPart: 'evening',
+  priority: 'normal',
+  repeatKind: 'none',
+  weekdays: [],
+});
+tail = createTask(tail, {
+  title: 'Закрыто',
+  date: '2026-11-16',
+  dayPart: 'morning',
+  priority: 'normal',
+  repeatKind: 'none',
+  weekdays: [],
+});
+const closed = tasksForDate(tail, '2026-11-16').find((task) => task.title === 'Закрыто');
+assert.ok(closed);
+tail = toggleTask(tail, closed.id);
+const carried = carryOpenTasks(tail, '2026-11-16', '2026-11-17');
+assert.equal(tasksForDate(carried, '2026-11-17').some((task) => task.title === 'Отчёт'), true);
+assert.equal(tasksForDate(carried, '2026-11-16').some((task) => task.title === 'Отчёт'), false);
+assert.equal(tasksForDate(carried, '2026-11-16').some((task) => task.title === 'Закрыто' && task.completed), true);
+assert.equal(carryOpenTasks(carried, '2026-11-16', '2026-11-16'), carried);
 
 const focusBook = toggleTask(book, saturday[0].id, '2026-11-07T12:00:00.000Z');
 assert.equal(tasksForDate(focusBook, '2026-11-07')[0].completed, true);

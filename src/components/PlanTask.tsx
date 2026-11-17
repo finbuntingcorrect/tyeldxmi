@@ -31,7 +31,10 @@ export function PlanTask({ task, today, onToggle, onMove, onPart, onPriority, on
     repeatKind,
     weekdays,
   };
-  const repeat = task.repeatKind === 'daily' ? ' · Каждый день' : task.repeatKind === 'weekdays' ? ' · По будням' : task.repeatKind === 'weekly' ? ' · По дням' : '';
+  const repeat = task.repeatKind === 'daily' ? 'Каждый день' : task.repeatKind === 'weekdays' ? 'По будням' : task.repeatKind === 'weekly' ? 'По дням' : '';
+  const moved = Boolean(task.exception && task.originalDate && task.originalDate !== task.date);
+  const priority = task.priority === 'normal' ? '' : PRIORITIES.find((item) => item.id === task.priority)?.label ?? '';
+  const notes = [priority, repeat, moved ? 'перенесено отдельно' : ''].filter(Boolean).join(' · ');
 
   return (
     <article className="border-b border-line">
@@ -39,13 +42,7 @@ export function PlanTask({ task, today, onToggle, onMove, onPart, onPriority, on
         <PaperCheck checked={task.completed} label={task.completed ? `Вернуть «${task.title}»` : `Выполнить «${task.title}»`} onClick={() => onToggle(task.id)} />
         <div className="min-w-0 flex-1 py-2.5">
           <p id={titleId} className={`text-base leading-snug ${task.completed ? 'text-muted line-through' : 'text-ink'}`}>{task.title}</p>
-          {repeat || (task.exception && task.originalDate && task.originalDate !== task.date) || task.priority !== 'normal' ? (
-            <p className="pb-2 text-xs text-muted">
-              {PRIORITIES.find((item) => item.id === task.priority)?.label}
-              {repeat}
-              {task.exception && task.originalDate && task.originalDate !== task.date ? ' · перенесено отдельно' : ''}
-            </p>
-          ) : null}
+          {notes ? <p className="pb-2 text-xs text-muted">{notes}</p> : null}
         </div>
         {task.date === today ? <button type="button" onClick={() => onFocus(task.id)} className="paper-submit my-2">В фокус</button> : null}
         <button type="button" aria-expanded={open} aria-label={`Действия: ${task.title}`} onClick={() => setOpen((value) => !value)} className="min-h-11 px-2 text-sm font-semibold text-muted">Ещё</button>

@@ -22,6 +22,7 @@ type PlannerScreenProps = {
   onAddWeekItem: (week: string, kind: WeekItem['kind'], title: string) => void;
   onToggleWeekItem: (id: string) => void;
   onAssignWeekItem: (id: string, date: string) => void;
+  onCarry: (from: string, to: string) => void;
   onFocus: (id: string) => void;
 };
 
@@ -36,6 +37,57 @@ function rangeLabel(week: string[]) {
 
 function dayLabel(day: string) {
   return new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long' }).format(dateFromKey(day));
+}
+
+function openCount(tasks: { completed: boolean }[]) {
+  return tasks.filter((task) => !task.completed).length;
+}
+
+function openLabel(count: number) {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  if (mod10 === 1 && mod100 !== 11) return `${count} дело не закрыто`;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return `${count} дела не закрыты`;
+  return `${count} дел не закрыто`;
+}
+
+function CarryLine({ count, label, onCarry }: { count: number; label: string; onCarry: () => void }) {
+  if (count === 0) return null;
+  return (
+    <p className="flex flex-wrap items-baseline gap-x-3 py-1 text-sm text-muted">
+      <span>{openLabel(count)}</span>
+      <button type="button" onClick={onCarry} className="min-h-11 font-semibold text-ink underline decoration-line underline-offset-4">{label}</button>
+    </p>
+  );
+}
+
+function CaptureLine({ onAdd }: { onAdd: (title: string) => void }) {
+  const [title, setTitle] = useState('');
+  return (
+    <form
+      className="flex items-end gap-2 border-b border-line px-4 py-3 sm:px-5"
+      onSubmit={(event) => {
+        event.preventDefault();
+        const next = title.trim();
+        if (!next) return;
+        onAdd(next);
+        setTitle('');
+      }}
+    >
+      <label className="min-w-0 flex-1 text-sm font-semibold text-muted">
+        Записать в список
+        <input
+          value={title}
+          onChange={(event) => setTitle(event.target.value)}
+          aria-label="Записать в список недели"
+          placeholder="Разберём, когда будет время"
+          maxLength={160}
+          className="paper-field mt-1"
+        />
+      </label>
+      <button type="submit" className="paper-submit">Ок</button>
+    </form>
+  );
 }
 
 function AddRow({ label, onAdd }: { label: string; onAdd: (title: string) => void }) {
@@ -87,6 +139,11 @@ export function PlannerScreen(props: PlannerScreenProps) {
         <header className="border-b border-line px-4 py-4 sm:px-6">
           <button type="button" onClick={() => setDetail(null)} className="text-sm font-semibold text-muted">К неделе</button>
           <h2 className="mt-2 text-3xl sm:text-4xl">{formatLocalDate(dateFromKey(detail))}</h2>
+          <CarryLine
+            count={detail > today ? 0 : openCount(tasks)}
+            label={detail < today ? 'Перенести на сегодня' : 'Перенести на завтра'}
+            onCarry={() => props.onCarry(detail, detail < today ? today : addDays(detail, 1))}
+          />
         </header>
         <div className="paper-dots">
           {DAY_PARTS.map((part) => {
@@ -117,11 +174,15 @@ export function PlannerScreen(props: PlannerScreenProps) {
         <div className="min-w-0 text-center">
           <h2 className="text-3xl sm:text-4xl">План на неделю</h2>
           <p className="mt-1 text-sm text-muted">{rangeLabel(week)}</p>
+          {!week.includes(today) ? (
+            <button type="button" onClick={() => { setDetail(null); setAnchor(today); }} className="mt-1 min-h-11 text-sm font-semibold underline decoration-line underline-offset-4">К сегодня</button>
+          ) : null}
         </div>
         <button type="button" aria-label="Следующая неделя" onClick={() => shift(1)} className="grid h-11 w-11 shrink-0 place-items-center text-ink">
           <ChevronRight aria-hidden="true" size={22} />
         </button>
       </header>
+      <CaptureLine onAdd={(title) => props.onAddWeekItem(weekKey, 'inbox', title)} />
       <div className="lg:grid lg:grid-cols-[minmax(0,1.5fr)_18rem]">
         <div className="lg:border-r lg:border-line">
           {week.map((day, index) => {
@@ -130,12 +191,17 @@ export function PlannerScreen(props: PlannerScreenProps) {
               <section key={day} aria-label={DAY_NAMES[index]} aria-current={day === today ? 'date' : undefined} className={`border-b border-line px-4 py-3 sm:px-5 ${day === today ? 'day-today' : ''}`}>
                 <button type="button" onClick={() => setDetail(day)} className="flex w-full items-baseline justify-between gap-3 text-left">
                   <h3 className="text-2xl">{DAY_NAMES[index]}</h3>
-                  <span className="text-sm text-muted">{dayLabel(day)}{day === today ? ' · сегодня' : ''}</span>
+                  <span className="text-sm text-muted">{dayLabel(day)}{day === today ? ' · сегодня' : ''}{openCount(tasks) > 0 ? ` · ${openCount(tasks)} открыто` : ''}</span>
                 </button>
                 <div className="mt-1 border-t border-line">
                   {tasks.map((task) => (
                     <PlanTask key={task.id} task={task} today={props.today} onToggle={props.onToggle} onMove={props.onMove} onPart={props.onPart} onPriority={props.onPriority} onUpdate={props.onUpdate} onFocus={props.onFocus} />
                   ))}
+                  <CarryLine
+                    count={day > today ? 0 : openCount(tasks)}
+                    label={day < today ? 'Перенести на сегодня' : 'Перенести на завтра'}
+                    onCarry={() => props.onCarry(day, day < today ? today : addDays(day, 1))}
+                  />
                   <AddRow label={`Новая задача, ${DAY_NAMES[index]}`} onAdd={(title) => createOn(day, 'anytime', title)} />
                 </div>
               </section>

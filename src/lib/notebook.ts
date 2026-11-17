@@ -318,6 +318,13 @@ export function moveTask(book: Notebook, id: string, date: string): Notebook {
   };
 }
 
+export function carryOpenTasks(book: Notebook, from: string, to: string): Notebook {
+  if (!isDateKey(from) || !isDateKey(to) || from === to) return book;
+  return tasksForDate(book, from)
+    .filter((task) => !task.completed)
+    .reduce((next, task) => moveTask(next, task.id, to), book);
+}
+
 export function setFocus(book: Notebook, id: string | null, today: string): Notebook {
   if (id == null) return { ...book, focusId: null };
   const task = book.tasks.find((item) => item.id === id && !item.deleted && item.date === today);
