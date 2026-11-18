@@ -132,6 +132,7 @@ html[data-theme='dark'] {
   select {
     color: var(--color-ink);
     background-color: var(--color-field);
+    max-width: 100%;
   }
 
   /*
@@ -192,6 +193,16 @@ html[data-theme='dark'] {
 .paper-choice:disabled,
 .paper-submit:disabled {
   opacity: 0.45;
+}
+
+@media (max-width: 639px) {
+  .paper-choice {
+    padding: 0 0.45rem;
+  }
+
+  .paper-submit {
+    padding: 0 0.75rem;
+  }
 }
 
 .paper-submit {

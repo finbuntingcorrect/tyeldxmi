@@ -72,7 +72,7 @@ function CaptureLine({ week, inbox, onAdd, onToggle, onAssign }: {
   const [title, setTitle] = useState('');
   const [placing, setPlacing] = useState<string | null>(null);
   return (
-    <div className="border-b border-line px-4 py-3 sm:px-5">
+    <div className="border-b border-line px-3 py-3 sm:px-5">
       <form
         onSubmit={(event) => {
           event.preventDefault();
@@ -95,7 +95,7 @@ function CaptureLine({ week, inbox, onAdd, onToggle, onAssign }: {
         <div key={item.id} className="border-b border-line">
           <div className="flex items-start">
             <PaperCheck checked={item.completed} label={item.completed ? `Вернуть «${item.title}»` : `Отметить «${item.title}»`} onClick={() => onToggle(item.id)} />
-            <p className={`min-w-0 flex-1 py-2.5 text-base ${item.completed ? 'text-muted line-through' : 'text-ink'}`}>{item.title}</p>
+            <p className={`min-w-0 flex-1 py-2.5 text-base break-words ${item.completed ? 'text-muted line-through' : 'text-ink'}`}>{item.title}</p>
             <button type="button" aria-expanded={placing === item.id} onClick={() => setPlacing((current) => current === item.id ? null : item.id)} className="paper-choice shrink-0">на день</button>
           </div>
           {placing === item.id ? (
@@ -130,9 +130,9 @@ function AddRow({ label, onAdd }: { label: string; onAdd: (title: string) => voi
   }
 
   return (
-    <form className="flex items-end gap-2 py-1" onSubmit={(event) => { event.preventDefault(); submit(); }}>
-      <input autoFocus aria-label={label} value={title} onChange={(event) => setTitle(event.target.value)} maxLength={160} className="paper-field" />
-      <button type="submit" className="paper-submit">Ок</button>
+    <form className="flex min-w-0 flex-col items-stretch gap-2 py-1 sm:flex-row sm:items-end" onSubmit={(event) => { event.preventDefault(); submit(); }}>
+      <input autoFocus aria-label={label} value={title} onChange={(event) => setTitle(event.target.value)} maxLength={160} className="paper-field min-w-0 sm:flex-1" />
+      <button type="submit" className="paper-submit sm:shrink-0">Ок</button>
     </form>
   );
 }
@@ -161,7 +161,7 @@ export function PlannerScreen(props: PlannerScreenProps) {
       <section>
         <header className="border-b border-line px-4 py-4 sm:px-6">
           <button type="button" onClick={() => setDetail(null)} className="text-sm font-semibold text-muted">К неделе</button>
-          <h2 className="mt-2 text-3xl sm:text-4xl">{formatLocalDate(dateFromKey(detail))}</h2>
+          <h2 className="mt-2 text-2xl leading-tight break-words sm:text-4xl">{formatLocalDate(dateFromKey(detail))}</h2>
           <CarryLine
             count={detail > today ? 0 : openCount(tasks)}
             label={detail < today ? 'Перенести на сегодня' : 'Перенести на завтра'}
@@ -172,7 +172,7 @@ export function PlannerScreen(props: PlannerScreenProps) {
           {DAY_PARTS.map((part) => {
             const rows = tasks.filter((task) => task.dayPart === part.id);
             return (
-              <section key={part.id} className="border-b border-line px-4 py-4 sm:px-6">
+              <section key={part.id} className="border-b border-line px-3 py-4 sm:px-6">
                 <h3 className="text-2xl">{part.label}</h3>
                 <div className="mt-2 border-t border-line">
                   {rows.map((task) => (
@@ -195,7 +195,7 @@ export function PlannerScreen(props: PlannerScreenProps) {
           <ChevronLeft aria-hidden="true" size={22} />
         </button>
         <div className="min-w-0 text-center">
-          <h2 className="text-3xl sm:text-4xl">План на неделю</h2>
+          <h2 className="text-2xl leading-tight break-words sm:text-4xl">План на неделю</h2>
           <p className="mt-1 text-sm text-muted">{rangeLabel(week)}</p>
           {!week.includes(today) ? (
             <button type="button" onClick={() => { setDetail(null); setAnchor(today); }} className="mt-1 min-h-11 text-sm font-semibold underline decoration-line underline-offset-4">К сегодня</button>
@@ -217,8 +217,8 @@ export function PlannerScreen(props: PlannerScreenProps) {
           {week.map((day, index) => {
             const tasks = tasksForDate(book, day);
             return (
-              <section key={day} aria-label={DAY_NAMES[index]} aria-current={day === today ? 'date' : undefined} className={`border-b border-line px-4 py-3 sm:px-5 ${day === today ? 'day-today' : ''}`}>
-                <button type="button" onClick={() => setDetail(day)} className="flex w-full items-baseline justify-between gap-3 text-left">
+              <section key={day} aria-label={DAY_NAMES[index]} aria-current={day === today ? 'date' : undefined} className={`min-w-0 border-b border-line px-3 py-3 sm:px-5 ${day === today ? 'day-today' : ''}`}>
+                <button type="button" onClick={() => setDetail(day)} className="flex w-full min-w-0 flex-col items-start gap-0.5 text-left sm:flex-row sm:items-baseline sm:justify-between sm:gap-3">
                   <h3 className="text-2xl">{DAY_NAMES[index]}</h3>
                   <span className="text-sm text-muted">{dayLabel(day)}{day === today ? ' · сегодня' : ''}{openCount(tasks) > 0 ? ` · ${openCount(tasks)} открыто` : ''}</span>
                 </button>
@@ -249,13 +249,13 @@ export function PlannerScreen(props: PlannerScreenProps) {
           })}
         </div>
         <aside className="border-t border-line lg:border-t-0">
-          <div className="border-b border-line px-4 py-4 sm:px-5">
+          <div className="border-b border-line px-3 py-4 sm:px-5">
             <h3 className="text-2xl">Цели недели</h3>
             <div className="mt-2 border-t border-line">
               {goals.map((item) => (
                 <div key={item.id} className="flex items-start border-b border-line">
                   <PaperCheck checked={item.completed} label={item.completed ? `Вернуть цель «${item.title}»` : `Отметить цель «${item.title}»`} onClick={() => props.onToggleWeekItem(item.id)} />
-                  <p className={`py-2.5 text-base ${item.completed ? 'text-muted line-through' : 'text-ink'}`}>{item.title}</p>
+                  <p className={`min-w-0 flex-1 py-2.5 text-base break-words ${item.completed ? 'text-muted line-through' : 'text-ink'}`}>{item.title}</p>
                 </div>
               ))}
               <AddRow label="Новая цель недели" onAdd={(title) => props.onAddWeekItem(weekKey, 'goal', title)} />

@@ -34,9 +34,15 @@ function readViewport() {
 }
 
 function frameFor(width: number, height: number, bottom: number): Frame {
-  const tight = width < 700 || height < 520;
+  const phone = width < 640;
+  const tight = phone || width < 700 || height < 520;
   const top = 76;
   const available = Math.max(48, height - top - bottom - 12);
+  if (phone) {
+    const size = Math.min(60, available);
+    const lane = size + 12;
+    return { width, height, size, top, lane, minX: Math.max(8, width - size - 12), tight: true };
+  }
   const widthRoom = Math.max(48, width - (tight ? 232 : 336) - 20);
   const target = tight ? 95 : 176;
   const size = Math.min(target, available, widthRoom);

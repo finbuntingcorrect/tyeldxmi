@@ -39,16 +39,20 @@ export function PlanTask({ task, today, onToggle, onMove, onPart, onPriority, on
   const notes = [priority, repeat, moved ? 'перенесено отдельно' : ''].filter(Boolean).join(' · ');
 
   return (
-    <article className="border-b border-line">
+    <article className="min-w-0 border-b border-line">
       <div className="flex items-start gap-1">
         <PaperCheck checked={task.completed} label={task.completed ? `Вернуть «${task.title}»` : `Выполнить «${task.title}»`} onClick={() => onToggle(task.id)} />
-        <div className="min-w-0 flex-1 py-2.5">
-          <p id={titleId} className={`text-base leading-snug ${task.completed ? 'text-muted line-through' : 'text-ink'}`}>{task.title}</p>
-          {notes ? <p className="pb-2 text-xs text-muted">{notes}</p> : null}
+        <div className="flex min-w-0 flex-1 flex-col py-2 sm:flex-row sm:items-start">
+          <div className="min-w-0 flex-1">
+            <p id={titleId} className={`text-base leading-snug break-words ${task.completed ? 'text-muted line-through' : 'text-ink'}`}>{task.title}</p>
+            {notes ? <p className="text-xs break-words text-muted">{notes}</p> : null}
+          </div>
+          <div className="flex flex-wrap items-center">
+            <button type="button" onClick={() => onMove(task.id, addDays(task.date, 1))} className="paper-choice px-2">завтра</button>
+            {task.date === today ? <button type="button" onClick={() => onFocus(task.id)} className="paper-submit my-1">В фокус</button> : null}
+            <button type="button" aria-expanded={open} aria-label={`Действия: ${task.title}`} onClick={() => setOpen((value) => !value)} className="min-h-11 px-2 text-sm font-semibold text-muted">Ещё</button>
+          </div>
         </div>
-        <button type="button" onClick={() => onMove(task.id, addDays(task.date, 1))} className="paper-choice shrink-0">завтра</button>
-        {task.date === today ? <button type="button" onClick={() => onFocus(task.id)} className="paper-submit my-2">В фокус</button> : null}
-        <button type="button" aria-expanded={open} aria-label={`Действия: ${task.title}`} onClick={() => setOpen((value) => !value)} className="min-h-11 px-2 text-sm font-semibold text-muted">Ещё</button>
       </div>
       {shelves && task.dayPart === 'anytime' ? (
         <div className="flex flex-wrap pb-1 pl-11">
@@ -58,7 +62,7 @@ export function PlanTask({ task, today, onToggle, onMove, onPart, onPriority, on
         </div>
       ) : null}
       {open ? (
-        <div className="mb-3 ml-11 border-t border-line pt-2" role="group" aria-label="Меню задачи">
+        <div className="mb-3 ml-11 min-w-0 border-t border-line pt-2" role="group" aria-label="Меню задачи">
           <div className="flex flex-wrap">
             {DAY_PARTS.map((part) => (
               <button key={part.id} type="button" aria-pressed={task.dayPart === part.id} onClick={() => onPart(task.id, part.id)} className="paper-choice">{part.label}</button>
@@ -72,9 +76,9 @@ export function PlanTask({ task, today, onToggle, onMove, onPart, onPriority, on
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <button type="button" onClick={() => onMove(task.id, addDays(task.date, 7))} className="paper-choice">на следующую неделю</button>
             {task.seriesId ? <button type="button" onClick={() => onSkip(task.id)} className="paper-choice">этот раз не надо</button> : null}
-            <label className="flex min-h-11 items-center gap-2 text-sm font-semibold">
+            <label className="flex min-h-11 min-w-0 flex-wrap items-center gap-2 text-sm font-semibold">
               Выбрать дату
-              <input type="date" value={customDate} onChange={(event) => setCustomDate(event.target.value)} className="bg-transparent" />
+              <input type="date" value={customDate} onChange={(event) => setCustomDate(event.target.value)} className="w-36 max-w-full bg-transparent" />
               <button type="button" onClick={() => customDate && onMove(task.id, customDate)} className="paper-submit">Ок</button>
             </label>
           </div>

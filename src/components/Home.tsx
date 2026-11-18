@@ -162,11 +162,11 @@ export function Home() {
 
   return (
     <div style={{ paddingRight: 'var(--cat-lane, 0px)' }}>
-    <div className={`mx-auto w-full max-w-6xl px-3 py-6 sm:px-6 sm:py-10 ${session ? 'pb-40' : ''}`}>
-      <div className={`border border-line bg-card ${session ? 'pb-36' : ''}`}>
-        <header className="flex items-center justify-between gap-3 px-4 py-4 sm:px-6">
+    <div className={`mx-auto w-full min-w-0 max-w-6xl px-2 py-4 sm:px-6 sm:py-10 ${session ? 'pb-40' : ''}`}>
+      <div className={`min-w-0 overflow-x-clip border border-line bg-card ${session ? 'pb-36' : ''}`}>
+        <header className="flex flex-col gap-2 px-3 py-4 sm:flex-row sm:items-end sm:justify-between sm:px-6">
           <div className="min-w-0">
-            <h1 className="text-2xl leading-tight sm:text-4xl">{book.name ? `Привет, ${book.name}` : 'Today Cat'}</h1>
+            <h1 className="text-2xl leading-tight break-words sm:text-4xl">{book.name ? `Привет, ${book.name}` : 'Today Cat'}</h1>
             <p className="mt-1 text-sm text-muted">{formatLocalDate(dateFromKey(today))}</p>
             <p className="text-sm text-muted">{hint}</p>
           </div>
