@@ -54,7 +54,7 @@ export function Welcome({ name, theme, onName, onTheme, onChoose }: WelcomeProps
           <img src="/mascot/cat-wave.png" alt="Рыжий котёнок с поднятой лапкой" className="mx-auto mt-6 h-44 w-auto max-w-full object-contain sm:h-52" />
           {step === 1 ? (
             <form className="mt-8" onSubmit={(event) => { event.preventDefault(); continueName(); }}>
-              <h1 className="text-4xl leading-tight text-ink sm:text-5xl">Привет! Давай знакомиться, работяга!</h1>
+              <h1 className="text-4xl leading-tight text-ink sm:text-5xl">Привет. Давай познакомимся.</h1>
               <label htmlFor="your-name" className="mt-6 block font-serif text-2xl text-ink">Как тебя зовут?</label>
               <input id="your-name" value={draft} onChange={(event) => { setDraft(event.target.value); setNameHint(false); }} maxLength={40} autoComplete="nickname" placeholder="Твоё имя" className="paper-field mt-2 text-center text-lg" />
               {nameHint ? <p role="alert" className="mt-3 text-sm font-semibold text-danger">Введи имя, чтобы продолжить</p> : null}

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { addDays } from '../../server/recurrence';
 import { DAY_PARTS, WEEKDAYS } from '../lib/plannerCopy';
-import { tasksForDate, weekDates, type Notebook, type TaskDraft, type WeekItem } from '../lib/notebook';
+import { searchTasks, tasksForDate, weekDates, type Notebook, type TaskDraft, type TaskDuration, type WeekItem } from '../lib/notebook';
 import { dateFromKey, formatLocalDate } from '../lib/date';
 import type { DayPart, Priority } from '../types';
 import { PaperCheck } from './PaperCheck';
@@ -24,7 +24,13 @@ type PlannerScreenProps = {
   onAssignWeekItem: (id: string, date: string) => void;
   onCarry: (from: string, to: string) => void;
   onSkip: (id: string) => void;
+  onDismiss: (id: string) => void;
+  onDefer: (id: string) => void;
+  onClaim: (id: string, week: string) => void;
+  onDayNote: (date: string, text: string) => void;
   onFocus: (id: string) => void;
+  onNote: (id: string, text: string) => void;
+  onDuration: (id: string, duration: TaskDuration) => void;
 };
 
 function rangeLabel(week: string[]) {
@@ -62,12 +68,15 @@ function CarryLine({ count, label, onCarry }: { count: number; label: string; on
   );
 }
 
-function CaptureLine({ week, inbox, onAdd, onToggle, onAssign }: {
+function CaptureLine({ week, weekKey, inbox, later, onAdd, onToggle, onAssign, onClaim }: {
   week: string[];
+  weekKey: string;
   inbox: WeekItem[];
+  later: WeekItem[];
   onAdd: (title: string) => void;
   onToggle: (id: string) => void;
   onAssign: (id: string, date: string) => void;
+  onClaim: (id: string, week: string) => void;
 }) {
   const [title, setTitle] = useState('');
   const [placing, setPlacing] = useState<string | null>(null);
@@ -109,6 +118,12 @@ function CaptureLine({ week, inbox, onAdd, onToggle, onAssign }: {
           ) : null}
         </div>
       ))}
+      {later.map((item) => (
+        <div key={item.id} className="flex items-start border-b border-line">
+          <p className="min-w-0 flex-1 py-2.5 text-base break-words text-ink">{item.title}</p>
+          <button type="button" onClick={() => onClaim(item.id, weekKey)} className="paper-choice shrink-0">на эту неделю</button>
+        </div>
+      ))}
     </div>
   );
 }
@@ -137,14 +152,81 @@ function AddRow({ label, onAdd }: { label: string; onAdd: (title: string) => voi
   );
 }
 
+function DayClose({ book, today, onMove, onDismiss, onDefer, onDayNote, onClose }: {
+  book: Notebook;
+  today: string;
+  onMove: PlannerScreenProps['onMove'];
+  onDismiss: (id: string) => void;
+  onDefer: (id: string) => void;
+  onDayNote: (date: string, text: string) => void;
+  onClose: () => void;
+}) {
+  const tasks = tasksForDate(book, today);
+  const done = tasks.filter((task) => task.completed);
+  const open = tasks.filter((task) => !task.completed);
+  const saved = book.dayNotes.find((note) => note.date === today)?.text ?? '';
+  const [text, setText] = useState(saved);
+  const empty = done.length === 0 && open.length === 0;
+
+  return (
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-card">
+      <div className="mx-auto w-full min-w-0 max-w-xl px-4 py-6">
+        <button type="button" onClick={onClose} className="min-h-11 text-sm font-semibold text-muted">К неделе</button>
+        <h2 className="mt-3 text-3xl">Закрыть день</h2>
+        <p className="mt-1 text-sm text-muted">{formatLocalDate(dateFromKey(today))}</p>
+        {empty ? <p className="mt-6 text-base text-ink">Сегодня пусто. Так тоже бывает.</p> : (
+          <>
+            {done.length > 0 ? (
+              <section className="mt-6">
+                <h3 className="text-2xl">Сделано</h3>
+                <ul className="mt-2 border-t border-line">
+                  {done.map((task) => <li key={task.id} className="border-b border-line py-2 text-base text-ink">{task.title}</li>)}
+                </ul>
+              </section>
+            ) : null}
+            {open.length > 0 ? (
+              <section className="mt-6">
+                <h3 className="text-2xl">Ещё открыто</h3>
+                <ul className="mt-2 border-t border-line">
+                  {open.map((task) => (
+                    <li key={task.id} className="border-b border-line py-2">
+                      <p className="text-base break-words text-ink">{task.title}</p>
+                      <div className="flex flex-wrap">
+                        <button type="button" onClick={() => onMove(task.id, addDays(task.date, 1))} className="paper-choice px-2">завтра</button>
+                        <button type="button" onClick={() => onMove(task.id, addDays(task.date, 7))} className="paper-choice px-2">на неделю</button>
+                        <button type="button" onClick={() => onDismiss(task.id)} className="paper-choice px-2">снять</button>
+                        {task.exception && task.originalDate && task.originalDate !== task.date ? (
+                          <button type="button" onClick={() => onDefer(task.id)} className="paper-choice px-2">когда получится</button>
+                        ) : null}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+          </>
+        )}
+        <form className="mt-8" onSubmit={(event) => { event.preventDefault(); onDayNote(today, text); onClose(); }}>
+          <label htmlFor="day-note" className="text-sm text-muted">Как прошёл день</label>
+          <input id="day-note" value={text} maxLength={160} onChange={(event) => { setText(event.target.value); onDayNote(today, event.target.value); }} className="paper-field mt-1" />
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export function PlannerScreen(props: PlannerScreenProps) {
   const { book, today } = props;
   const [anchor, setAnchor] = useState(today);
   const [detail, setDetail] = useState<string | null>(null);
+  const [closing, setClosing] = useState(false);
+  const [query, setQuery] = useState('');
   const week = weekDates(anchor);
   const weekKey = week[0];
   const goals = book.weekItems.filter((item) => item.week === weekKey && item.kind === 'goal');
   const inbox = book.weekItems.filter((item) => item.week === weekKey && item.kind === 'inbox');
+  const later = book.weekItems.filter((item) => item.week == null && item.kind === 'inbox');
+  const found = searchTasks(book, query);
 
   function shift(delta: number) {
     setDetail(null);
@@ -176,8 +258,9 @@ export function PlannerScreen(props: PlannerScreenProps) {
                 <h3 className="text-2xl">{part.label}</h3>
                 <div className="mt-2 border-t border-line">
                   {rows.map((task) => (
-                    <PlanTask key={task.id} task={task} today={props.today} onToggle={props.onToggle} onMove={props.onMove} onPart={props.onPart} onPriority={props.onPriority} onUpdate={props.onUpdate} onSkip={props.onSkip} onFocus={props.onFocus} />
+                    <PlanTask key={task.id} task={task} today={props.today} onToggle={props.onToggle} onMove={props.onMove} onPart={props.onPart} onPriority={props.onPriority} onUpdate={props.onUpdate} onSkip={props.onSkip} onFocus={props.onFocus} onNote={props.onNote} onDuration={props.onDuration} />
                   ))}
+                  {detail === today && rows.filter((task) => task.duration === 'long').length >= 2 ? <p className="px-1 py-2 text-sm text-muted">Между ними можно выдохнуть.</p> : null}
                   <AddRow label={`Новая задача, ${part.label}`} onAdd={(title) => createOn(detail, part.id, title)} />
                 </div>
               </section>
@@ -200,24 +283,61 @@ export function PlannerScreen(props: PlannerScreenProps) {
           {!week.includes(today) ? (
             <button type="button" onClick={() => { setDetail(null); setAnchor(today); }} className="mt-1 min-h-11 text-sm font-semibold underline decoration-line underline-offset-4">К сегодня</button>
           ) : null}
+          <button type="button" onClick={() => setClosing(true)} className="min-h-11 text-sm font-semibold text-muted underline decoration-line underline-offset-4">Закрыть день</button>
+          <input value={query} onChange={(event) => setQuery(event.target.value)} aria-label="Найти" placeholder="Найти" className="paper-field mt-2" />
         </div>
         <button type="button" aria-label="Следующая неделя" onClick={() => shift(1)} className="grid h-11 w-11 shrink-0 place-items-center text-ink">
           <ChevronRight aria-hidden="true" size={22} />
         </button>
       </header>
+      {query.trim() ? (
+        <div className="border-b border-line px-3 py-3 sm:px-5">
+          {found.length === 0 ? <p className="text-base text-ink">Такого дела не нахожу.</p> : found.map((task) => (
+            <p key={task.id} className="border-b border-line py-2 text-base break-words text-ink">
+              {task.title}
+              <span className="text-sm text-muted"> {formatLocalDate(dateFromKey(task.date))}</span>
+              {task.exception && task.originalDate && task.originalDate !== task.date ? <span className="text-sm text-muted"> перенесено</span> : null}
+            </p>
+          ))}
+        </div>
+      ) : null}
       <CaptureLine
         week={week}
+        weekKey={weekKey}
         inbox={inbox}
+        later={later}
         onAdd={(title) => props.onAddWeekItem(weekKey, 'inbox', title)}
         onToggle={props.onToggleWeekItem}
         onAssign={props.onAssignWeekItem}
+        onClaim={props.onClaim}
       />
+      {closing ? (
+        <DayClose
+          book={book}
+          today={today}
+          onMove={props.onMove}
+          onDismiss={props.onDismiss}
+          onDefer={props.onDefer}
+          onDayNote={props.onDayNote}
+          onClose={() => setClosing(false)}
+        />
+      ) : null}
       <div className="lg:grid lg:grid-cols-[minmax(0,1.5fr)_18rem]">
         <div className="lg:border-r lg:border-line">
           {week.map((day, index) => {
             const tasks = tasksForDate(book, day);
+            const preview = tasks.slice(0, 2).map((task) => task.title).join(', ');
             return (
               <section key={day} aria-label={DAY_NAMES[index]} aria-current={day === today ? 'date' : undefined} className={`min-w-0 border-b border-line px-3 py-3 sm:px-5 ${day === today ? 'day-today' : ''}`}>
+                {day !== today ? (
+                  <button type="button" onClick={() => setDetail(day)} className="flex w-full min-w-0 items-baseline gap-2 overflow-hidden text-left text-sm whitespace-nowrap sm:hidden">
+                    <span className="shrink-0">{DAY_NAMES[index]}</span>
+                    <span className="shrink-0 text-muted">{dateFromKey(day).getDate()}</span>
+                    <span className="min-w-0 truncate">{preview}</span>
+                    {tasks.length > 2 ? <span className="shrink-0 text-muted">ещё {tasks.length - 2}</span> : null}
+                  </button>
+                ) : null}
+                <div className={day === today ? '' : 'hidden sm:block'}>
                 <button type="button" onClick={() => setDetail(day)} className="flex w-full min-w-0 flex-col items-start gap-0.5 text-left sm:flex-row sm:items-baseline sm:justify-between sm:gap-3">
                   <h3 className="text-2xl">{DAY_NAMES[index]}</h3>
                   <span className="text-sm text-muted">{dayLabel(day)}{day === today ? ' · сегодня' : ''}{openCount(tasks) > 0 ? ` · ${openCount(tasks)} открыто` : ''}</span>
@@ -230,12 +350,13 @@ export function PlannerScreen(props: PlannerScreenProps) {
                       <div key={part.id}>
                         <p className="px-1 pt-3 text-sm text-ink">{part.label}</p>
                         {rows.map((task) => (
-                          <PlanTask key={task.id} task={task} today={props.today} shelves={part.id === 'anytime'} onToggle={props.onToggle} onMove={props.onMove} onPart={props.onPart} onPriority={props.onPriority} onUpdate={props.onUpdate} onSkip={props.onSkip} onFocus={props.onFocus} />
+                          <PlanTask key={task.id} task={task} today={props.today} shelves={part.id === 'anytime'} onToggle={props.onToggle} onMove={props.onMove} onPart={props.onPart} onPriority={props.onPriority} onUpdate={props.onUpdate} onSkip={props.onSkip} onFocus={props.onFocus} onNote={props.onNote} onDuration={props.onDuration} />
                         ))}
+                        {rows.filter((task) => task.duration === 'long').length >= 2 ? <p className="px-1 py-2 text-sm text-muted">Между ними можно выдохнуть.</p> : null}
                       </div>
                     );
                   }) : tasks.map((task) => (
-                    <PlanTask key={task.id} task={task} today={props.today} onToggle={props.onToggle} onMove={props.onMove} onPart={props.onPart} onPriority={props.onPriority} onUpdate={props.onUpdate} onSkip={props.onSkip} onFocus={props.onFocus} />
+                    <PlanTask key={task.id} task={task} today={props.today} onToggle={props.onToggle} onMove={props.onMove} onPart={props.onPart} onPriority={props.onPriority} onUpdate={props.onUpdate} onSkip={props.onSkip} onFocus={props.onFocus} onNote={props.onNote} onDuration={props.onDuration} />
                   ))}
                   <CarryLine
                     count={day > today ? 0 : openCount(tasks)}
@@ -243,6 +364,7 @@ export function PlannerScreen(props: PlannerScreenProps) {
                     onCarry={() => props.onCarry(day, day < today ? today : addDays(day, 1))}
                   />
                   <AddRow label={`Новая задача, ${DAY_NAMES[index]}`} onAdd={(title) => createOn(day, 'anytime', title)} />
+                </div>
                 </div>
               </section>
             );

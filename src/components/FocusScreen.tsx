@@ -1,9 +1,11 @@
 import { useState } from 'react';
+import { addDays } from '../../server/recurrence';
 import { FOCUS_PRESETS, minutesLabel, parseFocusMinutes, type FocusSession } from '../lib/focusSession';
 import { PRIORITIES } from '../lib/plannerCopy';
 import { tasksForDate, type Notebook } from '../lib/notebook';
 import type { Priority } from '../types';
 import { PaperCheck } from './PaperCheck';
+import { WhyLine } from './WhyLine';
 
 type FocusScreenProps = {
   book: Notebook;
@@ -15,10 +17,12 @@ type FocusScreenProps = {
   onToggle: (id: string) => void;
   onPriority: (id: string, priority: Priority) => void;
   onFocus: (id: string | null) => void;
+  onMove: (id: string, date: string) => void;
+  onNote: (id: string, text: string) => void;
   onStart: () => void;
 };
 
-export function FocusScreen({ book, today, minutes, session, onMinutes, onCreate, onToggle, onPriority, onFocus, onStart }: FocusScreenProps) {
+export function FocusScreen({ book, today, minutes, session, onMinutes, onCreate, onToggle, onPriority, onFocus, onMove, onNote, onStart }: FocusScreenProps) {
   const tasks = tasksForDate(book, today);
   const main = tasks.find((task) => task.id === book.focusId) || null;
   const rest = tasks.filter((task) => task.id !== main?.id);
@@ -28,6 +32,7 @@ export function FocusScreen({ book, today, minutes, session, onMinutes, onCreate
   const [customError, setCustomError] = useState<string | null>(null);
   const busy = session != null && !session.settled;
   const focusedHere = session?.taskId === main?.id;
+  const openCount = tasks.filter((task) => !task.completed).length;
 
   function applyCustom() {
     const parsed = parseFocusMinutes(custom);
@@ -52,6 +57,7 @@ export function FocusScreen({ book, today, minutes, session, onMinutes, onCreate
             <div className="min-w-0 flex-1 py-2">
               <p className="text-xs font-semibold tracking-[0.14em] text-primary uppercase">В фокусе</p>
               <p className={`font-serif text-2xl leading-snug ${main.completed ? 'text-muted line-through' : 'text-ink'}`}>{main.title}</p>
+              <WhyLine text={main.note} onSave={(text) => onNote(main.id, text)} />
               <p className="mt-1 text-xs text-muted">
                 {PRIORITIES.find((item) => item.id === main.priority)?.label}
                 {main.focusMs >= 30_000 ? ` · уже ${minutesLabel(Math.max(1, Math.round(main.focusMs / 60_000)))}` : ''}
@@ -91,15 +97,17 @@ export function FocusScreen({ book, today, minutes, session, onMinutes, onCreate
         </div>
       </form>
       <div className="px-4 py-4 sm:px-6">
-        <h3 className="text-2xl">Остальные дела</h3>
+        <h3 className="text-2xl">Не влезло</h3>
+        {openCount > 6 ? <p className="mt-2 text-sm text-muted">Вот это одно. Остальное может поехать дальше.</p> : null}
         <div className="mt-2 border-t border-line">
-          {rest.length === 0 && tasks.length > 0 ? <p className="py-3 text-sm text-muted">Других дел нет.</p> : null}
+          {rest.length === 0 ? <p className="py-3 text-sm text-muted">Других дел нет.</p> : null}
           {rest.map((task) => (
             <article key={task.id} className="flex items-start gap-1 border-b border-line">
               <PaperCheck checked={task.completed} label={task.completed ? `Вернуть «${task.title}»` : `Выполнить «${task.title}»`} onClick={() => onToggle(task.id)} />
               <div className="min-w-0 flex-1 py-2.5">
-                <p className={`text-base leading-snug ${task.completed ? 'text-muted line-through' : 'text-ink'}`}>{task.title}</p>
+                <p className={`text-base leading-snug break-words ${task.completed ? 'text-muted line-through' : 'text-ink'}`}>{task.title}</p>
                 <div className="mt-1 flex flex-wrap">
+                  <button type="button" onClick={() => onMove(task.id, addDays(task.date, 1))} className="paper-choice px-2">завтра</button>
                   {PRIORITIES.map((item) => (
                     <button key={item.id} type="button" aria-pressed={task.priority === item.id} onClick={() => onPriority(task.id, item.id)} className="paper-choice">{item.label}</button>
                   ))}

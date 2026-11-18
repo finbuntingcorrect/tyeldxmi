@@ -43,7 +43,7 @@ export function AccountGate({ notice = null, onRequest }: AccountGateProps) {
           <p className="text-xs font-semibold tracking-[0.22em] text-muted uppercase">Today Cat</p>
           <img src="/mascot/cat-wave.png" alt="Рыжий котёнок с поднятой лапкой" className="mx-auto mt-6 h-44 w-auto max-w-full object-contain sm:h-52" />
           <form className="mt-8 text-left" onSubmit={(event) => { event.preventDefault(); void submit(); }}>
-            <h1 className="text-center text-4xl leading-tight text-ink sm:text-5xl">Привет! Давай знакомиться, работяга!</h1>
+            <h1 className="text-center text-4xl leading-tight text-ink sm:text-5xl">Привет. Давай познакомимся.</h1>
             <p className="mt-6 text-center font-serif text-2xl text-ink">Вход по почте. Пароль не нужен.</p>
             <label htmlFor="cabinet-email" className="mt-6 block text-sm font-semibold">Почта</label>
             <input id="cabinet-email" type="email" value={email} onChange={(event) => { setEmail(event.target.value); setError(null); setSent(false); }} autoComplete="email" maxLength={200} placeholder="name@example.com" className="paper-field mt-1 text-lg" />

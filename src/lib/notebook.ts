@@ -23,6 +23,8 @@ export type SeriesSkip = {
   originalDate: string;
 };
 
+export type TaskDuration = 'short' | 'usual' | 'long';
+
 export type NotebookTask = {
   id: string;
   title: string;
@@ -39,6 +41,8 @@ export type NotebookTask = {
   weekdays: number[];
   deleted: boolean;
   focusMs: number;
+  note: string | null;
+  duration: TaskDuration | null;
 };
 
 export type Habit = {
@@ -57,10 +61,15 @@ export type HabitMark = {
 
 export type WeekItem = {
   id: string;
-  week: string;
+  week: string | null;
   kind: 'goal' | 'inbox';
   title: string;
   completed: boolean;
+};
+
+export type DayNote = {
+  date: string;
+  text: string;
 };
 
 export type Notebook = {
@@ -79,6 +88,7 @@ export type Notebook = {
   habits: Habit[];
   marks: HabitMark[];
   weekItems: WeekItem[];
+  dayNotes: DayNote[];
 };
 
 export type TaskDraft = {
@@ -106,7 +116,8 @@ export function notebookIsEmpty(book: Notebook) {
     && book.skips.length === 0
     && book.habits.length === 0
     && book.marks.length === 0
-    && book.weekItems.length === 0;
+    && book.weekItems.length === 0
+    && book.dayNotes.length === 0;
 }
 
 export function emptyNotebook(): Notebook {
@@ -126,6 +137,7 @@ export function emptyNotebook(): Notebook {
     habits: [],
     marks: [],
     weekItems: [],
+    dayNotes: [],
   };
 }
 
@@ -181,10 +193,58 @@ export function materialize(book: Notebook, from: string, to: string, now = new 
         weekdays: rule.weekdays,
         deleted: false,
         focusMs: 0,
+        note: null,
+        duration: null,
       });
     }
   }
   return { ...book, tasks };
+}
+
+export type ReturnRow = {
+  key: string;
+  title: string;
+  seriesId: string | null;
+  tasks: NotebookTask[];
+};
+
+export function returnRows(book: Notebook, today: string): ReturnRow[] {
+  if (!isDateKey(today)) return [];
+  const cutoff = addDays(today, -2);
+  const open = book.tasks.filter((task) => !task.deleted && !task.completed && task.date <= cutoff);
+  const grouped = new Map<string, NotebookTask[]>();
+  const singles: NotebookTask[] = [];
+  for (const task of open) {
+    if (!task.seriesId) {
+      singles.push(task);
+      continue;
+    }
+    const list = grouped.get(task.seriesId) ?? [];
+    list.push(task);
+    grouped.set(task.seriesId, list);
+  }
+  const rows: ReturnRow[] = [];
+  for (const [seriesId, tasks] of grouped) {
+    tasks.sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
+    const rule = book.series.find((item) => item.id === seriesId);
+    rows.push({ key: seriesId, title: rule?.title || tasks[0].title, seriesId, tasks });
+  }
+  singles.sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
+  for (const task of singles) rows.push({ key: task.id, title: task.title, seriesId: null, tasks: [task] });
+  rows.sort((a, b) => a.tasks[0].date.localeCompare(b.tasks[0].date) || a.title.localeCompare(b.title, 'ru'));
+  return rows;
+}
+
+export function bringReturnRow(book: Notebook, today: string, key: string): Notebook {
+  const row = returnRows(book, today).find((item) => item.key === key);
+  if (!row || !isDateKey(today)) return book;
+  const nearest = [...row.tasks].sort((a, b) => b.date.localeCompare(a.date))[0];
+  let next = moveTask(book, nearest.id, today);
+  for (const task of row.tasks) {
+    if (task.id === nearest.id) continue;
+    next = skipThisOccurrence(next, task.id);
+  }
+  return next;
 }
 
 export function tasksForDate(book: Notebook, date: string) {
@@ -279,6 +339,8 @@ export function createTask(book: Notebook, draft: TaskDraft, now = new Date().to
         weekdays: [],
         deleted: false,
         focusMs: 0,
+        note: null,
+        duration: null,
       }],
     };
   }
@@ -318,6 +380,60 @@ export function moveTask(book: Notebook, id: string, date: string): Notebook {
   };
 }
 
+export function dismissTask(book: Notebook, id: string): Notebook {
+  const task = book.tasks.find((item) => item.id === id && !item.deleted);
+  if (!task) return book;
+  if (task.seriesId) return skipThisOccurrence(book, id);
+  return {
+    ...book,
+    focusId: book.focusId === id ? null : book.focusId,
+    tasks: book.tasks.map((item) => item.id === id ? { ...item, deleted: true } : item),
+  };
+}
+
+export function deferTask(book: Notebook, id: string): Notebook {
+  const task = book.tasks.find((item) => item.id === id && !item.deleted);
+  const title = task?.title.trim().slice(0, 160);
+  if (!task || !title) return book;
+  return {
+    ...book,
+    focusId: book.focusId === id ? null : book.focusId,
+    tasks: book.tasks.map((item) => item.id === id ? { ...item, deleted: true } : item),
+    weekItems: [...book.weekItems, { id: createId(), week: null, kind: 'inbox', title, completed: false }],
+  };
+}
+
+export function claimWeekItem(book: Notebook, id: string, week: string): Notebook {
+  if (!isDateKey(week)) return book;
+  return {
+    ...book,
+    weekItems: book.weekItems.map((item) => item.id === id && item.week == null && item.kind === 'inbox' ? { ...item, week } : item),
+  };
+}
+
+export function setTaskDuration(book: Notebook, id: string, duration: TaskDuration | null): Notebook {
+  if (duration !== null && duration !== 'short' && duration !== 'usual' && duration !== 'long') return book;
+  return {
+    ...book,
+    tasks: book.tasks.map((task) => task.id === id ? { ...task, duration } : task),
+  };
+}
+
+export function searchTasks(book: Notebook, query: string) {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return [];
+  return book.tasks.filter((task) => !task.deleted && (
+    task.title.toLowerCase().includes(needle) || (task.note ?? '').toLowerCase().includes(needle)
+  ));
+}
+
+export function setDayNote(book: Notebook, date: string, text: string): Notebook {
+  const note = text.trim().slice(0, 160);
+  const rest = book.dayNotes.filter((item) => item.date !== date);
+  if (!note || !isDateKey(date)) return { ...book, dayNotes: rest };
+  return { ...book, dayNotes: [...rest, { date, text: note }] };
+}
+
 export function skipThisOccurrence(book: Notebook, id: string): Notebook {
   const task = book.tasks.find((item) => item.id === id && !item.deleted);
   if (!task?.seriesId) return book;
@@ -349,6 +465,14 @@ export function setTaskPriority(book: Notebook, id: string, priority: Priority):
   return {
     ...book,
     tasks: book.tasks.map((task) => task.id === id ? { ...task, priority, exception: true } : task),
+  };
+}
+
+export function setTaskNote(book: Notebook, id: string, text: string): Notebook {
+  const note = text.trim().slice(0, 120);
+  return {
+    ...book,
+    tasks: book.tasks.map((task) => task.id === id ? { ...task, note: note || null } : task),
   };
 }
 
@@ -512,6 +636,8 @@ export function fromLegacyTasks(tasks: LegacyStoredTask[]): Notebook {
       weekdays: [],
       deleted: false,
       focusMs: 0,
+      note: null,
+      duration: null,
     });
   }
   return book;
@@ -586,6 +712,8 @@ export function parseNotebook(value: unknown): Notebook | null {
         weekdays: Array.isArray(task.weekdays) ? cleanWeekdays(task.weekdays.map(Number)) : [],
         deleted: task.deleted === true,
         focusMs: typeof task.focusMs === 'number' && task.focusMs > 0 ? Math.round(task.focusMs) : 0,
+        note: typeof task.note === 'string' && task.note.trim() ? task.note.trim().slice(0, 120) : null,
+        duration: task.duration === 'short' || task.duration === 'usual' || task.duration === 'long' ? task.duration : null,
       });
     }
   }
@@ -644,15 +772,28 @@ export function parseNotebook(value: unknown): Notebook | null {
     for (const item of raw.weekItems) {
       if (!item || typeof item !== 'object') continue;
       const entry = item as Record<string, unknown>;
-      if (typeof entry.id !== 'string' || typeof entry.title !== 'string' || typeof entry.week !== 'string' || !isDateKey(entry.week)) continue;
+      if (typeof entry.id !== 'string' || typeof entry.title !== 'string') continue;
       if (entry.kind !== 'goal' && entry.kind !== 'inbox') continue;
+      const week = entry.week == null || entry.week === '' ? null : entry.week;
+      if (week !== null && (typeof week !== 'string' || !isDateKey(week))) continue;
+      if (week === null && entry.kind !== 'inbox') continue;
       book.weekItems.push({
         id: entry.id,
-        week: entry.week,
+        week,
         kind: entry.kind,
         title: entry.title.trim().slice(0, 160),
         completed: entry.completed === true,
       });
+    }
+  }
+  if (Array.isArray(raw.dayNotes)) {
+    for (const item of raw.dayNotes) {
+      if (!item || typeof item !== 'object') continue;
+      const note = item as Record<string, unknown>;
+      if (typeof note.date !== 'string' || !isDateKey(note.date) || typeof note.text !== 'string') continue;
+      const text = note.text.trim().slice(0, 160);
+      if (!text) continue;
+      book.dayNotes.push({ date: note.date, text });
     }
   }
   if (!book.mode) book.greeted = false;

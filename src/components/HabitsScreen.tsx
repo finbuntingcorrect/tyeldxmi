@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { Check, X } from 'lucide-react';
 import { dateFromKey, formatLocalDate } from '../lib/date';
-import { habitSpan, nextHabitStatus, trackerProgressLabel, type HabitStatus, type Notebook } from '../lib/notebook';
+import { habitSpan, nextHabitStatus, weekDates, type HabitStatus, type Notebook } from '../lib/notebook';
+import { WEEKDAYS } from '../lib/plannerCopy';
 import type { RepeatKind } from '../types';
 
 const PRESETS = ['10 минут зарядки', 'Читать 20 минут', 'Учить английский'];
@@ -23,6 +23,12 @@ function statusLabel(status: HabitStatus | null) {
   return 'без отметки';
 }
 
+function markTone(status: HabitStatus | null) {
+  if (status === 'done') return 'border-ink bg-ink';
+  if (status === 'missed') return 'border-ink bg-transparent';
+  return 'border-line bg-transparent';
+}
+
 function HabitCard({
   habit,
   today,
@@ -35,27 +41,44 @@ function HabitCard({
   onMark: HabitsScreenProps['onMark'];
 }) {
   const days = habitSpan(habit.start);
-  const done = days.filter((date) => marks.some((mark) => mark.habitId === habit.id && mark.date === date && mark.status === 'done')).length;
+  const week = weekDates(today);
+  const weekDone = week.filter((date) => marks.some((mark) => mark.habitId === habit.id && mark.date === date && mark.status === 'done')).length;
 
   function markDay(date: string, status: HabitStatus | null) {
-    if (date > today) return;
+    if (date > today || date < habit.start) return;
     onMark(habit.id, date, nextHabitStatus(status));
   }
 
   return (
     <article data-habit={habit.id} className="border border-line bg-card p-4 sm:p-5">
-      <h3 className="text-2xl">{habit.title}</h3>
-      <p className="mt-1 text-sm text-muted">{trackerProgressLabel(done)}</p>
+      <h3 className="text-2xl break-words">{habit.title}</h3>
+      <p className="mt-1 text-sm text-muted">На этой неделе {weekDone} точек</p>
       <p className="mt-1 text-xs text-muted">с {shortStart(habit.start)}</p>
-      <div className="mt-4 grid grid-cols-6 gap-2">
+      <div className="mt-4 grid grid-cols-7 gap-1">
+        {week.map((date, index) => {
+          const status = marks.find((mark) => mark.habitId === habit.id && mark.date === date)?.status ?? null;
+          const locked = date > today || date < habit.start;
+          return (
+            <button
+              key={date}
+              type="button"
+              disabled={locked}
+              aria-current={date === today ? 'date' : undefined}
+              aria-pressed={status === 'done'}
+              aria-label={`${habit.title}, ${WEEKDAYS[index].label}, ${formatLocalDate(dateFromKey(date))}, ${statusLabel(status)}`}
+              onClick={() => markDay(date, status)}
+              className={`flex min-h-11 flex-col items-center justify-center gap-1 ${locked ? 'cursor-default opacity-40' : 'cursor-pointer'}`}
+            >
+              <span className="text-xs text-muted">{WEEKDAYS[index].label}</span>
+              <span aria-hidden="true" className={`h-3.5 w-3.5 rounded-full border ${markTone(status)} ${date === today ? 'ring-2 ring-ink ring-offset-2' : ''}`} />
+            </button>
+          );
+        })}
+      </div>
+      <div className="mt-4 grid grid-cols-6 gap-1.5">
         {days.map((date) => {
           const status = marks.find((mark) => mark.habitId === habit.id && mark.date === date)?.status ?? null;
           const ahead = date > today;
-          const tone = status === 'done'
-            ? 'border-success bg-success text-white'
-            : status === 'missed'
-              ? 'border-danger bg-danger-soft text-danger'
-              : 'border-ink bg-card text-ink';
           return (
             <button
               key={date}
@@ -65,10 +88,9 @@ function HabitCard({
               aria-pressed={status === 'done'}
               aria-label={`${habit.title}, ${formatLocalDate(dateFromKey(date))}, ${statusLabel(status)}`}
               onClick={() => markDay(date, status)}
-              className={`mx-auto grid aspect-square w-full max-w-11 place-items-center rounded-full border ${tone} ${date === today ? 'ring-2 ring-primary' : ''} ${ahead ? 'cursor-default opacity-40' : 'cursor-pointer'}`}
+              className={`mx-auto grid h-6 w-6 place-items-center ${ahead ? 'cursor-default opacity-40' : 'cursor-pointer'}`}
             >
-              {status === 'done' ? <Check aria-hidden="true" size={14} strokeWidth={2.5} /> : null}
-              {status === 'missed' ? <X aria-hidden="true" size={14} strokeWidth={2.5} /> : null}
+              <span aria-hidden="true" className={`h-3 w-3 rounded-full border ${markTone(status)} ${date === today ? 'ring-2 ring-ink ring-offset-1' : ''}`} />
             </button>
           );
         })}

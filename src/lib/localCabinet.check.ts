@@ -33,6 +33,8 @@ anya.notebook.tasks = [{
   weekdays: [],
   deleted: false,
   focusMs: 0,
+  note: null,
+  duration: null,
 }];
 await cabinet.save(anya.notebook);
 assert.equal(persistent.raw().includes('Только Аня'), false);
