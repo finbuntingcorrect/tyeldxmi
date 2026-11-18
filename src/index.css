@@ -218,10 +218,6 @@ html[data-theme='dark'] {
   background: var(--color-primary-hover);
 }
 
-.day-today {
-  background: color-mix(in srgb, var(--color-primary) 16%, var(--color-card));
-}
-
 .cat-arrive {
   animation: cat-arrive 900ms ease-out;
 }

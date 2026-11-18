@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { addDays } from '../../server/recurrence';
+import { addDays } from '../../server/recurrence.ts';
 import {
   chooseMode,
   parseNotebook,
@@ -34,7 +34,7 @@ import {
   toggleTask,
   trackerProgressLabel,
   weekDates,
-} from './notebook';
+} from './notebook.ts';
 
 const week = weekDates('2026-11-06');
 assert.deepEqual(week, ['2026-11-02', '2026-11-03', '2026-11-04', '2026-11-05', '2026-11-06', '2026-11-07', '2026-11-08']);
@@ -137,6 +137,39 @@ assert.equal(skipped.series[0].until, skipRule.until);
 assert.equal(skipped.series[0].repeatKind, skipRule.repeatKind);
 assert.deepEqual(skipped.series[0].weekdays, skipRule.weekdays);
 assert.equal(skipThisOccurrence(skipped, 'missing'), skipped);
+
+let dailySkip = createTask(emptyNotebook(), {
+  title: 'Страница',
+  date: '2026-11-16',
+  dayPart: 'morning',
+  priority: 'normal',
+  repeatKind: 'daily',
+  weekdays: [],
+}, '2026-11-16T08:00:00.000Z');
+dailySkip = materialize(dailySkip, '2026-11-16', '2026-11-20');
+const dailyUntil = dailySkip.series[0].until;
+const dailyFirst = tasksForDate(dailySkip, '2026-11-16')[0];
+dailySkip = skipThisOccurrence(dailySkip, dailyFirst.id);
+assert.equal(tasksForDate(dailySkip, '2026-11-16').length, 0);
+assert.equal(tasksForDate(dailySkip, '2026-11-17').length, 1);
+assert.equal(dailySkip.series[0].until, dailyUntil);
+assert.equal(dailySkip.series[0].start, '2026-11-16');
+dailySkip = materialize(dailySkip, '2026-11-16', '2026-11-20');
+assert.equal(tasksForDate(dailySkip, '2026-11-16').length, 0);
+assert.equal(tasksForDate(dailySkip, '2026-11-17')[0].deleted, false);
+
+let singleSkip = createTask(emptyNotebook(), {
+  title: 'Разовая',
+  date: '2026-11-16',
+  dayPart: 'anytime',
+  priority: 'normal',
+  repeatKind: 'none',
+  weekdays: [],
+});
+singleSkip = skipThisOccurrence(singleSkip, singleSkip.tasks[0].id);
+assert.equal(singleSkip.tasks[0].deleted, true);
+assert.equal(singleSkip.skips.length, 0);
+assert.equal(tasksForDate(singleSkip, '2026-11-16').length, 0);
 
 const noted = setDayNote(emptyNotebook(), '2026-11-17', '  Тихий день  ');
 assert.equal(noted.dayNotes[0].text, 'Тихий день');

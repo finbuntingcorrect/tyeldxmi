@@ -1,7 +1,7 @@
 import { useId, useState } from 'react';
 import { addDays } from '../../server/recurrence';
 import { DAY_PARTS, PRIORITIES, WEEKDAYS } from '../lib/plannerCopy';
-import type { NotebookTask, TaskDraft, TaskDuration } from '../lib/notebook';
+import type { NotebookTask, TaskDraft } from '../lib/notebook';
 import type { DayPart, Priority } from '../types';
 import { PaperCheck } from './PaperCheck';
 import { WhyLine } from './WhyLine';
@@ -17,17 +17,12 @@ type PlanTaskProps = {
   onSkip: (id: string) => void;
   onFocus: (id: string) => void;
   onNote: (id: string, text: string) => void;
-  onDuration: (id: string, duration: TaskDuration) => void;
   shelves?: boolean;
 };
 
-const DURATIONS: { id: TaskDuration; label: string }[] = [
-  { id: 'short', label: 'коротко' },
-  { id: 'usual', label: 'обычно' },
-  { id: 'long', label: 'долго' },
-];
+const SHELF_MOVES = DAY_PARTS.filter((part) => part.id !== 'anytime');
 
-export function PlanTask({ task, today, onToggle, onMove, onPart, onPriority, onUpdate, onSkip, onFocus, onNote, onDuration, shelves = false }: PlanTaskProps) {
+export function PlanTask({ task, today, onToggle, onMove, onPart, onPriority, onUpdate, onSkip, onFocus, onNote, shelves = false }: PlanTaskProps) {
   const titleId = useId();
   const [open, setOpen] = useState(false);
   const [customDate, setCustomDate] = useState(task.date);
@@ -55,20 +50,19 @@ export function PlanTask({ task, today, onToggle, onMove, onPart, onPriority, on
           <div className="min-w-0 flex-1">
             <p id={titleId} className={`text-base leading-snug break-words ${task.completed ? 'text-muted line-through' : 'text-ink'}`}>{task.title}</p>
             <WhyLine text={task.note} onSave={(text) => onNote(task.id, text)} />
-            {task.duration ? <p className="text-xs text-muted">{DURATIONS.find((item) => item.id === task.duration)?.label}</p> : null}
             {notes ? <p className="text-xs break-words text-muted">{notes}</p> : null}
           </div>
           <div className="flex flex-wrap items-center">
             <button type="button" onClick={() => onMove(task.id, addDays(task.date, 1))} className="paper-choice px-2">завтра</button>
-            {task.date === today ? <button type="button" onClick={() => onFocus(task.id)} className="paper-submit my-1">В фокус</button> : null}
+            {task.date === today ? <button type="button" onClick={() => onFocus(task.id)} className="paper-choice my-1">В фокус</button> : null}
             <button type="button" aria-expanded={open} aria-label={`Действия: ${task.title}`} onClick={() => setOpen((value) => !value)} className="min-h-11 px-2 text-sm font-semibold text-muted">Ещё</button>
           </div>
         </div>
       </div>
       {shelves && task.dayPart === 'anytime' ? (
         <div className="flex flex-wrap pb-1 pl-11">
-          {DAY_PARTS.map((part) => (
-            <button key={part.id} type="button" aria-pressed={task.dayPart === part.id} onClick={() => onPart(task.id, part.id)} className="paper-choice">{part.label}</button>
+          {SHELF_MOVES.map((part) => (
+            <button key={part.id} type="button" onClick={() => onPart(task.id, part.id)} className="paper-choice">{part.label}</button>
           ))}
         </div>
       ) : null}
@@ -84,14 +78,10 @@ export function PlanTask({ task, today, onToggle, onMove, onPart, onPriority, on
               <button key={item.id} type="button" aria-pressed={task.priority === item.id} onClick={() => onPriority(task.id, item.id)} className="paper-choice">{item.label}</button>
             ))}
           </div>
-          <div className="flex flex-wrap">
-            {DURATIONS.map((item) => (
-              <button key={item.id} type="button" aria-pressed={task.duration === item.id} onClick={() => onDuration(task.id, item.id)} className="paper-choice">{item.label}</button>
-            ))}
-          </div>
           <div className="mt-2 flex flex-wrap items-center gap-2">
+            <button type="button" onClick={() => onMove(task.id, addDays(task.date, 1))} className="paper-choice">Перенести на завтра</button>
             <button type="button" onClick={() => onMove(task.id, addDays(task.date, 7))} className="paper-choice">на следующую неделю</button>
-            {task.seriesId ? <button type="button" onClick={() => onSkip(task.id)} className="paper-choice">этот раз не надо</button> : null}
+            <button type="button" onClick={() => onSkip(task.id)} className="paper-choice">этот раз не надо</button>
             <label className="flex min-h-11 min-w-0 flex-wrap items-center gap-2 text-sm font-semibold">
               Выбрать дату
               <input type="date" value={customDate} onChange={(event) => setCustomDate(event.target.value)} className="w-36 max-w-full bg-transparent" />
@@ -122,7 +112,7 @@ export function PlanTask({ task, today, onToggle, onMove, onPart, onPriority, on
           <input id={`${titleId}-title`} value={title} onChange={(event) => setTitle(event.target.value)} maxLength={160} className="paper-field" />
           <div className="mt-3 flex flex-wrap gap-2">
             <button type="button" onClick={() => onUpdate(task.id, draft, 'one')} className="paper-choice">Только эту задачу</button>
-            <button type="button" onClick={() => onUpdate(task.id, draft, 'future')} className="paper-submit">Эту и будущие</button>
+            <button type="button" onClick={() => onUpdate(task.id, draft, 'future')} className="paper-choice">Эту и будущие</button>
           </div>
         </div>
       ) : null}

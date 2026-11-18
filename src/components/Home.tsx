@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { localDateKey, dateFromKey, formatLocalDate } from '../lib/date';
 import { DEFAULT_FOCUS_MINUTES, catPose } from '../lib/focusSession';
-import { habitsForDate, returnRows, tasksForDate } from '../lib/notebook';
+import { habitsForDate, tasksForDate } from '../lib/notebook';
 import { unlockSound } from '../lib/focusSound';
 import { useFocusController } from '../hooks/useFocusController';
 import { useNotebook } from '../hooks/useNotebook';
@@ -13,7 +13,6 @@ import { FocusScreen } from './FocusScreen';
 import { HabitsScreen } from './HabitsScreen';
 import { ModeSwitch } from './ModeSwitch';
 import { PlannerScreen } from './PlannerScreen';
-import { ReturnSheet } from './ReturnSheet';
 import { SettingsPanel } from './SettingsPanel';
 import { Welcome } from './Welcome';
 
@@ -26,8 +25,6 @@ export function Home() {
   const [pickedMinutes, setPickedMinutes] = useState<number | null>(null);
   const [conflict, setConflict] = useState<string | null>(null);
   const [reduced, setReduced] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches);
-  const [returnOpen, setReturnOpen] = useState(false);
-  const returnSeen = useRef(false);
   const [soundNote, setSoundNote] = useState<string | null>(null);
   const book = notebook.book;
   const mode = book.mode;
@@ -47,21 +44,6 @@ export function Home() {
     media.addEventListener('change', apply);
     return () => media.removeEventListener('change', apply);
   }, []);
-
-  useEffect(() => {
-    if (notebook.status !== 'ready' || !book.greeted || !mode || returnSeen.current) return;
-    try {
-      if (sessionStorage.getItem('today-cat.return-sheet') === '1') {
-        returnSeen.current = true;
-        return;
-      }
-    } catch {
-      return;
-    }
-    if (returnRows(book, today).length === 0) return;
-    returnSeen.current = true;
-    setReturnOpen(true);
-  }, [notebook.status, book, mode, today]);
 
   useEffect(() => {
     if (mode !== 'planner') return;
@@ -226,11 +208,6 @@ export function Home() {
             onCarry={notebook.carryOpen}
             onSkip={notebook.skipThis}
             onNote={notebook.setTaskNote}
-            onDismiss={notebook.dismissTask}
-            onDefer={notebook.deferTask}
-            onClaim={notebook.claimWeek}
-            onDayNote={notebook.setDayNote}
-            onDuration={notebook.setDuration}
             onFocus={requestFocus}
           />
         ) : null}
@@ -251,16 +228,6 @@ export function Home() {
           />
         ) : null}
       </div>
-      {returnOpen ? (
-        <ReturnSheet
-          rows={returnRows(book, today)}
-          onBring={(key) => notebook.bringReturn(today, key)}
-          onLater={() => {
-            try { sessionStorage.setItem('today-cat.return-sheet', '1'); } catch { /* the sheet can still close */ }
-            setReturnOpen(false);
-          }}
-        />
-      ) : null}
       <CatCompanion
         pose={pose}
         hidden={book.cat.hidden}

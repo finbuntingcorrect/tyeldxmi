@@ -1,7 +1,7 @@
-import { addDays, isDateKey, occurrenceDates, weekday } from '../../server/recurrence';
+import { addDays, isDateKey, occurrenceDates, weekday } from '../../server/recurrence.ts';
 import type { DayPart, Priority, RepeatKind } from '../types';
 import type { LegacyStoredTask } from '../types';
-import { defaultCatPrefs, parseCatPrefs, parseFocusSession, type CatPrefs, type FocusSession } from './focusSession';
+import { defaultCatPrefs, parseCatPrefs, parseFocusSession, type CatPrefs, type FocusSession } from './focusSession.ts';
 
 export type AppMode = 'habits' | 'planner' | 'focus';
 export type AppTheme = 'blue' | 'pink' | 'yellow' | 'dark';
@@ -436,12 +436,20 @@ export function setDayNote(book: Notebook, date: string, text: string): Notebook
 
 export function skipThisOccurrence(book: Notebook, id: string): Notebook {
   const task = book.tasks.find((item) => item.id === id && !item.deleted);
-  if (!task?.seriesId) return book;
+  if (!task) return book;
+  const cleared = book.focusId === id ? null : book.focusId;
+  if (!task.seriesId) {
+    return {
+      ...book,
+      focusId: cleared,
+      tasks: book.tasks.map((item) => item.id === id ? { ...item, deleted: true } : item),
+    };
+  }
   const originalDate = task.originalDate || task.date;
   const listed = book.skips.some((skip) => skip.seriesId === task.seriesId && skip.originalDate === originalDate);
   return {
     ...book,
-    focusId: book.focusId === id ? null : book.focusId,
+    focusId: cleared,
     skips: listed ? book.skips : [...book.skips, { seriesId: task.seriesId, originalDate }],
     tasks: book.tasks.map((item) => item.id === id ? { ...item, deleted: true } : item),
   };
