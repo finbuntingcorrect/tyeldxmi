@@ -46,16 +46,14 @@ export function PlanTask({ task, today, onToggle, onMove, onPart, onPriority, on
     <article className="min-w-0 border-b border-line">
       <div className="flex items-start gap-1">
         <PaperCheck checked={task.completed} label={task.completed ? `Вернуть «${task.title}»` : `Выполнить «${task.title}»`} onClick={() => onToggle(task.id)} />
-        <div className="flex min-w-0 flex-1 flex-col py-2 sm:flex-row sm:items-start">
-          <div className="min-w-0 flex-1">
-            <p id={titleId} className={`text-base leading-snug break-words ${task.completed ? 'text-muted line-through' : 'text-ink'}`}>{task.title}</p>
-            <WhyLine text={task.note} onSave={(text) => onNote(task.id, text)} />
-            {notes ? <p className="text-xs break-words text-muted">{notes}</p> : null}
-          </div>
+        <div className="min-w-0 flex-1 py-2">
+          <p id={titleId} className={`text-base leading-snug break-words ${task.completed ? 'text-muted line-through' : 'text-ink'}`}>{task.title}</p>
+          <WhyLine text={task.note} onSave={(text) => onNote(task.id, text)} />
+          {notes ? <p className="text-xs break-words text-muted">{notes}</p> : null}
           <div className="flex flex-wrap items-center">
             <button type="button" onClick={() => onMove(task.id, addDays(task.date, 1))} className="paper-choice px-2">завтра</button>
             {task.date === today ? <button type="button" onClick={() => onFocus(task.id)} className="paper-choice my-1">В фокус</button> : null}
-            <button type="button" aria-expanded={open} aria-label={`Действия: ${task.title}`} onClick={() => setOpen((value) => !value)} className="min-h-11 px-2 text-sm font-semibold text-muted">Ещё</button>
+            <button type="button" aria-expanded={open} aria-label={`Действия: ${task.title}`} onClick={() => setOpen((value) => !value)} className="paper-choice">Ещё</button>
           </div>
         </div>
       </div>
@@ -81,7 +79,7 @@ export function PlanTask({ task, today, onToggle, onMove, onPart, onPriority, on
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <button type="button" onClick={() => onMove(task.id, addDays(task.date, 1))} className="paper-choice">Перенести на завтра</button>
             <button type="button" onClick={() => onMove(task.id, addDays(task.date, 7))} className="paper-choice">на следующую неделю</button>
-            <button type="button" onClick={() => onSkip(task.id)} className="paper-choice">этот раз не надо</button>
+            <button type="button" onClick={() => onSkip(task.id)} className="paper-choice">{task.seriesId ? 'этот раз не надо' : 'Убрать'}</button>
             <label className="flex min-h-11 min-w-0 flex-wrap items-center gap-2 text-sm font-semibold">
               Выбрать дату
               <input type="date" value={customDate} onChange={(event) => setCustomDate(event.target.value)} className="w-36 max-w-full bg-transparent" />
@@ -111,8 +109,14 @@ export function PlanTask({ task, today, onToggle, onMove, onPart, onPriority, on
           <label className="mt-2 block text-sm font-semibold" htmlFor={`${titleId}-title`}>Название</label>
           <input id={`${titleId}-title`} value={title} onChange={(event) => setTitle(event.target.value)} maxLength={160} className="paper-field" />
           <div className="mt-3 flex flex-wrap gap-2">
-            <button type="button" onClick={() => onUpdate(task.id, draft, 'one')} className="paper-choice">Только эту задачу</button>
-            <button type="button" onClick={() => onUpdate(task.id, draft, 'future')} className="paper-choice">Эту и будущие</button>
+            {task.seriesId ? (
+              <>
+                <button type="button" onClick={() => onUpdate(task.id, draft, 'one')} className="paper-choice">Только эту задачу</button>
+                <button type="button" onClick={() => onUpdate(task.id, draft, 'future')} className="paper-choice">Эту и будущие</button>
+              </>
+            ) : (
+              <button type="button" onClick={() => onUpdate(task.id, draft, 'one')} className="paper-submit">Сохранить</button>
+            )}
           </div>
         </div>
       ) : null}
