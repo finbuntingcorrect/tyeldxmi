@@ -3,7 +3,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { addDays } from '../../server/recurrence';
 import { DAY_PARTS, WEEKDAYS } from '../lib/plannerCopy';
 import { tasksForDate, weekDates, type Notebook, type TaskDraft, type WeekItem } from '../lib/notebook';
-import { dateFromKey, formatLocalDate } from '../lib/date';
+import { dateFromKey, formatDayMonth, formatDayRange, formatLocalDate } from '../lib/date';
 import type { DayPart, Priority } from '../types';
 import { PaperCheck } from './PaperCheck';
 import { PlanTask } from './PlanTask';
@@ -15,6 +15,7 @@ type PlannerScreenProps = {
   today: string;
   onCreate: (draft: TaskDraft) => void;
   onToggle: (id: string) => void;
+  onRemove: (id: string) => void;
   onMove: (id: string, date: string) => void;
   onPart: (id: string, part: DayPart) => void;
   onPriority: (id: string, priority: Priority) => void;
@@ -26,16 +27,11 @@ type PlannerScreenProps = {
 };
 
 function rangeLabel(week: string[]) {
-  const start = dateFromKey(week[0]);
-  const end = dateFromKey(week[6]);
-  const startMonth = new Intl.DateTimeFormat('ru-RU', { month: 'long' }).format(start);
-  const endMonth = new Intl.DateTimeFormat('ru-RU', { month: 'long' }).format(end);
-  if (start.getMonth() === end.getMonth()) return `${start.getDate()}–${end.getDate()} ${endMonth}`;
-  return `${start.getDate()} ${startMonth} – ${end.getDate()} ${endMonth}`;
+  return formatDayRange(dateFromKey(week[0]), dateFromKey(week[6]));
 }
 
 function dayLabel(day: string) {
-  return new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long' }).format(dateFromKey(day));
+  return formatDayMonth(dateFromKey(day));
 }
 
 function AddRow({ label, onAdd }: { label: string; onAdd: (title: string) => void }) {
@@ -96,7 +92,7 @@ export function PlannerScreen(props: PlannerScreenProps) {
                 <h3 className="text-2xl">{part.label}</h3>
                 <div className="mt-2 border-t border-line">
                   {rows.map((task) => (
-                    <PlanTask key={task.id} task={task} today={props.today} onToggle={props.onToggle} onMove={props.onMove} onPart={props.onPart} onPriority={props.onPriority} onUpdate={props.onUpdate} onFocus={props.onFocus} />
+                    <PlanTask key={task.id} task={task} today={props.today} onToggle={props.onToggle} onRemove={props.onRemove} onMove={props.onMove} onPart={props.onPart} onPriority={props.onPriority} onUpdate={props.onUpdate} onFocus={props.onFocus} />
                   ))}
                   <AddRow label={`Новая задача, ${part.label}`} onAdd={(title) => createOn(detail, part.id, title)} />
                 </div>
@@ -117,6 +113,9 @@ export function PlannerScreen(props: PlannerScreenProps) {
         <div className="min-w-0 text-center">
           <h2 className="text-3xl sm:text-4xl">План на неделю</h2>
           <p className="mt-1 text-sm text-muted">{rangeLabel(week)}</p>
+          {week.includes(today) && week.every((day) => tasksForDate(book, day).length === 0) && goals.length === 0 && inbox.length === 0 ? (
+            <p className="mt-2 text-sm text-muted">Одно дело на сегодня. Фокус и привычки — соседние страницы сверху.</p>
+          ) : null}
         </div>
         <button type="button" aria-label="Следующая неделя" onClick={() => shift(1)} className="grid h-11 w-11 shrink-0 place-items-center text-ink">
           <ChevronRight aria-hidden="true" size={22} />
@@ -134,7 +133,7 @@ export function PlannerScreen(props: PlannerScreenProps) {
                 </button>
                 <div className="mt-1 border-t border-line">
                   {tasks.map((task) => (
-                    <PlanTask key={task.id} task={task} today={props.today} onToggle={props.onToggle} onMove={props.onMove} onPart={props.onPart} onPriority={props.onPriority} onUpdate={props.onUpdate} onFocus={props.onFocus} />
+                    <PlanTask key={task.id} task={task} today={props.today} onToggle={props.onToggle} onRemove={props.onRemove} onMove={props.onMove} onPart={props.onPart} onPriority={props.onPriority} onUpdate={props.onUpdate} onFocus={props.onFocus} />
                   ))}
                   <AddRow label={`Новая задача, ${DAY_NAMES[index]}`} onAdd={(title) => createOn(day, 'anytime', title)} />
                 </div>

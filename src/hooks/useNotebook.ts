@@ -18,8 +18,11 @@ import {
   notebookIsEmpty,
   parseNotebook,
   applyFocus,
+  removeHabit,
+  removeTask,
   setCatPrefs,
   setFocus,
+  setHabitArchived,
   setHabitMark,
   setName,
   setTaskPart,
@@ -40,10 +43,6 @@ import { applyTheme } from '../lib/theme';
 import type { DayPart, Priority, RepeatKind } from '../types';
 
 type Status = 'loading' | 'anon' | 'ready';
-
-function named(book: Notebook, login: string) {
-  return book.name.trim() ? book : { ...book, name: login.slice(0, 40) };
-}
 
 export function useNotebook() {
   const [status, setStatus] = useState<Status>('loading');
@@ -70,12 +69,12 @@ export function useNotebook() {
   }
 
   async function adopt(accountLogin: string, raw: unknown, claim: boolean) {
-    let book = named(parseNotebook(raw) ?? emptyNotebook(), accountLogin);
+    let book = parseNotebook(raw) ?? emptyNotebook();
     if (notebookIsEmpty(book) && (claim || claimMatches(accountLogin))) {
       const local = peekLocalNotebook();
       if (local) {
         rememberClaim(accountLogin);
-        book = named(local, accountLogin);
+        book = local;
         const message = await saveCabinet(book);
         if (!message) clearClaim();
         show(accountLogin, book, message);
@@ -197,12 +196,15 @@ export function useNotebook() {
     },
     createTask: (draft: TaskDraft) => commit((book) => createTask(book, draft)),
     toggleTask: (id: string) => commit((book) => toggleTask(book, id)),
+    removeTask: (id: string) => commit((book) => removeTask(book, id)),
     moveTask: (id: string, date: string) => commit((book) => moveTask(book, id, date)),
     setPart: (id: string, dayPart: DayPart) => commit((book) => setTaskPart(book, id, dayPart)),
     setPriority: (id: string, priority: Priority) => commit((book) => setTaskPriority(book, id, priority)),
     updateTask: (id: string, draft: TaskDraft, scope: 'one' | 'future') => commit((book) => updateTask(book, id, draft, scope)),
     setFocus: (id: string | null, today: string) => commit((book) => setFocus(book, id, today)),
     createHabit: (title: string, repeatKind: RepeatKind, weekdays: number[], start: string) => commit((book) => createHabit(book, title, repeatKind, weekdays, start)),
+    removeHabit: (id: string) => commit((book) => removeHabit(book, id)),
+    setHabitArchived: (id: string, archived: boolean) => commit((book) => setHabitArchived(book, id, archived)),
     setHabitMark: (habitId: string, date: string, status: HabitStatus | null) => commit((book) => setHabitMark(book, habitId, date, status)),
     addWeekItem: (week: string, kind: WeekItem['kind'], title: string) => commit((book) => addWeekItem(book, week, kind, title)),
     toggleWeekItem: (id: string) => commit((book) => toggleWeekItem(book, id)),

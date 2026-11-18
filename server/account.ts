@@ -183,7 +183,7 @@ export async function verifyLink(raw: unknown, timezoneValue: unknown, secure: b
   );
   await sql.query(
     `INSERT INTO notebooks (user_id, data) VALUES ($1, $2::jsonb) ON CONFLICT (user_id) DO NOTHING`,
-    [user.id, JSON.stringify({ ...emptyNotebook(), name: email.slice(0, 40) })],
+    [user.id, JSON.stringify(emptyNotebook())],
   );
   await sql.query(
     `INSERT INTO sessions (id, user_id, token_hash, expires_at) VALUES ($1, $2, $3, now() + interval '30 days')`,

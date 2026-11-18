@@ -11,6 +11,7 @@ const CHOICES: { id: AppMode; label: string; text: string }[] = [
 type WelcomeProps = {
   name: string;
   theme: AppTheme | null;
+  nameOnly?: boolean;
   onName: (name: string) => void;
   onTheme: (theme: AppTheme) => void;
   onChoose: (mode: AppMode) => void;
@@ -22,7 +23,7 @@ function openingStep(name: string, theme: AppTheme | null): 1 | 2 | 3 {
   return 3;
 }
 
-export function Welcome({ name, theme, onName, onTheme, onChoose }: WelcomeProps) {
+export function Welcome({ name, theme, nameOnly = false, onName, onTheme, onChoose }: WelcomeProps) {
   const [step, setStep] = useState<1 | 2 | 3>(() => openingStep(name, theme));
   const [draft, setDraft] = useState(name);
   const [nameHint, setNameHint] = useState(false);
@@ -35,7 +36,7 @@ export function Welcome({ name, theme, onName, onTheme, onChoose }: WelcomeProps
       return;
     }
     onName(next);
-    setStep(2);
+    if (!nameOnly) setStep(2);
   }
 
   function continueTheme() {
@@ -54,7 +55,7 @@ export function Welcome({ name, theme, onName, onTheme, onChoose }: WelcomeProps
           <img src="/mascot/cat-wave.png" alt="Рыжий котёнок с поднятой лапкой" className="mx-auto mt-6 h-44 w-auto max-w-full object-contain sm:h-52" />
           {step === 1 ? (
             <form className="mt-8" onSubmit={(event) => { event.preventDefault(); continueName(); }}>
-              <h1 className="text-4xl leading-tight text-ink sm:text-5xl">Привет! Давай знакомиться, работяга!</h1>
+              <h1 className="text-4xl leading-tight text-ink sm:text-5xl">Привет. Давай познакомимся.</h1>
               <label htmlFor="your-name" className="mt-6 block font-serif text-2xl text-ink">Как тебя зовут?</label>
               <input id="your-name" value={draft} onChange={(event) => { setDraft(event.target.value); setNameHint(false); }} maxLength={40} autoComplete="nickname" placeholder="Твоё имя" className="paper-field mt-2 text-center text-lg" />
               {nameHint ? <p role="alert" className="mt-3 text-sm font-semibold text-danger">Введи имя, чтобы продолжить</p> : null}
@@ -75,6 +76,7 @@ export function Welcome({ name, theme, onName, onTheme, onChoose }: WelcomeProps
           {step === 3 ? (
             <div className="mt-8 text-left">
               <h1 className="text-center text-4xl leading-tight text-ink">{name}, для чего тебе трекер?</h1>
+              <p className="mt-3 text-center text-sm text-muted">Неделя, фокус и привычки — три страницы одной тетради. Выбери, с какой начать.</p>
               <div className="mt-6 border-t border-line">
                 {CHOICES.map((choice) => (
                   <button key={choice.id} type="button" onClick={() => onChoose(choice.id)} className="block w-full border-b border-line px-1 py-4 text-left">

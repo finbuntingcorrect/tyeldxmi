@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { localDateKey, dateFromKey, formatLocalDate } from '../lib/date';
 import { DEFAULT_FOCUS_MINUTES, catPose } from '../lib/focusSession';
-import { habitsForDate, tasksForDate } from '../lib/notebook';
+import { habitsForDate, personName, tasksForDate } from '../lib/notebook';
 import { unlockSound } from '../lib/focusSound';
 import { useFocusController } from '../hooks/useFocusController';
 import { useNotebook } from '../hooks/useNotebook';
@@ -67,10 +67,24 @@ export function Home() {
   if (notebook.status === 'loading') return <CabinetSplash />;
   if (notebook.status === 'anon') return <AccountGate notice={notebook.error} onRequest={notebook.requestEmail} />;
 
-  if (!book.greeted || !mode) {
+  const person = personName(book.name, notebook.login);
+  if (!person && book.greeted && book.mode) {
     return (
       <Welcome
-        name={book.name}
+        name=""
+        nameOnly
+        theme={book.theme}
+        onName={notebook.setName}
+        onTheme={notebook.setTheme}
+        onChoose={notebook.chooseMode}
+      />
+    );
+  }
+
+  if (!person || !book.greeted || !mode) {
+    return (
+      <Welcome
+        name={person}
         theme={book.theme}
         onName={notebook.setName}
         onTheme={notebook.setTheme}
@@ -81,12 +95,11 @@ export function Home() {
 
   const todayTasks = tasksForDate(book, today);
   const todayHabits = habitsForDate(book, today);
-  const open = mode === 'habits'
-    ? todayHabits.some((row) => row.status !== 'done')
-    : todayTasks.some((task) => !task.completed);
+  const openTasks = todayTasks.some((task) => !task.completed);
+  const openHabits = todayHabits.some((row) => row.status !== 'done');
   const hint = burst > 0
     ? 'Задача выполнена'
-    : open
+    : openTasks || openHabits
       ? 'Есть незакрытые дела'
       : todayTasks.length === 0 && todayHabits.length === 0 ? 'На сегодня тихо' : 'Можно отдохнуть';
   const minutes = pickedMinutes ?? book.focusSession?.focusMinutes ?? DEFAULT_FOCUS_MINUTES;
@@ -164,9 +177,9 @@ export function Home() {
     <div style={{ paddingRight: 'var(--cat-lane, 0px)' }}>
     <div className={`mx-auto w-full max-w-6xl px-3 py-6 sm:px-6 sm:py-10 ${session ? 'pb-40' : ''}`}>
       <div className={`border border-line bg-card ${session ? 'pb-36' : ''}`}>
-        <header className="flex items-center justify-between gap-3 px-4 py-4 sm:px-6">
-          <div className="min-w-0">
-            <h1 className="text-2xl leading-tight sm:text-4xl">{book.name ? `Привет, ${book.name}` : 'Today Cat'}</h1>
+        <header className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2 px-4 py-4 sm:px-6">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-2xl leading-tight [overflow-wrap:anywhere] sm:text-4xl">{person ? `Привет, ${person}` : 'Привет'}</h1>
             <p className="mt-1 text-sm text-muted">{formatLocalDate(dateFromKey(today))}</p>
             <p className="text-sm text-muted">{hint}</p>
           </div>
@@ -179,7 +192,7 @@ export function Home() {
         {settings ? (
           <SettingsPanel
             login={notebook.login}
-            name={book.name}
+            name={person}
             theme={book.theme}
             cat={book.cat}
             onName={notebook.setName}
@@ -190,7 +203,7 @@ export function Home() {
         ) : null}
         {notebook.error ? <p role="alert" className="border-b border-line px-4 py-3 text-sm font-semibold text-danger sm:px-6">{notebook.error}</p> : null}
         {mode === 'habits' ? (
-          <HabitsScreen book={book} today={today} onCreate={notebook.createHabit} onMark={notebook.setHabitMark} />
+          <HabitsScreen book={book} today={today} onCreate={notebook.createHabit} onMark={notebook.setHabitMark} onRemove={notebook.removeHabit} onArchive={notebook.setHabitArchived} />
         ) : null}
         {mode === 'planner' ? (
           <PlannerScreen
@@ -198,6 +211,7 @@ export function Home() {
             today={today}
             onCreate={notebook.createTask}
             onToggle={toggle}
+            onRemove={notebook.removeTask}
             onMove={notebook.moveTask}
             onPart={notebook.setPart}
             onPriority={notebook.setPriority}

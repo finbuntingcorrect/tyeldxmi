@@ -47,6 +47,7 @@ export type Habit = {
   repeatKind: RepeatKind;
   weekdays: number[];
   start: string;
+  archived: boolean;
 };
 
 export type HabitMark = {
@@ -208,9 +209,18 @@ export function habitProgressLabel(done: number, total: number) {
   return `${done} из ${total} ${noun} ${verb}`;
 }
 
+export function personName(name: string, login = ''): string {
+  const value = name.trim();
+  if (!value) return '';
+  const mail = login.trim().toLowerCase();
+  if (mail && value.toLowerCase() === mail) return '';
+  if (value.includes('@')) return '';
+  return value;
+}
+
 export function habitsForDate(book: Notebook, date: string) {
   return book.habits
-    .filter((habit) => occurs(habit.repeatKind, habit.weekdays, habit.start, null, date))
+    .filter((habit) => !habit.archived && occurs(habit.repeatKind, habit.weekdays, habit.start, null, date))
     .map((habit) => ({
       habit,
       status: book.marks.find((mark) => mark.habitId === habit.id && mark.date === date)?.status ?? null,
@@ -304,6 +314,22 @@ export function toggleTask(book: Notebook, id: string, now = new Date().toISOStr
       const completed = !task.completed;
       return { ...task, completed, completedAt: completed ? now : null };
     }),
+  };
+}
+
+export function removeTask(book: Notebook, id: string): Notebook {
+  const task = book.tasks.find((item) => item.id === id && !item.deleted);
+  if (!task) return book;
+  const original = task.originalDate || task.date;
+  const alreadySkipped = task.seriesId
+    ? book.skips.some((skip) => skip.seriesId === task.seriesId && skip.originalDate === original)
+    : true;
+  return {
+    ...book,
+    focusId: book.focusId === id ? null : book.focusId,
+    focusSession: book.focusSession?.taskId === id ? null : book.focusSession,
+    skips: task.seriesId && !alreadySkipped ? [...book.skips, { seriesId: task.seriesId, originalDate: original }] : book.skips,
+    tasks: book.tasks.map((item) => item.id === id ? { ...item, deleted: true } : item),
   };
 }
 
@@ -453,7 +479,24 @@ export function createHabit(book: Notebook, title: string, repeatKind: RepeatKin
   if (repeatKind === 'weekly' && days.length === 0) return book;
   return {
     ...book,
-    habits: [...book.habits, { id: createId(), title: name, repeatKind, weekdays: days, start }],
+    habits: [...book.habits, { id: createId(), title: name, repeatKind, weekdays: days, start, archived: false }],
+  };
+}
+
+export function removeHabit(book: Notebook, id: string): Notebook {
+  if (!book.habits.some((habit) => habit.id === id)) return book;
+  return {
+    ...book,
+    habits: book.habits.filter((habit) => habit.id !== id),
+    marks: book.marks.filter((mark) => mark.habitId !== id),
+  };
+}
+
+export function setHabitArchived(book: Notebook, id: string, archived: boolean): Notebook {
+  if (!book.habits.some((habit) => habit.id === id)) return book;
+  return {
+    ...book,
+    habits: book.habits.map((habit) => habit.id === id ? { ...habit, archived } : habit),
   };
 }
 
@@ -608,6 +651,7 @@ export function parseNotebook(value: unknown): Notebook | null {
         repeatKind: repeat,
         weekdays: Array.isArray(habit.weekdays) ? cleanWeekdays(habit.weekdays.map(Number)) : [],
         start: habit.start,
+        archived: habit.archived === true,
       });
     }
   }

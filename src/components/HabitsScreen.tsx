@@ -11,6 +11,8 @@ type HabitsScreenProps = {
   today: string;
   onCreate: (title: string, repeatKind: RepeatKind, weekdays: number[], start: string) => void;
   onMark: (habitId: string, date: string, status: HabitStatus | null) => void;
+  onRemove: (id: string) => void;
+  onArchive: (id: string, archived: boolean) => void;
 };
 
 function shortStart(start: string) {
@@ -28,13 +30,18 @@ function HabitCard({
   today,
   marks,
   onMark,
+  onRemove,
+  onArchive,
 }: {
   habit: Notebook['habits'][number];
   today: string;
   marks: Notebook['marks'];
   onMark: HabitsScreenProps['onMark'];
+  onRemove: HabitsScreenProps['onRemove'];
+  onArchive: HabitsScreenProps['onArchive'];
 }) {
   const days = habitSpan(habit.start);
+  const [confirmRemove, setConfirmRemove] = useState(false);
   const done = days.filter((date) => marks.some((mark) => mark.habitId === habit.id && mark.date === date && mark.status === 'done')).length;
 
   function markDay(date: string, status: HabitStatus | null) {
@@ -73,19 +80,30 @@ function HabitCard({
           );
         })}
       </div>
+      <div className="mt-3 flex flex-wrap">
+        <button type="button" onClick={() => onArchive(habit.id, true)} className="paper-choice px-0">В архив</button>
+        <button type="button" onClick={() => { if (confirmRemove) onRemove(habit.id); else setConfirmRemove(true); }} className="paper-choice">{confirmRemove ? 'Точно убрать' : 'Убрать'}</button>
+      </div>
     </article>
   );
 }
 
-export function HabitsScreen({ book, today, onCreate, onMark }: HabitsScreenProps) {
+export function HabitsScreen({ book, today, onCreate, onMark, onRemove, onArchive }: HabitsScreenProps) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const active = book.habits.filter((habit) => !habit.archived);
+  const archived = book.habits.filter((habit) => habit.archived);
 
   function add(name: string) {
     const next = name.trim();
-    if (!next) return;
+    if (!next) {
+      setError('Введи название привычки.');
+      return;
+    }
     onCreate(next, 'daily', [], today);
     setTitle('');
+    setError(null);
     setOpen(false);
   }
 
@@ -108,20 +126,34 @@ export function HabitsScreen({ book, today, onCreate, onMark }: HabitsScreenProp
             <form className="mt-4" onSubmit={(event) => { event.preventDefault(); add(title); }}>
               <label htmlFor="habit-title" className="text-sm font-semibold">Своя привычка</label>
               <div className="mt-1 flex flex-col gap-3 sm:flex-row sm:items-end">
-                <input id="habit-title" value={title} onChange={(event) => setTitle(event.target.value)} maxLength={160} className="paper-field" />
+                <input id="habit-title" value={title} onChange={(event) => { setTitle(event.target.value); setError(null); }} maxLength={160} className="paper-field" />
                 <button type="submit" className="paper-submit">Добавить</button>
               </div>
+              {error ? <p role="alert" className="mt-2 text-sm font-semibold text-danger">{error}</p> : null}
             </form>
           </div>
         ) : null}
       </div>
-      {book.habits.length === 0 ? <p className="px-4 py-6 text-sm text-muted sm:px-6">Пока нет привычек.</p> : (
+      {active.length === 0 ? <p className="px-4 py-6 text-sm text-muted sm:px-6">Пока нет привычек. Добавь первую: точка на день, без оценок.</p> : (
         <div className="grid gap-4 p-4 sm:p-6 lg:grid-cols-2">
-          {book.habits.map((habit) => (
-            <HabitCard key={habit.id} habit={habit} today={today} marks={book.marks} onMark={onMark} />
+          {active.map((habit) => (
+            <HabitCard key={habit.id} habit={habit} today={today} marks={book.marks} onMark={onMark} onRemove={onRemove} onArchive={onArchive} />
           ))}
         </div>
       )}
+      {archived.length > 0 ? (
+        <section className="border-t border-line px-4 py-4 sm:px-6">
+          <h3 className="text-sm font-semibold text-muted">Архив</h3>
+          <div className="mt-2">
+            {archived.map((habit) => (
+              <div key={habit.id} className="flex items-center justify-between gap-3 border-b border-line py-2">
+                <p className="min-w-0 text-base text-muted [overflow-wrap:anywhere]">{habit.title}</p>
+                <button type="button" onClick={() => onArchive(habit.id, false)} className="paper-choice shrink-0">Вернуть</button>
+              </div>
+            ))}
+          </div>
+        </section>
+      ) : null}
     </section>
   );
 }
