@@ -19,14 +19,14 @@ function shortStart(start: string) {
 
 function statusLabel(status: HabitStatus | null) {
   if (status === 'done') return 'сделано';
-  if (status === 'missed') return 'не сделано';
-  return 'без отметки';
+  if (status === 'missed') return 'не в счёт';
+  return 'пусто';
 }
 
 function markTone(status: HabitStatus | null) {
   if (status === 'done') return 'border-ink bg-ink';
-  if (status === 'missed') return 'border-ink bg-transparent';
-  return 'border-line bg-transparent';
+  if (status === 'missed') return 'border-line bg-transparent';
+  return 'border-line bg-transparent opacity-40';
 }
 
 function HabitCard({
@@ -50,8 +50,8 @@ function HabitCard({
   }
 
   return (
-    <article data-habit={habit.id} className="border border-line bg-card p-4 sm:p-5">
-      <h3 className="text-2xl break-words">{habit.title}</h3>
+    <article data-habit={habit.id} className="py-2">
+      <p className="text-lg break-words text-ink">{habit.title}</p>
       <p className="mt-1 text-sm text-muted">На этой неделе {weekDone} точек</p>
       <p className="mt-1 text-xs text-muted">с {shortStart(habit.start)}</p>
       <div className="mt-4 grid grid-cols-7 gap-1">
@@ -70,7 +70,7 @@ function HabitCard({
               className={`flex min-h-11 flex-col items-center justify-center gap-1 ${locked ? 'cursor-default opacity-40' : 'cursor-pointer'}`}
             >
               <span className="text-xs text-muted">{WEEKDAYS[index].label}</span>
-              <span aria-hidden="true" className={`h-3.5 w-3.5 rounded-full border ${markTone(status)} ${date === today ? 'ring-2 ring-ink ring-offset-2' : ''}`} />
+              <span aria-hidden="true" className={`h-3.5 w-3.5 rounded-full border ${markTone(status)} ${date === today ? 'ring-2 ring-primary ring-offset-2' : ''}`} />
             </button>
           );
         })}
@@ -90,7 +90,7 @@ function HabitCard({
               onClick={() => markDay(date, status)}
               className={`mx-auto grid h-6 w-6 place-items-center ${ahead ? 'cursor-default opacity-40' : 'cursor-pointer'}`}
             >
-              <span aria-hidden="true" className={`h-3 w-3 rounded-full border ${markTone(status)} ${date === today ? 'ring-2 ring-ink ring-offset-1' : ''}`} />
+              <span aria-hidden="true" className={`h-3 w-3 rounded-full border ${markTone(status)} ${date === today ? 'ring-2 ring-primary ring-offset-1' : ''}`} />
             </button>
           );
         })}
@@ -113,12 +113,13 @@ export function HabitsScreen({ book, today, onCreate, onMark }: HabitsScreenProp
 
   return (
     <section>
-      <header className="border-b border-line px-4 py-4 sm:px-6">
+      <header className="px-4 py-4 sm:px-6">
         <p className="text-xs font-semibold tracking-[0.16em] text-muted uppercase">Привычки</p>
-        <h2 className="mt-1 text-3xl sm:text-4xl">Тридцать дней</h2>
-        {book.habits.length > 0 ? <p className="mt-2 text-sm text-muted">Кружок: сделано, пропуск, пусто.</p> : null}
+        <h2 className="mt-1 font-serif text-4xl">Тридцать дней</h2>
+        <div className="mx-3 mt-2 border-t border-line" />
+        {book.habits.length > 0 ? <p className="mt-2 text-sm text-muted">Точка: сделано, не в счёт, пусто.</p> : null}
       </header>
-      <div className="border-b border-line px-4 py-4 sm:px-6">
+      <div className="px-4 py-4 sm:px-6">
         <button type="button" onClick={() => setOpen((value) => !value)} className="paper-submit">Добавить привычку</button>
         {open ? (
           <div className="mt-4">

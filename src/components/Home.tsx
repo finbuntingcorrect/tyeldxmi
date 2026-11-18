@@ -223,7 +223,6 @@ export function Home() {
             onPriority={notebook.setPriority}
             onFocus={(id) => { if (id) requestFocus(id); else notebook.setFocus(null, today); }}
             onMove={notebook.moveTask}
-            onNote={notebook.setTaskNote}
             onStart={startSelected}
           />
         ) : null}
