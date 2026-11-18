@@ -3,6 +3,7 @@ import { addDays } from '../../server/recurrence';
 import {
   chooseMode,
   parseNotebook,
+  personName,
   setName,
   createHabit,
   createTask,
@@ -18,12 +19,16 @@ import {
   nextHabitStatus,
   notebookIsEmpty,
   applyFocus,
+  removeHabit,
+  removeTask,
+  setHabitArchived,
   setHabitMark,
   tasksForDate,
   toggleTask,
   trackerProgressLabel,
   weekDates,
 } from './notebook';
+import { dateFromKey, formatDayRange } from './date';
 
 const week = weekDates('2026-11-06');
 assert.deepEqual(week, ['2026-11-02', '2026-11-03', '2026-11-04', '2026-11-05', '2026-11-06', '2026-11-07', '2026-11-08']);
@@ -126,6 +131,32 @@ assert.equal(notebookIsEmpty(first), false);
 assert.equal(nextHabitStatus(null), 'done');
 assert.equal(nextHabitStatus('done'), 'missed');
 assert.equal(nextHabitStatus('missed'), null);
+assert.equal(personName('  Катя  ', 'katya@example.com'), 'Катя');
+assert.equal(personName('katya@example.com', 'katya@example.com'), '');
+assert.equal(personName('other@example.com', 'katya@example.com'), '');
+assert.equal(formatDayRange(dateFromKey('2026-11-16'), dateFromKey('2026-11-22')), '16–22 ноября');
+assert.equal(formatDayRange(dateFromKey('2026-11-30'), dateFromKey('2026-12-06')), '30 ноября – 6 декабря');
+
+const daily = createTask(emptyNotebook(), {
+  title: 'Вода',
+  date: '2026-11-16',
+  dayPart: 'anytime',
+  priority: 'normal',
+  repeatKind: 'daily',
+  weekdays: [],
+}, '2026-11-16T08:00:00.000Z');
+const mondayTask = tasksForDate(daily, '2026-11-16')[0];
+const removed = removeTask(materialize(daily, '2026-11-16', '2026-11-18'), mondayTask.id);
+assert.equal(tasksForDate(removed, '2026-11-16').some((task) => task.title === 'Вода'), false);
+assert.equal(tasksForDate(materialize(removed, '2026-11-16', '2026-11-18'), '2026-11-17').some((task) => task.title === 'Вода'), true);
+assert.equal(removed.series[0].until, null);
+
+const archived = setHabitArchived(first, first.habits[0].id, true);
+assert.equal(habitsForDate(archived, '2026-11-01').length, 0);
+assert.equal(setHabitArchived(archived, first.habits[0].id, false).habits[0].archived, false);
+const dropped = removeHabit(marked, marked.habits[0].id);
+assert.equal(dropped.habits.length, 1);
+assert.equal(dropped.marks.length, 0);
 
 const timed = createTask(emptyNotebook(), {
   title: 'Письмо',

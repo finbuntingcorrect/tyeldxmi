@@ -9,6 +9,7 @@ type PlanTaskProps = {
   task: NotebookTask;
   today: string;
   onToggle: (id: string) => void;
+  onRemove: (id: string) => void;
   onMove: (id: string, date: string) => void;
   onPart: (id: string, part: DayPart) => void;
   onPriority: (id: string, priority: Priority) => void;
@@ -16,7 +17,7 @@ type PlanTaskProps = {
   onFocus: (id: string) => void;
 };
 
-export function PlanTask({ task, today, onToggle, onMove, onPart, onPriority, onUpdate, onFocus }: PlanTaskProps) {
+export function PlanTask({ task, today, onToggle, onRemove, onMove, onPart, onPriority, onUpdate, onFocus }: PlanTaskProps) {
   const titleId = useId();
   const [open, setOpen] = useState(false);
   const [customDate, setCustomDate] = useState(task.date);
@@ -32,13 +33,14 @@ export function PlanTask({ task, today, onToggle, onMove, onPart, onPriority, on
     weekdays,
   };
   const repeat = task.repeatKind === 'daily' ? ' · Каждый день' : task.repeatKind === 'weekdays' ? ' · По будням' : task.repeatKind === 'weekly' ? ' · По дням' : '';
+  const repeating = Boolean(task.seriesId) || repeatKind !== 'none';
 
   return (
     <article className="border-b border-line">
       <div className="flex items-start gap-1">
         <PaperCheck checked={task.completed} label={task.completed ? `Вернуть «${task.title}»` : `Выполнить «${task.title}»`} onClick={() => onToggle(task.id)} />
         <div className="min-w-0 flex-1 py-2.5">
-          <p id={titleId} className={`text-base leading-snug ${task.completed ? 'text-muted line-through' : 'text-ink'}`}>{task.title}</p>
+          <p id={titleId} className={`text-base leading-snug [overflow-wrap:anywhere] ${task.completed ? 'text-muted line-through' : 'text-ink'}`}>{task.title}</p>
           {repeat || (task.exception && task.originalDate && task.originalDate !== task.date) || task.priority !== 'normal' ? (
             <p className="pb-2 text-xs text-muted">
               {PRIORITIES.find((item) => item.id === task.priority)?.label}
@@ -46,9 +48,11 @@ export function PlanTask({ task, today, onToggle, onMove, onPart, onPriority, on
               {task.exception && task.originalDate && task.originalDate !== task.date ? ' · перенесено отдельно' : ''}
             </p>
           ) : null}
+          <div className="flex flex-wrap">
+            {task.date === today ? <button type="button" onClick={() => onFocus(task.id)} className="paper-choice px-0">В фокус</button> : null}
+            <button type="button" aria-expanded={open} aria-label={`Действия: ${task.title}`} onClick={() => setOpen((value) => !value)} className="paper-choice">Ещё</button>
+          </div>
         </div>
-        {task.date === today ? <button type="button" onClick={() => onFocus(task.id)} className="paper-submit my-2">В фокус</button> : null}
-        <button type="button" aria-expanded={open} aria-label={`Действия: ${task.title}`} onClick={() => setOpen((value) => !value)} className="min-h-11 px-2 text-sm font-semibold text-muted">Ещё</button>
       </div>
       {open ? (
         <div className="mb-3 ml-11 border-t border-line pt-2" role="group" aria-label="Меню задачи">
@@ -93,8 +97,15 @@ export function PlanTask({ task, today, onToggle, onMove, onPart, onPriority, on
           <label className="mt-2 block text-sm font-semibold" htmlFor={`${titleId}-title`}>Название</label>
           <input id={`${titleId}-title`} value={title} onChange={(event) => setTitle(event.target.value)} maxLength={160} className="paper-field" />
           <div className="mt-3 flex flex-wrap gap-2">
-            <button type="button" onClick={() => onUpdate(task.id, draft, 'one')} className="paper-choice">Только эту задачу</button>
-            <button type="button" onClick={() => onUpdate(task.id, draft, 'future')} className="paper-submit">Эту и будущие</button>
+            {repeating ? (
+              <>
+                <button type="button" onClick={() => onUpdate(task.id, draft, 'one')} className="paper-choice">Только эту задачу</button>
+                <button type="button" onClick={() => onUpdate(task.id, draft, 'future')} className="paper-submit">Эту и будущие</button>
+              </>
+            ) : (
+              <button type="button" onClick={() => onUpdate(task.id, draft, 'one')} className="paper-submit">Сохранить</button>
+            )}
+            <button type="button" onClick={() => onRemove(task.id)} className="paper-choice">Убрать</button>
           </div>
         </div>
       ) : null}

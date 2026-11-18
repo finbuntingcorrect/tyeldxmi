@@ -57,8 +57,8 @@ function dummyPasswordHash() {
   return dummyHash;
 }
 
-function freshNotebook(login: string): Notebook {
-  return { ...emptyNotebook(), name: login.slice(0, 40) };
+function freshNotebook(): Notebook {
+  return emptyNotebook();
 }
 
 function sessionExpiry() {
@@ -277,7 +277,7 @@ async function openSession(store: CabinetStore, user: CabinetUser, secure: boole
   const raw = token();
   await store.createSession(user.id, hashToken(raw));
   const saved = await store.readNotebook(user.id);
-  const notebook = parseNotebook(saved) ?? freshNotebook(user.login);
+  const notebook = parseNotebook(saved) ?? freshNotebook();
   if (!parseNotebook(saved)) await store.writeNotebook(user.id, notebook);
   return {
     status: 200,
@@ -298,7 +298,7 @@ export async function registerAccount(store: CabinetStore, loginValue: unknown, 
   };
   const inserted = await store.insertUser(user);
   if (inserted === 'taken') return { status: 409, body: { error: 'taken' } };
-  await store.writeNotebook(user.id, freshNotebook(user.login));
+  await store.writeNotebook(user.id, freshNotebook());
   return openSession(store, user, secure);
 }
 
@@ -321,7 +321,7 @@ export async function readAccountNotebook(store: CabinetStore, rawToken: string)
   const user = rawToken ? await store.userForToken(hashToken(rawToken)) : null;
   if (!user) return { status: 401, body: { error: 'auth' } };
   const saved = await store.readNotebook(user.id);
-  const notebook = parseNotebook(saved) ?? freshNotebook(user.login);
+  const notebook = parseNotebook(saved) ?? freshNotebook();
   return { status: 200, body: { login: user.login, notebook } };
 }
 

@@ -129,8 +129,8 @@ function writeJson(storage: MemoryStorage, key: string, value: unknown) {
   }
 }
 
-function freshNotebook(login: string): Notebook {
-  return { ...emptyNotebook(), name: login.slice(0, 40) };
+function freshNotebook(): Notebook {
+  return emptyNotebook();
 }
 
 export function createLocalCabinet(persistent: MemoryStorage, session: MemoryStorage): LocalCabinet {
@@ -179,7 +179,7 @@ export function createLocalCabinet(persistent: MemoryStorage, session: MemorySto
       clearFailures(loginKey);
     }
     const key = await deriveBits(password, salt, 'notebook');
-    const notebook = creating ? freshNotebook(login) : await decryptNotebook(key, record?.notebook || '');
+    const notebook = creating ? freshNotebook() : await decryptNotebook(key, record?.notebook || '');
     const next: AccountRecord = {
       login,
       salt: bytesToBase64(salt),
