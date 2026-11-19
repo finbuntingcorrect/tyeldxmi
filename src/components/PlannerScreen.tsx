@@ -197,7 +197,7 @@ export function PlannerScreen(props: PlannerScreenProps) {
           <ChevronLeft aria-hidden="true" size={22} />
         </button>
         <div className="min-w-0 text-center">
-          <h2 className="font-serif text-4xl leading-tight break-words sm:text-5xl">{monthTitle(anchor)}</h2>
+          <h2 className="font-serif text-3xl leading-tight break-words sm:text-5xl">{monthTitle(anchor)}</h2>
           {today.slice(0, 7) !== monthKey ? (
             <button type="button" onClick={() => { setDetail(null); setAnchor(today); }} className="mt-1 min-h-11 text-sm font-semibold text-ink underline decoration-line underline-offset-4">К сегодня</button>
           ) : null}

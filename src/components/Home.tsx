@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { localDateKey, dateFromKey, formatLocalDate } from '../lib/date';
 import { DEFAULT_FOCUS_MINUTES, catPose } from '../lib/focusSession';
-import { habitsForDate, tasksForDate } from '../lib/notebook';
+import { habitsForDate, personName, tasksForDate } from '../lib/notebook';
 import { unlockSound } from '../lib/focusSound';
 import { useFocusController } from '../hooks/useFocusController';
 import { useNotebook } from '../hooks/useNotebook';
@@ -79,10 +79,12 @@ export function Home() {
     );
   }
 
-  if (!book.greeted || !mode) {
+  const person = personName(book.name, notebook.login);
+  if (!person || !book.greeted || !mode) {
     return (
       <Welcome
-        name={book.name}
+        name={person}
+        nameOnly={!person && Boolean(book.greeted && mode)}
         theme={book.theme}
         onName={notebook.setName}
         onTheme={notebook.setTheme}
@@ -173,12 +175,12 @@ export function Home() {
   }
 
   return (
-    <div style={{ paddingRight: 'var(--cat-lane, 0px)' }}>
+    <div className="min-w-0 overflow-x-clip" style={{ paddingRight: 'var(--cat-lane, 0px)' }}>
     <div className={`mx-auto w-full min-w-0 max-w-6xl px-2 py-4 sm:px-6 sm:py-10 ${session ? 'pb-40' : ''}`}>
       <div className={`min-w-0 overflow-x-clip border border-line bg-card ${session ? 'pb-36' : ''}`}>
         <header className="flex flex-col gap-2 px-3 py-4 sm:flex-row sm:items-end sm:justify-between sm:px-6">
           <div className="min-w-0">
-            <h1 className="text-2xl leading-tight break-words sm:text-4xl">{book.name ? `Привет, ${book.name}` : 'Today Cat'}</h1>
+            <h1 className="text-2xl leading-tight break-words sm:text-4xl">{person ? `Привет, ${person}` : 'Привет'}</h1>
             <p className="mt-1 text-sm text-muted">{formatLocalDate(dateFromKey(today))}</p>
             <p className="text-sm text-muted">{hint}</p>
           </div>
@@ -191,7 +193,7 @@ export function Home() {
         {settings ? (
           <SettingsPanel
             login={notebook.login}
-            name={book.name}
+            name={person}
             theme={book.theme}
             cat={book.cat}
             onName={notebook.setName}

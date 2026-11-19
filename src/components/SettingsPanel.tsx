@@ -17,20 +17,20 @@ type SettingsPanelProps = {
 
 export function SettingsPanel({ login, name, theme, cat, onName, onTheme, onCat, here = false }: SettingsPanelProps) {
   const [draft, setDraft] = useState(name);
-  const [hint, setHint] = useState(false);
+  const [hint, setHint] = useState<string | null>(null);
   const [draftVolume, setDraftVolume] = useState<number | null>(null);
   const [soundNote, setSoundNote] = useState<string | null>(null);
   const volume = draftVolume ?? cat.volume;
 
   function saveName() {
     const next = draft.trim();
-    if (!next) {
-      setHint(true);
+    if (!next || next.includes('@')) {
+      setHint(next.includes('@') ? 'Напиши имя, не почту.' : 'Введи имя, чтобы продолжить');
       return;
     }
     onName(next);
     setDraft(next);
-    setHint(false);
+    setHint(null);
   }
 
   function commitVolume(value: number) {
@@ -52,15 +52,15 @@ export function SettingsPanel({ login, name, theme, cat, onName, onTheme, onCat,
   return (
     <section className="border-b border-line px-4 py-5 sm:px-6">
       <h2 className="text-3xl text-ink">Настройки</h2>
-      <p className="mt-2 text-sm text-muted">Логин: {login}</p>
+      <p className="mt-2 text-sm text-muted break-words">{login.includes('@') ? 'Почта' : 'Логин'}: {login}</p>
       {here ? <p className="mt-1 text-sm text-muted">Кабинет открывается в этом браузере.</p> : null}
       <form className="mt-4" onSubmit={(event) => { event.preventDefault(); saveName(); }}>
         <label htmlFor="settings-name" className="text-sm font-semibold text-ink">Имя</label>
         <div className="mt-1 flex flex-col gap-3 sm:flex-row sm:items-end">
-          <input id="settings-name" value={draft} onChange={(event) => { setDraft(event.target.value); setHint(false); }} maxLength={40} className="paper-field" />
+          <input id="settings-name" value={draft} onChange={(event) => { setDraft(event.target.value); setHint(null); }} maxLength={40} autoComplete="nickname" className="paper-field" />
           <button type="submit" className="paper-submit">Сохранить</button>
         </div>
-        {hint ? <p role="alert" className="mt-2 text-sm font-semibold text-danger">Введи имя, чтобы продолжить</p> : null}
+        {hint ? <p role="alert" className="mt-2 text-sm font-semibold text-danger">{hint}</p> : null}
       </form>
       <h3 className="mt-6 text-2xl text-ink">Звук</h3>
       <label className="mt-3 flex min-h-11 items-center gap-3 text-sm font-semibold text-ink">

@@ -135,6 +135,11 @@ html[data-theme='dark'] {
     max-width: 100%;
   }
 
+  input[type='date'],
+  input[type='time'] {
+    min-width: 0;
+  }
+
   /*
     Mascot files are anti-aliased illustrations in a pixel style, not a hard
     integer grid. Nearest-neighbor scaling softens the outlines into jagged

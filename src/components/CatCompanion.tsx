@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { clampCatPosition, type CatPose } from '../lib/focusSession';
+import { catFrame, clampCatPosition, type CatPose } from '../lib/focusSession';
 import { CatSprite, type CatClip } from './CatSprite';
 
 type Point = { x: number; y: number };
@@ -26,28 +26,11 @@ type CatCompanionProps = {
 type Frame = { width: number; height: number; size: number; top: number; lane: number; minX: number; tight: boolean };
 
 function readViewport() {
-  const viewport = window.visualViewport;
-  return {
-    width: viewport?.width ?? window.innerWidth,
-    height: viewport?.height ?? window.innerHeight,
-  };
+  return { width: window.innerWidth, height: window.innerHeight };
 }
 
 function frameFor(width: number, height: number, bottom: number): Frame {
-  const phone = width < 640;
-  const tight = phone || width < 700 || height < 520;
-  const top = 76;
-  const available = Math.max(48, height - top - bottom - 12);
-  if (phone) {
-    const size = Math.min(60, available);
-    const lane = size + 12;
-    return { width, height, size, top, lane, minX: Math.max(8, width - size - 12), tight: true };
-  }
-  const widthRoom = Math.max(48, width - (tight ? 232 : 336) - 20);
-  const target = tight ? 95 : 176;
-  const size = Math.min(target, available, widthRoom);
-  const lane = size + (tight ? 12 : 16);
-  return { width, height, size, top, lane, minX: Math.max(8, width - lane + 4), tight };
+  return { width, height, ...catFrame(width, height, bottom) };
 }
 
 export function CatCompanion(props: CatCompanionProps) {
@@ -67,7 +50,7 @@ export function CatCompanion(props: CatCompanionProps) {
   const bottom = Math.max(24, occupiedBottom);
   const frame = frameFor(viewport.width, viewport.height, bottom);
   const resting = clampCatPosition(
-    props.position.x ?? frame.minX,
+    props.position.x ?? Math.max(frame.minX, frame.width - frame.size - 8),
     props.position.y ?? frame.height - frame.size - bottom - 12,
     frame.width,
     frame.height,
@@ -137,15 +120,14 @@ export function CatCompanion(props: CatCompanionProps) {
       setViewport((current) => (current.width === nextFrame.width && current.height === nextFrame.height ? current : { width: nextFrame.width, height: nextFrame.height }));
       if (props.position.x == null || props.position.y == null || drag.current) return;
       const next = clampCatPosition(props.position.x, props.position.y, nextFrame.width, nextFrame.height, nextFrame.size, nextFrame.top, bottom, nextFrame.minX);
-      if (next.x !== props.position.x || next.y !== props.position.y) moveRef.current(next);
+      if (Math.hypot(next.x - props.position.x, next.y - props.position.y) < 48) return;
+      moveRef.current(next);
     };
     const id = window.requestAnimationFrame(update);
     window.addEventListener('resize', update);
-    window.visualViewport?.addEventListener('resize', update);
     return () => {
       window.cancelAnimationFrame(id);
       window.removeEventListener('resize', update);
-      window.visualViewport?.removeEventListener('resize', update);
     };
   }, [props.position.x, props.position.y, bottom]);
 

@@ -11,6 +11,7 @@ const CHOICES: { id: AppMode; label: string; text: string }[] = [
 type WelcomeProps = {
   name: string;
   theme: AppTheme | null;
+  nameOnly?: boolean;
   onName: (name: string) => void;
   onTheme: (theme: AppTheme) => void;
   onChoose: (mode: AppMode) => void;
@@ -22,20 +23,20 @@ function openingStep(name: string, theme: AppTheme | null): 1 | 2 | 3 {
   return 3;
 }
 
-export function Welcome({ name, theme, onName, onTheme, onChoose }: WelcomeProps) {
+export function Welcome({ name, theme, nameOnly = false, onName, onTheme, onChoose }: WelcomeProps) {
   const [step, setStep] = useState<1 | 2 | 3>(() => openingStep(name, theme));
   const [draft, setDraft] = useState(name);
-  const [nameHint, setNameHint] = useState(false);
+  const [nameHint, setNameHint] = useState<string | null>(null);
   const [themeHint, setThemeHint] = useState(false);
 
   function continueName() {
     const next = draft.trim();
-    if (!next) {
-      setNameHint(true);
+    if (!next || next.includes('@')) {
+      setNameHint(next.includes('@') ? 'Напиши, как к тебе обращаться, не почту.' : 'Введи имя, чтобы продолжить');
       return;
     }
     onName(next);
-    setStep(2);
+    if (!nameOnly) setStep(2);
   }
 
   function continueTheme() {
@@ -56,8 +57,8 @@ export function Welcome({ name, theme, onName, onTheme, onChoose }: WelcomeProps
             <form className="mt-8" onSubmit={(event) => { event.preventDefault(); continueName(); }}>
               <h1 className="text-4xl leading-tight text-ink sm:text-5xl">Привет. Давай познакомимся.</h1>
               <label htmlFor="your-name" className="mt-6 block font-serif text-2xl text-ink">Как тебя зовут?</label>
-              <input id="your-name" value={draft} onChange={(event) => { setDraft(event.target.value); setNameHint(false); }} maxLength={40} autoComplete="nickname" placeholder="Твоё имя" className="paper-field mt-2 text-center text-lg" />
-              {nameHint ? <p role="alert" className="mt-3 text-sm font-semibold text-danger">Введи имя, чтобы продолжить</p> : null}
+              <input id="your-name" value={draft} onChange={(event) => { setDraft(event.target.value); setNameHint(null); }} maxLength={40} autoComplete="nickname" placeholder="Твоё имя" className="paper-field mt-2 text-center text-lg" />
+              {nameHint ? <p role="alert" className="mt-3 text-sm font-semibold text-danger">{nameHint}</p> : null}
               <button type="submit" className="paper-submit mt-8 min-w-32">Дальше</button>
             </form>
           ) : null}
