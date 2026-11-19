@@ -1,12 +1,13 @@
-import { readCookie, requestLink, userFromToken, verifyLink } from '../account';
-import { cabinetStore, loginAccount, logoutAccount, registerAccount } from '../cabinet';
+import { consumeMagicLink, readCookie, requestLink, userFromToken, verifyLink } from '../account';
+import { assignPassword, cabinetStore, loginAccount, logoutAccount, registerAccount } from '../cabinet';
+import { validPassword } from '../password';
 import { cookieHeader, originOf, readBody, secureRequest, send, type NodeRequest, type NodeResponse } from './node';
 
 const attempts = new Map<string, number[]>();
 
 function attemptKey(value: unknown) {
   if (typeof value !== 'string') return 'invalid';
-  const key = value.trim().toLocaleLowerCase('ru-RU').slice(0, 24);
+  const key = value.trim().toLocaleLowerCase('ru-RU').slice(0, 200);
   return key || 'invalid';
 }
 
@@ -68,6 +69,21 @@ export default async function handler(req: NodeRequest, res: NodeResponse) {
         return;
       }
       const result = await logoutAccount(store, token, secureRequest(req));
+      send(res, result.status, result.body, result.cookie);
+      return;
+    }
+    if (input.action === 'reset') {
+      if (!validPassword(input.password)) {
+        send(res, 400, { error: 'password' });
+        return;
+      }
+      const email = await consumeMagicLink(input.token);
+      if (!email) {
+        send(res, 400, { error: 'token' });
+        return;
+      }
+      const store = await cabinetStore();
+      const result = await assignPassword(store, email, input.password, secureRequest(req));
       send(res, result.status, result.body, result.cookie);
       return;
     }

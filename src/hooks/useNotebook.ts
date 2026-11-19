@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { cabinetError, cabinetUsesBrowser, fetchCabinet, loginCabinet, logoutCabinet, registerCabinet, requestEmailLink, saveCabinet, verifyEmailLink } from '../lib/cabinetApi';
+import { cabinetError, cabinetUsesBrowser, fetchCabinet, loginCabinet, logoutCabinet, registerCabinet, requestEmailLink, resetCabinetPassword, saveCabinet } from '../lib/cabinetApi';
 import {
   claimMatches,
   clearClaim,
@@ -52,12 +52,14 @@ import type { DayPart, Priority, RepeatKind } from '../types';
 type Status = 'loading' | 'anon' | 'ready';
 
 function named(book: Notebook, login: string) {
-  return book.name.trim() ? book : { ...book, name: login.slice(0, 40) };
+  if (book.name.trim() || login.includes('@')) return book;
+  return { ...book, name: login.slice(0, 40) };
 }
 
 export function useNotebook() {
   const [status, setStatus] = useState<Status>('loading');
   const [login, setLogin] = useState('');
+  const [resetToken, setResetToken] = useState<string | null>(null);
   const [state, setState] = useState<{ book: Notebook; error: string | null }>({ book: emptyNotebook(), error: null });
   const mounted = useRef(true);
   const generation = useRef(0);
@@ -103,14 +105,19 @@ export function useNotebook() {
     const magic = new URLSearchParams(window.location.search).get('magic');
     const boot = (async () => {
       if (magic) {
-        await verifyEmailLink(magic);
         window.history.replaceState({}, '', window.location.pathname);
+        return { reset: magic };
       }
       return fetchCabinet();
     })();
     boot
       .then((result) => {
         if (!mounted.current || generation.current !== generationAtLoad) return;
+        if (result && 'reset' in result) {
+          setResetToken(result.reset);
+          setStatus('anon');
+          return;
+        }
         if (!result) {
           setStatus('anon');
           return;
@@ -172,6 +179,18 @@ export function useNotebook() {
     }
   }
 
+  async function setPassword(token: string, password: string) {
+    try {
+      const result = await resetCabinetPassword(token, password);
+      generation.current += 1;
+      setResetToken(null);
+      await adopt(result.login, result.notebook, true);
+      return null;
+    } catch (error) {
+      return cabinetError(error);
+    }
+  }
+
   async function signOut() {
     generation.current += 1;
     await chain.current.catch(() => undefined);
@@ -192,12 +211,14 @@ export function useNotebook() {
   return {
     status,
     login,
+    resetToken,
     here: cabinetUsesBrowser(),
     book: state.book,
     error: state.error,
     requestEmail,
     register,
     signIn,
+    setPassword,
     signOut,
     chooseMode: (mode: AppMode) => commit((book) => chooseMode(book, mode)),
     setName: (name: string) => commit((book) => setName(book, name)),

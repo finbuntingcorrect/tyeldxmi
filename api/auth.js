@@ -5335,8 +5335,31 @@ var export_escapeLiteral = ct.escapeLiteral;
 var export_types = ct.types;
 
 // server/db.ts
+var DATABASE_KEYS = [
+  "DATABASE_URL",
+  "POSTGRES_URL",
+  "POSTGRES_PRISMA_URL",
+  "NEON_DATABASE_URL",
+  "DATABASE_URL_UNPOOLED",
+  "POSTGRES_URL_NON_POOLING"
+];
+var DATABASE_NAME = /DATABASE_URL|POSTGRES_URL|POSTGRES_PRISMA_URL|POSTGRES_URL_NON_POOLING|DATABASE_URL_UNPOOLED/;
+function databaseUrl() {
+  const seen = /* @__PURE__ */ new Set();
+  const ranked = [
+    ...DATABASE_KEYS,
+    ...Object.keys(process.env).filter((key) => DATABASE_NAME.test(key))
+  ];
+  for (const key of ranked) {
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const value = process.env[key]?.trim();
+    if (value && /^postgres(ql)?:\/\//i.test(value)) return value;
+  }
+  return "";
+}
 function getSql() {
-  const url = process.env.DATABASE_URL;
+  const url = databaseUrl();
   if (!url) throw new Error("DATABASE_URL is not set");
   return ys(url);
 }
@@ -5403,6 +5426,7 @@ async function ensureSchema() {
     await sql`CREATE UNIQUE INDEX IF NOT EXISTS tasks_series_original_idx
       ON tasks (series_id, original_date)
       WHERE series_id IS NOT NULL AND original_date IS NOT NULL`;
+    await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash text`;
   })().catch((error) => {
     schemaReady = null;
     throw error;
@@ -5486,14 +5510,6 @@ function requestOrigin(headers) {
 function asEnum(value, allowed) {
   return typeof value === "string" && allowed.has(value) ? value : null;
 }
-function validTimeZone(value) {
-  try {
-    new Intl.DateTimeFormat("en-CA", { timeZone: value }).format(/* @__PURE__ */ new Date());
-    return true;
-  } catch {
-    return false;
-  }
-}
 function mapUser(row) {
   return {
     id: row.id,
@@ -5549,38 +5565,28 @@ async function requestLink(emailValue, origin) {
   return { status: 200, body: { ok: true } };
 }
 async function verifyLink(raw, timezoneValue, secure) {
+  void timezoneValue;
+  void secure;
   if (typeof raw !== "string" || raw.length < 20) return { status: 400, body: { error: "token" } };
-  const timezone = typeof timezoneValue === "string" && validTimeZone(timezoneValue) ? timezoneValue : "Europe/Moscow";
   const sql = await ensureSchema();
-  const hashed = hashToken(raw);
+  const links = await sql.query(
+    `SELECT email FROM magic_links WHERE token_hash = $1 AND used_at IS NULL AND expires_at > now()`,
+    [hashToken(raw)]
+  );
+  const email = links[0]?.email;
+  if (!email) return { status: 400, body: { error: "token" } };
+  return { status: 200, body: { reset: true } };
+}
+async function consumeMagicLink(raw) {
+  if (typeof raw !== "string" || raw.length < 20) return null;
+  const sql = await ensureSchema();
   const links = await sql.query(
     `UPDATE magic_links SET used_at = now()
      WHERE token_hash = $1 AND used_at IS NULL AND expires_at > now()
      RETURNING email`,
-    [hashed]
+    [hashToken(raw)]
   );
-  const email = links[0]?.email;
-  if (!email) return { status: 400, body: { error: "token" } };
-  await sql.query(
-    `INSERT INTO users (id, email, timezone) VALUES ($1, $2, $3) ON CONFLICT (email) DO NOTHING`,
-    [(0, import_node_crypto.randomUUID)(), email, timezone]
-  );
-  const users = await sql.query(
-    `SELECT id, email, name, timezone, occupation, purpose, cat_name, cat_look, cat_role, onboarding_done
-     FROM users WHERE email = $1`,
-    [email]
-  );
-  const user = mapUser(users[0]);
-  const session = token();
-  await sql.query(
-    `INSERT INTO sessions (id, user_id, token_hash, expires_at) VALUES ($1, $2, $3, now() + interval '30 days')`,
-    [(0, import_node_crypto.randomUUID)(), user.id, hashToken(session)]
-  );
-  return {
-    status: 200,
-    body: { user },
-    cookie: sessionCookie(session, secure, 60 * 60 * 24 * 30)
-  };
+  return links[0]?.email ?? null;
 }
 
 // server/cabinet.ts
@@ -5633,6 +5639,64 @@ function isDateKey(value) {
   return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
 }
 
+// src/lib/focusSession.ts
+var MIN_FOCUS_MINUTES = 1;
+var MAX_FOCUS_MINUTES = 180;
+function defaultCatPrefs() {
+  return {
+    sound: false,
+    volume: 0.3,
+    walks: true,
+    pinned: false,
+    hidden: false,
+    reminders: false,
+    x: null,
+    y: null
+  };
+}
+function parseFocusMinutes(value) {
+  const number = typeof value === "number" ? value : typeof value === "string" && value.trim() !== "" ? Number(value) : Number.NaN;
+  if (!Number.isInteger(number) || number < MIN_FOCUS_MINUTES || number > MAX_FOCUS_MINUTES) return null;
+  return number;
+}
+function parseFocusSession(value) {
+  if (!value || typeof value !== "object") return null;
+  const raw = value;
+  const focusMinutes = parseFocusMinutes(raw.focusMinutes);
+  const durationMs = typeof raw.durationMs === "number" && raw.durationMs >= 0 ? raw.durationMs : null;
+  if (!focusMinutes || durationMs == null || typeof raw.taskId !== "string" || typeof raw.signalId !== "string") return null;
+  if (raw.phase !== "focus" && raw.phase !== "break") return null;
+  return {
+    taskId: raw.taskId,
+    phase: raw.phase,
+    focusMinutes,
+    durationMs,
+    endsAt: typeof raw.endsAt === "number" ? raw.endsAt : null,
+    pausedRemainingMs: typeof raw.pausedRemainingMs === "number" ? Math.max(0, raw.pausedRemainingMs) : durationMs,
+    paused: raw.paused === true,
+    sliceAppliedMs: typeof raw.sliceAppliedMs === "number" ? Math.max(0, raw.sliceAppliedMs) : 0,
+    settled: raw.settled === true,
+    reminded: raw.reminded === true,
+    signalId: raw.signalId
+  };
+}
+function parseCatPrefs(value) {
+  const base = defaultCatPrefs();
+  if (!value || typeof value !== "object") return base;
+  const raw = value;
+  const volume = typeof raw.volume === "number" ? Math.min(1, Math.max(0, raw.volume)) : base.volume;
+  return {
+    sound: raw.sound === true,
+    volume,
+    walks: raw.walks !== false,
+    pinned: raw.pinned === true,
+    hidden: raw.hidden === true,
+    reminders: raw.reminders === true,
+    x: typeof raw.x === "number" ? raw.x : null,
+    y: typeof raw.y === "number" ? raw.y : null
+  };
+}
+
 // src/lib/notebook.ts
 var PARTS = /* @__PURE__ */ new Set(["morning", "afternoon", "evening", "anytime"]);
 var PRIORITIES = /* @__PURE__ */ new Set(["high", "normal", "low"]);
@@ -5647,12 +5711,16 @@ function emptyNotebook() {
     name: "",
     theme: null,
     focusId: null,
+    focusSession: null,
+    focusAt: 0,
+    cat: defaultCatPrefs(),
     tasks: [],
     series: [],
     skips: [],
     habits: [],
     marks: [],
-    weekItems: []
+    weekItems: [],
+    dayNotes: []
   };
 }
 function cleanWeekdays(days) {
@@ -5682,6 +5750,9 @@ function parseNotebook(value) {
   book.name = typeof raw.name === "string" ? raw.name.trim().slice(0, 40) : "";
   book.theme = asTheme(raw.theme);
   book.focusId = typeof raw.focusId === "string" ? raw.focusId : null;
+  book.focusSession = parseFocusSession(raw.focusSession);
+  book.focusAt = typeof raw.focusAt === "number" && raw.focusAt > 0 ? raw.focusAt : 0;
+  book.cat = parseCatPrefs(raw.cat);
   if (Array.isArray(raw.tasks)) {
     for (const item of raw.tasks) {
       if (!item || typeof item !== "object") continue;
@@ -5702,7 +5773,10 @@ function parseNotebook(value) {
         exception: task.exception === true,
         repeatKind: repeat,
         weekdays: Array.isArray(task.weekdays) ? cleanWeekdays(task.weekdays.map(Number)) : [],
-        deleted: task.deleted === true
+        deleted: task.deleted === true,
+        focusMs: typeof task.focusMs === "number" && task.focusMs > 0 ? Math.round(task.focusMs) : 0,
+        note: typeof task.note === "string" && task.note.trim() ? task.note.trim().slice(0, 120) : null,
+        duration: task.duration === "short" || task.duration === "usual" || task.duration === "long" ? task.duration : null
       });
     }
   }
@@ -5761,15 +5835,28 @@ function parseNotebook(value) {
     for (const item of raw.weekItems) {
       if (!item || typeof item !== "object") continue;
       const entry = item;
-      if (typeof entry.id !== "string" || typeof entry.title !== "string" || typeof entry.week !== "string" || !isDateKey(entry.week)) continue;
+      if (typeof entry.id !== "string" || typeof entry.title !== "string") continue;
       if (entry.kind !== "goal" && entry.kind !== "inbox") continue;
+      const week = entry.week == null || entry.week === "" ? null : entry.week;
+      if (week !== null && (typeof week !== "string" || !isDateKey(week))) continue;
+      if (week === null && entry.kind !== "inbox") continue;
       book.weekItems.push({
         id: entry.id,
-        week: entry.week,
+        week,
         kind: entry.kind,
         title: entry.title.trim().slice(0, 160),
         completed: entry.completed === true
       });
+    }
+  }
+  if (Array.isArray(raw.dayNotes)) {
+    for (const item of raw.dayNotes) {
+      if (!item || typeof item !== "object") continue;
+      const note = item;
+      if (typeof note.date !== "string" || !isDateKey(note.date) || typeof note.text !== "string") continue;
+      const text = note.text.trim().slice(0, 160);
+      if (!text) continue;
+      book.dayNotes.push({ date: note.date, text });
     }
   }
   if (!book.mode) book.greeted = false;
@@ -5789,6 +5876,7 @@ function dummyPasswordHash() {
   return dummyHash;
 }
 function freshNotebook(login) {
+  if (login.includes("@")) return emptyNotebook();
   return { ...emptyNotebook(), name: login.slice(0, 40) };
 }
 function sessionExpiry() {
@@ -5813,11 +5901,29 @@ function createFileStore(filePath) {
     findByLogin(loginKey) {
       return update(async (db) => ({ db, result: db.users.find((user) => user.loginKey === loginKey) ?? null }));
     },
+    findByEmail(email) {
+      return update(async (db) => ({ db, result: db.users.find((user) => user.loginKey === email) ?? null }));
+    },
     insertUser(user) {
       return update(async (db) => {
         if (db.users.some((item) => item.loginKey === user.loginKey)) return { db, result: "taken" };
         return { db: { ...db, users: [...db.users, user] }, result: "ok" };
       });
+    },
+    savePassword(userId, passwordHash) {
+      return update(async (db) => ({
+        db: {
+          ...db,
+          users: db.users.map((user) => user.id === userId ? { ...user, passwordHash } : user)
+        },
+        result: void 0
+      }));
+    },
+    clearSessions(userId) {
+      return update(async (db) => ({
+        db: { ...db, sessions: db.sessions.filter((session) => session.userId !== userId) },
+        result: void 0
+      }));
     },
     createSession(userId, tokenHash) {
       return update(async (db) => ({
@@ -5911,18 +6017,48 @@ async function createNeonStore() {
       if (!login || !passwordHash) return null;
       return { id: textField(row, "id"), login, loginKey, passwordHash };
     },
+    async findByEmail(email) {
+      const rows = asRows(await sql.query(
+        `SELECT id, email, login, login_key, password_hash FROM users WHERE email = $1`,
+        [email]
+      ));
+      const row = rows[0];
+      if (!row) return null;
+      const login = textField(row, "login") || textField(row, "email");
+      return {
+        id: textField(row, "id"),
+        login,
+        loginKey: textField(row, "login_key") || email,
+        passwordHash: textField(row, "password_hash")
+      };
+    },
     async insertUser(user) {
+      const email = user.login.includes("@") ? user.login.toLowerCase() : `${user.id}@users.today-cat.invalid`;
+      const name = email.endsWith("@users.today-cat.invalid") ? user.login : "";
       try {
         await sql.query(
           `INSERT INTO users (id, email, name, login, login_key, password_hash)
            VALUES ($1, $2, $3, $4, $5, $6)`,
-          [user.id, `${user.id}@users.today-cat.invalid`, user.login, user.login, user.loginKey, user.passwordHash]
+          [user.id, email, name, user.login, user.loginKey, user.passwordHash]
         );
         return "ok";
       } catch (error) {
         if (isUniqueViolation(error)) return "taken";
         throw error;
       }
+    },
+    async savePassword(userId, passwordHash) {
+      await sql.query(
+        `UPDATE users
+         SET password_hash = $2,
+             login = CASE WHEN login IS NULL OR login = '' THEN email ELSE login END,
+             login_key = CASE WHEN login_key IS NULL OR login_key = '' THEN email ELSE login_key END
+         WHERE id = $1`,
+        [userId, passwordHash]
+      );
+    },
+    async clearSessions(userId) {
+      await sql.query(`DELETE FROM sessions WHERE user_id = $1`, [userId]);
     },
     async createSession(userId, tokenHash) {
       await sql.query(
@@ -5935,18 +6071,22 @@ async function createNeonStore() {
     },
     async userForToken(tokenHash) {
       const rows = asRows(await sql.query(
-        `SELECT u.id, u.login, u.login_key, u.password_hash
+        `SELECT u.id, u.email, u.login, u.login_key, u.password_hash
          FROM sessions s
          JOIN users u ON u.id = s.user_id
-         WHERE s.token_hash = $1 AND s.expires_at > now() AND u.login IS NOT NULL`,
+         WHERE s.token_hash = $1 AND s.expires_at > now()`,
         [tokenHash]
       ));
       const row = rows[0];
       if (!row) return null;
-      const login = textField(row, "login");
-      const passwordHash = textField(row, "password_hash");
-      if (!login || !passwordHash) return null;
-      return { id: textField(row, "id"), login, loginKey: textField(row, "login_key"), passwordHash };
+      const login = textField(row, "login") || textField(row, "email");
+      if (!login) return null;
+      return {
+        id: textField(row, "id"),
+        login,
+        loginKey: textField(row, "login_key") || login.toLowerCase(),
+        passwordHash: textField(row, "password_hash")
+      };
     },
     async readNotebook(userId) {
       const rows = asRows(await sql.query(
@@ -5974,7 +6114,7 @@ function cabinetStore() {
   return sharedStore;
 }
 async function openCabinetStore() {
-  if (process.env.DATABASE_URL) return createNeonStore();
+  if (databaseUrl()) return createNeonStore();
   if (process.env.VERCEL === "1") throw new Error("storage");
   return createFileStore(localFile);
 }
@@ -5990,7 +6130,61 @@ async function openSession(store, user, secure) {
     cookie: sessionCookie(raw, secure, 60 * 60 * 24 * 30)
   };
 }
+function emailAddress(value) {
+  if (typeof value !== "string" || !value.includes("@")) return null;
+  const email = value.trim().toLowerCase();
+  if (email.length > 200 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return "";
+  return email;
+}
+async function registerEmailAccount(store, email, passwordValue, secure) {
+  if (!validPassword(passwordValue)) return { status: 400, body: { error: "password" } };
+  const existing = await store.findByEmail(email);
+  if (existing?.passwordHash) return { status: 409, body: { error: "email_taken" } };
+  if (existing) return { status: 401, body: { error: "password_unset" } };
+  const user = {
+    id: (0, import_node_crypto3.randomUUID)(),
+    login: email,
+    loginKey: email,
+    passwordHash: await hashPassword(passwordValue)
+  };
+  const inserted = await store.insertUser(user);
+  if (inserted === "taken") return { status: 409, body: { error: "email_taken" } };
+  await store.writeNotebook(user.id, emptyNotebook());
+  return openSession(store, user, secure);
+}
+async function loginEmailAccount(store, email, passwordValue, secure) {
+  if (!validPassword(passwordValue)) return { status: 400, body: { error: "password" } };
+  const user = await store.findByEmail(email);
+  if (!user) {
+    await verifyPassword(passwordValue, await dummyPasswordHash());
+    return { status: 401, body: { error: "credentials" } };
+  }
+  if (!user.passwordHash) return { status: 401, body: { error: "password_unset" } };
+  const matches = await verifyPassword(passwordValue, user.passwordHash);
+  if (!matches) return { status: 401, body: { error: "credentials" } };
+  return openSession(store, user, secure);
+}
+async function assignPassword(store, email, passwordValue, secure) {
+  if (!validPassword(passwordValue)) return { status: 400, body: { error: "password" } };
+  const passwordHash = await hashPassword(passwordValue);
+  const existing = await store.findByEmail(email);
+  if (!existing) {
+    const user = { id: (0, import_node_crypto3.randomUUID)(), login: email, loginKey: email, passwordHash };
+    const inserted = await store.insertUser(user);
+    if (inserted === "taken") return { status: 409, body: { error: "email_taken" } };
+    await store.writeNotebook(user.id, emptyNotebook());
+    await store.clearSessions(user.id);
+    return openSession(store, user, secure);
+  }
+  await store.savePassword(existing.id, passwordHash);
+  await store.clearSessions(existing.id);
+  const refreshed = await store.findByEmail(email);
+  return openSession(store, { ...existing, ...refreshed, passwordHash, login: refreshed?.login || email }, secure);
+}
 async function registerAccount(store, loginValue, passwordValue, secure) {
+  const email = emailAddress(loginValue);
+  if (email === "") return { status: 400, body: { error: "email" } };
+  if (email) return registerEmailAccount(store, email, passwordValue, secure);
   const login = normalizeLogin(loginValue);
   if (!login) return { status: 400, body: { error: "login" } };
   if (!validPassword(passwordValue)) return { status: 400, body: { error: "password" } };
@@ -6006,6 +6200,9 @@ async function registerAccount(store, loginValue, passwordValue, secure) {
   return openSession(store, user, secure);
 }
 async function loginAccount(store, loginValue, passwordValue, secure) {
+  const email = emailAddress(loginValue);
+  if (email === "") return { status: 400, body: { error: "email" } };
+  if (email) return loginEmailAccount(store, email, passwordValue, secure);
   const login = normalizeLogin(loginValue);
   if (!login) return { status: 400, body: { error: "login" } };
   if (!validPassword(passwordValue)) return { status: 400, body: { error: "password" } };
@@ -6049,7 +6246,7 @@ function send(res, status, body, cookie) {
 var attempts = /* @__PURE__ */ new Map();
 function attemptKey(value) {
   if (typeof value !== "string") return "invalid";
-  const key = value.trim().toLocaleLowerCase("ru-RU").slice(0, 24);
+  const key = value.trim().toLocaleLowerCase("ru-RU").slice(0, 200);
   return key || "invalid";
 }
 function blocked(key) {
@@ -6107,6 +6304,21 @@ async function handler(req, res) {
         return;
       }
       const result = await logoutAccount(store, token3, secureRequest(req));
+      send(res, result.status, result.body, result.cookie);
+      return;
+    }
+    if (input.action === "reset") {
+      if (!validPassword(input.password)) {
+        send(res, 400, { error: "password" });
+        return;
+      }
+      const email = await consumeMagicLink(input.token);
+      if (!email) {
+        send(res, 400, { error: "token" });
+        return;
+      }
+      const store = await cabinetStore();
+      const result = await assignPassword(store, email, input.password, secureRequest(req));
       send(res, result.status, result.body, result.cookie);
       return;
     }

@@ -10,7 +10,9 @@ const MESSAGES: Record<string, string> = {
   login: 'Логин — от 3 до 24 символов: буквы, цифры, знак _ или -.',
   password: 'Пароль — от 6 до 72 символов.',
   taken: 'Такой логин уже есть. Войди или придумай другой.',
-  credentials: 'Неверный логин или пароль.',
+  credentials: 'Неверная почта или пароль.',
+  password_unset: 'Для этой почты пароль ещё не задан. Нажми „Забыла пароль“.',
+  email_taken: 'Для этой почты кабинет уже есть. Войди.',
   rate: 'Слишком много попыток. Подожди немного и попробуй снова.',
   storage: 'Кабинет не сохранился. Попробуй ещё раз.',
   notebook: 'Не получилось записать задачи.',
@@ -93,6 +95,10 @@ export function requestEmailLink(email: string) {
 export function verifyEmailLink(token: string) {
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Moscow';
   return request('/api/auth', 'POST', { action: 'verify', token, timezone });
+}
+
+export async function resetCabinetPassword(token: string, password: string) {
+  return asCabinet(await request('/api/auth', 'POST', { action: 'reset', token, password }));
 }
 
 export async function registerCabinet(login: string, password: string) {

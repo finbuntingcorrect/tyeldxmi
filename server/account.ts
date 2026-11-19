@@ -1,6 +1,5 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import type { CatLook, CatRole, Occupation, Profile, Purpose } from '../src/types';
-import { emptyNotebook } from '../src/lib/notebook';
 import { ensureSchema } from './schema';
 import { sendMagicLink } from './mail';
 
@@ -150,50 +149,29 @@ export async function requestLink(emailValue: unknown, origin: string): Promise<
 }
 
 export async function verifyLink(raw: unknown, timezoneValue: unknown, secure: boolean): Promise<AccountResult> {
+  void timezoneValue;
+  void secure;
   if (typeof raw !== 'string' || raw.length < 20) return { status: 400, body: { error: 'token' } };
-  const timezone = typeof timezoneValue === 'string' && validTimeZone(timezoneValue) ? timezoneValue : 'Europe/Moscow';
   const sql = await ensureSchema();
-  const hashed = hashToken(raw);
+  const links = await sql.query(
+    `SELECT email FROM magic_links WHERE token_hash = $1 AND used_at IS NULL AND expires_at > now()`,
+    [hashToken(raw)],
+  );
+  const email = (links as { email: string }[])[0]?.email;
+  if (!email) return { status: 400, body: { error: 'token' } };
+  return { status: 200, body: { reset: true } };
+}
+
+export async function consumeMagicLink(raw: unknown): Promise<string | null> {
+  if (typeof raw !== 'string' || raw.length < 20) return null;
+  const sql = await ensureSchema();
   const links = await sql.query(
     `UPDATE magic_links SET used_at = now()
      WHERE token_hash = $1 AND used_at IS NULL AND expires_at > now()
      RETURNING email`,
-    [hashed],
+    [hashToken(raw)],
   );
-  const email = (links as { email: string }[])[0]?.email;
-  if (!email) return { status: 400, body: { error: 'token' } };
-
-  await sql.query(
-    `INSERT INTO users (id, email, timezone) VALUES ($1, $2, $3) ON CONFLICT (email) DO NOTHING`,
-    [randomUUID(), email, timezone],
-  );
-  const users = await sql.query(
-    `SELECT id, email, name, timezone, occupation, purpose, cat_name, cat_look, cat_role, onboarding_done
-     FROM users WHERE email = $1`,
-    [email],
-  );
-  const user = mapUser((users as UserRow[])[0]);
-  const session = token();
-  await sql.query(
-    `CREATE TABLE IF NOT EXISTS notebooks (
-      user_id text PRIMARY KEY,
-      data jsonb NOT NULL,
-      updated_at timestamptz NOT NULL DEFAULT now()
-    )`,
-  );
-  await sql.query(
-    `INSERT INTO notebooks (user_id, data) VALUES ($1, $2::jsonb) ON CONFLICT (user_id) DO NOTHING`,
-    [user.id, JSON.stringify({ ...emptyNotebook(), name: email.slice(0, 40) })],
-  );
-  await sql.query(
-    `INSERT INTO sessions (id, user_id, token_hash, expires_at) VALUES ($1, $2, $3, now() + interval '30 days')`,
-    [randomUUID(), user.id, hashToken(session)],
-  );
-  return {
-    status: 200,
-    body: { user },
-    cookie: sessionCookie(session, secure, 60 * 60 * 24 * 30),
-  };
+  return (links as { email: string }[])[0]?.email ?? null;
 }
 
 export async function logout(rawToken: string, secure: boolean): Promise<AccountResult> {

@@ -98,8 +98,40 @@ await logoutAccount(store, freshToken, false);
 assert.equal((await readAccountNotebook(store, freshToken)).status, 401);
 assert.equal((await readAccountNotebook(store, anyaToken)).status, 200);
 
+const created = await registerAccount(store, 'ksenia@example.com', 'letter1', false);
+assert.equal(created.status, 200);
+assert.equal(created.body.login, 'ksenia@example.com');
+assert.equal((created.body.notebook as { name?: string }).name, '');
+const createdToken = tokenFrom(created.cookie);
+
+const wrongEmail = await loginAccount(store, 'ksenia@example.com', 'nope-nope', false);
+assert.equal(wrongEmail.status, 401);
+assert.equal(wrongEmail.body.error, 'credentials');
+assert.equal(wrongEmail.cookie, undefined);
+assert.equal((await readAccountNotebook(store, createdToken)).status, 200);
+
+const unknownEmail = await loginAccount(store, 'missing@example.com', 'letter1', false);
+assert.equal(unknownEmail.status, 401);
+assert.equal(unknownEmail.body.error, 'credentials');
+assert.equal(unknownEmail.cookie, undefined);
+
+const rightEmail = await loginAccount(store, 'Ksenia@example.com', 'letter1', false);
+assert.equal(rightEmail.status, 200);
+assert.equal(rightEmail.body.login, 'ksenia@example.com');
+
+const shortPassword = await registerAccount(store, 'other@example.com', '12345', false);
+assert.equal(shortPassword.status, 400);
+assert.equal(shortPassword.body.error, 'password');
+
+await store.insertUser({ id: 'no-pass', login: 'old@example.com', loginKey: 'old@example.com', passwordHash: '' });
+const unset = await loginAccount(store, 'old@example.com', 'letter1', false);
+assert.equal(unset.status, 401);
+assert.equal(unset.body.error, 'password_unset');
+assert.equal(unset.cookie, undefined);
+
 const raw = await readFile(join(directory, 'accounts.json'), 'utf8');
 assert.equal(raw.includes('secret12'), false);
+assert.equal(raw.includes('letter1'), false);
 assert.equal(raw.includes('Только Боря'), true);
 assert.equal(raw.includes('Только Аня'), true);
 

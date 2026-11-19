@@ -33,8 +33,15 @@ import {
   tasksForDate,
   toggleTask,
   trackerProgressLabel,
+  monthGrid,
   weekDates,
 } from './notebook.ts';
+
+const november = monthGrid('2026-11-18');
+assert.equal(november.length, 42);
+assert.equal(november[0], '2026-10-26');
+assert.equal(november[41], '2026-12-06');
+assert.equal(monthGrid('2026-11-01')[0], '2026-10-26');
 
 const week = weekDates('2026-11-06');
 assert.deepEqual(week, ['2026-11-02', '2026-11-03', '2026-11-04', '2026-11-05', '2026-11-06', '2026-11-07', '2026-11-08']);

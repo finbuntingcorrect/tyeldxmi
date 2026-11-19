@@ -62,6 +62,7 @@ export async function ensureSchema() {
     await sql`CREATE UNIQUE INDEX IF NOT EXISTS tasks_series_original_idx
       ON tasks (series_id, original_date)
       WHERE series_id IS NOT NULL AND original_date IS NOT NULL`;
+    await sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash text`;
   })().catch((error: unknown) => {
     schemaReady = null;
     throw error;

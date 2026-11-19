@@ -38,6 +38,11 @@ export type LocalCabinet = {
 
 function loginIdentity(value: string) {
   const display = value.trim();
+  const email = display.toLowerCase();
+  if (email.includes('@')) {
+    if (email.length > 200 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return null;
+    return { display: email, key: email };
+  }
   if (display.length < 3 || display.length > 24 || !LOGIN_PATTERN.test(display)) return null;
   return { display, key: display.toLocaleLowerCase('ru-RU') };
 }
@@ -130,6 +135,7 @@ function writeJson(storage: MemoryStorage, key: string, value: unknown) {
 }
 
 function freshNotebook(login: string): Notebook {
+  if (login.includes('@')) return emptyNotebook();
   return { ...emptyNotebook(), name: login.slice(0, 40) };
 }
 
