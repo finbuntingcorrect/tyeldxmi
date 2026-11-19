@@ -153,6 +153,13 @@ export function weekDates(selected: string): string[] {
   return Array.from({ length: 7 }, (_, index) => addDays(monday, index));
 }
 
+export function monthGrid(anchor: string): string[] {
+  const first = `${anchor.slice(0, 7)}-01`;
+  if (!isDateKey(anchor) || !isDateKey(first)) return [];
+  const start = weekDates(first)[0];
+  return Array.from({ length: 42 }, (_, index) => addDays(start, index));
+}
+
 function cleanWeekdays(days: number[]) {
   return [...new Set(days.filter((day) => day >= 0 && day <= 6))].sort((a, b) => a - b);
 }

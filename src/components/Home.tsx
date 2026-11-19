@@ -65,7 +65,19 @@ export function Home() {
   }, [conflict]);
 
   if (notebook.status === 'loading') return <CabinetSplash />;
-  if (notebook.status === 'anon') return <AccountGate notice={notebook.error} onRequest={notebook.requestEmail} />;
+  if (notebook.status === 'anon') {
+    return (
+      <AccountGate
+        notice={notebook.error}
+        browser={notebook.here}
+        resetToken={notebook.resetToken}
+        onEnter={notebook.signIn}
+        onCreate={notebook.register}
+        onForgot={notebook.requestEmail}
+        onReset={notebook.setPassword}
+      />
+    );
+  }
 
   if (!book.greeted || !mode) {
     return (

@@ -2,13 +2,11 @@ import { useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { addDays } from '../../server/recurrence';
 import { DAY_PARTS, WEEKDAYS } from '../lib/plannerCopy';
-import { tasksForDate, weekDates, type Notebook, type NotebookTask, type TaskDraft, type WeekItem } from '../lib/notebook';
+import { monthGrid, tasksForDate, weekDates, type Notebook, type NotebookTask, type TaskDraft, type WeekItem } from '../lib/notebook';
 import { dateFromKey, formatLocalDate } from '../lib/date';
 import type { DayPart, Priority } from '../types';
 import { PaperCheck } from './PaperCheck';
 import { PlanTask } from './PlanTask';
-
-const DAY_NAMES = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье'];
 
 type PlannerScreenProps = {
   book: Notebook;
@@ -28,17 +26,18 @@ type PlannerScreenProps = {
   onNote: (id: string, text: string) => void;
 };
 
-function rangeLabel(week: string[]) {
-  const start = dateFromKey(week[0]);
-  const end = dateFromKey(week[6]);
-  const startMonth = new Intl.DateTimeFormat('ru-RU', { month: 'long' }).format(start);
-  const endMonth = new Intl.DateTimeFormat('ru-RU', { month: 'long' }).format(end);
-  if (start.getMonth() === end.getMonth()) return `${start.getDate()}–${end.getDate()} ${endMonth}`;
-  return `${start.getDate()} ${startMonth} – ${end.getDate()} ${endMonth}`;
+function monthTitle(key: string) {
+  const formatted = new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric' }).format(dateFromKey(`${key.slice(0, 7)}-01`));
+  const clean = formatted.replace(/\s*г\.?$/u, '').trim();
+  return clean.charAt(0).toLocaleUpperCase('ru-RU') + clean.slice(1);
 }
 
-function dayLabel(day: string) {
-  return new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long' }).format(dateFromKey(day));
+function shiftMonth(key: string, delta: number) {
+  const date = dateFromKey(`${key.slice(0, 7)}-01`);
+  date.setMonth(date.getMonth() + delta);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  return `${year}-${month}-01`;
 }
 
 function openCount(tasks: { completed: boolean }[]) {
@@ -64,55 +63,6 @@ function CarryLine({ count, label, onCarry }: { count: number; label: string; on
       <span>{openLabel(count)}</span>
       <button type="button" onClick={onCarry} className="min-h-11 font-semibold text-ink underline decoration-line underline-offset-4">{label}</button>
     </p>
-  );
-}
-
-function CaptureLine({ week, inbox, onAdd, onToggle, onAssign }: {
-  week: string[];
-  inbox: WeekItem[];
-  onAdd: (title: string) => void;
-  onToggle: (id: string) => void;
-  onAssign: (id: string, date: string) => void;
-}) {
-  const [title, setTitle] = useState('');
-  return (
-    <div className="px-3 py-3 sm:px-5">
-      <form
-        onSubmit={(event) => {
-          event.preventDefault();
-          const next = title.trim();
-          if (!next) return;
-          onAdd(next);
-          setTitle('');
-        }}
-      >
-        <input
-          value={title}
-          onChange={(event) => setTitle(event.target.value)}
-          aria-label="Записать и забыть"
-          placeholder="Записать и забыть"
-          maxLength={160}
-          className="paper-field"
-        />
-      </form>
-      <p className="mt-4 text-sm text-muted">Список дел</p>
-      <ShortRule />
-      {inbox.map((item) => (
-        <div key={item.id}>
-          <div className="flex items-start">
-            <PaperCheck checked={item.completed} label={item.completed ? `Вернуть «${item.title}»` : `Отметить «${item.title}»`} onClick={() => onToggle(item.id)} />
-            <p className={`min-w-0 flex-1 py-2.5 text-base break-words ${item.completed ? 'text-muted line-through' : 'text-ink'}`}>{item.title}</p>
-          </div>
-          <div className="flex flex-wrap pb-1 pl-11">
-            {week.map((day, index) => (
-              <button key={day} type="button" onClick={() => onAssign(item.id, day)} className="paper-choice">
-                {WEEKDAYS[index].label}
-              </button>
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
   );
 }
 
@@ -144,14 +94,15 @@ export function PlannerScreen(props: PlannerScreenProps) {
   const { book, today } = props;
   const [anchor, setAnchor] = useState(today);
   const [detail, setDetail] = useState<string | null>(null);
-  const week = weekDates(anchor);
-  const weekKey = week[0];
+  const grid = monthGrid(anchor);
+  const monthKey = anchor.slice(0, 7);
+  const weekKey = weekDates(today.slice(0, 7) === monthKey ? today : `${monthKey}-01`)[0];
   const goals = book.weekItems.filter((item) => item.week === weekKey && item.kind === 'goal');
   const inbox = book.weekItems.filter((item) => item.week === weekKey && item.kind === 'inbox');
 
   function shift(delta: number) {
     setDetail(null);
-    setAnchor(addDays(weekKey, delta * 7));
+    setAnchor(shiftMonth(anchor, delta));
   }
 
   function createOn(date: string, dayPart: DayPart, title: string) {
@@ -196,7 +147,7 @@ export function PlannerScreen(props: PlannerScreenProps) {
     return (
       <section>
         <header className="px-4 py-4 sm:px-6">
-          <button type="button" onClick={() => setDetail(null)} className="text-sm font-semibold text-muted">К неделе</button>
+          <button type="button" onClick={() => setDetail(null)} className="text-sm font-semibold text-muted">К месяцу</button>
           <h2 className="mt-2 font-serif text-3xl leading-tight break-words sm:text-5xl">{formatLocalDate(dateFromKey(detail))}</h2>
           <ShortRule />
           <CarryLine
@@ -212,55 +163,55 @@ export function PlannerScreen(props: PlannerScreenProps) {
     );
   }
 
+  const week = weekDates(weekKey);
+
   return (
     <section>
       <header className="flex items-center justify-between gap-2 px-2 py-4 sm:px-4">
-        <button type="button" aria-label="Предыдущая неделя" onClick={() => shift(-1)} className="grid h-11 w-11 shrink-0 place-items-center text-ink">
+        <button type="button" aria-label="Предыдущий месяц" onClick={() => shift(-1)} className="grid h-11 w-11 shrink-0 place-items-center text-ink">
           <ChevronLeft aria-hidden="true" size={22} />
         </button>
         <div className="min-w-0 text-center">
-          <h2 className="font-serif text-4xl leading-tight break-words sm:text-5xl">План на неделю</h2>
-          <p className="mt-1 text-sm text-muted">{rangeLabel(week)}</p>
-          {!week.includes(today) ? (
+          <h2 className="font-serif text-4xl leading-tight break-words sm:text-5xl">{monthTitle(anchor)}</h2>
+          {today.slice(0, 7) !== monthKey ? (
             <button type="button" onClick={() => { setDetail(null); setAnchor(today); }} className="mt-1 min-h-11 text-sm font-semibold text-ink underline decoration-line underline-offset-4">К сегодня</button>
           ) : null}
         </div>
-        <button type="button" aria-label="Следующая неделя" onClick={() => shift(1)} className="grid h-11 w-11 shrink-0 place-items-center text-ink">
+        <button type="button" aria-label="Следующий месяц" onClick={() => shift(1)} className="grid h-11 w-11 shrink-0 place-items-center text-ink">
           <ChevronRight aria-hidden="true" size={22} />
         </button>
       </header>
-      <CaptureLine
-        week={week}
-        inbox={inbox}
-        onAdd={(title) => props.onAddWeekItem(weekKey, 'inbox', title)}
-        onToggle={props.onToggleWeekItem}
-        onAssign={props.onAssignWeekItem}
-      />
-      <div className="lg:grid lg:grid-cols-[minmax(0,1.5fr)_18rem]">
-        <div>
-          {week.map((day, index) => {
-            const tasks = tasksForDate(book, day);
-            return (
-              <section key={day} aria-label={DAY_NAMES[index]} aria-current={day === today ? 'date' : undefined} className="min-w-0 px-3 py-3 sm:px-5">
-                <button type="button" onClick={() => setDetail(day)} className="flex w-full min-w-0 flex-col items-start gap-0.5 text-left sm:flex-row sm:items-baseline sm:justify-between sm:gap-3">
-                  <h3 className={`text-lg ${day === today ? 'text-primary' : 'text-ink'}`}>{DAY_NAMES[index]}</h3>
-                  <span className="text-sm text-muted">{dayLabel(day)}{day === today ? ' · сегодня' : ''}{openCount(tasks) > 0 ? ` · ${openCount(tasks)} открыто` : ''}</span>
+      <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_18rem]">
+        <div className="min-w-0 px-2 pb-4 sm:px-4">
+          <div className="grid grid-cols-7">
+            {WEEKDAYS.map((day) => (
+              <p key={day.id} className="px-1 py-1 text-center text-xs text-muted">{day.label}</p>
+            ))}
+          </div>
+          <div className="grid grid-cols-7 border-l border-t border-line">
+            {grid.map((day) => {
+              const tasks = tasksForDate(book, day);
+              const outside = day.slice(0, 7) !== monthKey;
+              const shown = tasks.slice(0, 2);
+              const rest = tasks.length - shown.length;
+              const number = Number(day.slice(8));
+              return (
+                <button
+                  key={day}
+                  type="button"
+                  aria-current={day === today ? 'date' : undefined}
+                  onClick={() => setDetail(day)}
+                  className="min-h-20 min-w-0 border-r border-b border-line px-1 py-1 text-left sm:min-h-28"
+                >
+                  <span className={`block text-sm ${day === today ? 'text-primary' : outside ? 'text-muted' : 'text-ink'}`}>{number}</span>
+                  {shown.map((task) => (
+                    <p key={task.id} className={`truncate text-xs ${task.completed || outside ? 'text-muted' : 'text-ink'} ${task.completed ? 'line-through' : ''}`}>{task.title}</p>
+                  ))}
+                  {rest > 0 ? <p className="truncate text-xs text-muted">ещё {rest}</p> : null}
                 </button>
-                <ShortRule />
-                {day === today ? renderShelves(day, tasks) : (
-                  <>
-                    {tasks.map((task) => renderTask(task))}
-                    <AddRow label={`Новая задача, ${DAY_NAMES[index]}`} onAdd={(title) => createOn(day, 'anytime', title)} />
-                  </>
-                )}
-                <CarryLine
-                  count={day > today ? 0 : openCount(tasks)}
-                  label={day < today ? 'Перенести на сегодня' : 'Перенести на завтра'}
-                  onCarry={() => props.onCarry(day, day < today ? today : addDays(day, 1))}
-                />
-              </section>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
         <aside className="px-3 py-4 sm:px-5">
           <p className="text-sm text-muted">Цели недели</p>
@@ -272,6 +223,23 @@ export function PlannerScreen(props: PlannerScreenProps) {
             </div>
           ))}
           <AddRow label="Новая цель недели" onAdd={(title) => props.onAddWeekItem(weekKey, 'goal', title)} />
+          <p className="mt-6 text-sm text-muted">Список дел</p>
+          <ShortRule />
+          {inbox.map((item) => (
+            <div key={item.id}>
+              <div className="flex items-start">
+                <PaperCheck checked={item.completed} label={item.completed ? `Вернуть «${item.title}»` : `Отметить «${item.title}»`} onClick={() => props.onToggleWeekItem(item.id)} />
+                <p className={`min-w-0 flex-1 py-2.5 text-base break-words ${item.completed ? 'text-muted line-through' : 'text-ink'}`}>{item.title}</p>
+              </div>
+              <div className="flex flex-wrap pb-1 pl-11">
+                {week.map((day, index) => (
+                  <button key={day} type="button" onClick={() => props.onAssignWeekItem(item.id, day)} className="paper-choice">
+                    {WEEKDAYS[index].label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
         </aside>
       </div>
     </section>

@@ -33,7 +33,10 @@ type FileDatabase = {
 
 export type CabinetStore = {
   findByLogin: (loginKey: string) => Promise<CabinetUser | null>;
+  findByEmail: (email: string) => Promise<CabinetUser | null>;
   insertUser: (user: CabinetUser) => Promise<'ok' | 'taken'>;
+  savePassword: (userId: string, passwordHash: string) => Promise<void>;
+  clearSessions: (userId: string) => Promise<void>;
   createSession: (userId: string, tokenHash: string) => Promise<void>;
   deleteSession: (tokenHash: string) => Promise<void>;
   userForToken: (tokenHash: string) => Promise<CabinetUser | null>;
@@ -58,6 +61,7 @@ function dummyPasswordHash() {
 }
 
 function freshNotebook(login: string): Notebook {
+  if (login.includes('@')) return emptyNotebook();
   return { ...emptyNotebook(), name: login.slice(0, 40) };
 }
 
@@ -87,11 +91,29 @@ export function createFileStore(filePath: string): CabinetStore {
     findByLogin(loginKey) {
       return update(async (db) => ({ db, result: db.users.find((user) => user.loginKey === loginKey) ?? null }));
     },
+    findByEmail(email) {
+      return update(async (db) => ({ db, result: db.users.find((user) => user.loginKey === email) ?? null }));
+    },
     insertUser(user) {
       return update(async (db) => {
         if (db.users.some((item) => item.loginKey === user.loginKey)) return { db, result: 'taken' as const };
         return { db: { ...db, users: [...db.users, user] }, result: 'ok' as const };
       });
+    },
+    savePassword(userId, passwordHash) {
+      return update(async (db) => ({
+        db: {
+          ...db,
+          users: db.users.map((user) => user.id === userId ? { ...user, passwordHash } : user),
+        },
+        result: undefined,
+      }));
+    },
+    clearSessions(userId) {
+      return update(async (db) => ({
+        db: { ...db, sessions: db.sessions.filter((session) => session.userId !== userId) },
+        result: undefined,
+      }));
     },
     createSession(userId, tokenHash) {
       return update(async (db) => ({
@@ -197,18 +219,48 @@ async function createNeonStore(): Promise<CabinetStore> {
       if (!login || !passwordHash) return null;
       return { id: textField(row, 'id'), login, loginKey, passwordHash };
     },
+    async findByEmail(email) {
+      const rows = asRows(await sql.query(
+        `SELECT id, email, login, login_key, password_hash FROM users WHERE email = $1`,
+        [email],
+      ));
+      const row = rows[0];
+      if (!row) return null;
+      const login = textField(row, 'login') || textField(row, 'email');
+      return {
+        id: textField(row, 'id'),
+        login,
+        loginKey: textField(row, 'login_key') || email,
+        passwordHash: textField(row, 'password_hash'),
+      };
+    },
     async insertUser(user) {
+      const email = user.login.includes('@') ? user.login.toLowerCase() : `${user.id}@users.today-cat.invalid`;
+      const name = email.endsWith('@users.today-cat.invalid') ? user.login : '';
       try {
         await sql.query(
           `INSERT INTO users (id, email, name, login, login_key, password_hash)
            VALUES ($1, $2, $3, $4, $5, $6)`,
-          [user.id, `${user.id}@users.today-cat.invalid`, user.login, user.login, user.loginKey, user.passwordHash],
+          [user.id, email, name, user.login, user.loginKey, user.passwordHash],
         );
         return 'ok';
       } catch (error) {
         if (isUniqueViolation(error)) return 'taken';
         throw error;
       }
+    },
+    async savePassword(userId, passwordHash) {
+      await sql.query(
+        `UPDATE users
+         SET password_hash = $2,
+             login = CASE WHEN login IS NULL OR login = '' THEN email ELSE login END,
+             login_key = CASE WHEN login_key IS NULL OR login_key = '' THEN email ELSE login_key END
+         WHERE id = $1`,
+        [userId, passwordHash],
+      );
+    },
+    async clearSessions(userId) {
+      await sql.query(`DELETE FROM sessions WHERE user_id = $1`, [userId]);
     },
     async createSession(userId, tokenHash) {
       await sql.query(
@@ -286,7 +338,65 @@ async function openSession(store: CabinetStore, user: CabinetUser, secure: boole
   };
 }
 
+function emailAddress(value: unknown) {
+  if (typeof value !== 'string' || !value.includes('@')) return null;
+  const email = value.trim().toLowerCase();
+  if (email.length > 200 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return '';
+  return email;
+}
+
+async function registerEmailAccount(store: CabinetStore, email: string, passwordValue: unknown, secure: boolean): Promise<AccountResult> {
+  if (!validPassword(passwordValue)) return { status: 400, body: { error: 'password' } };
+  const existing = await store.findByEmail(email);
+  if (existing?.passwordHash) return { status: 409, body: { error: 'email_taken' } };
+  if (existing) return { status: 401, body: { error: 'password_unset' } };
+  const user: CabinetUser = {
+    id: randomUUID(),
+    login: email,
+    loginKey: email,
+    passwordHash: await hashPassword(passwordValue),
+  };
+  const inserted = await store.insertUser(user);
+  if (inserted === 'taken') return { status: 409, body: { error: 'email_taken' } };
+  await store.writeNotebook(user.id, emptyNotebook());
+  return openSession(store, user, secure);
+}
+
+async function loginEmailAccount(store: CabinetStore, email: string, passwordValue: unknown, secure: boolean): Promise<AccountResult> {
+  if (!validPassword(passwordValue)) return { status: 400, body: { error: 'password' } };
+  const user = await store.findByEmail(email);
+  if (!user) {
+    await verifyPassword(passwordValue, await dummyPasswordHash());
+    return { status: 401, body: { error: 'credentials' } };
+  }
+  if (!user.passwordHash) return { status: 401, body: { error: 'password_unset' } };
+  const matches = await verifyPassword(passwordValue, user.passwordHash);
+  if (!matches) return { status: 401, body: { error: 'credentials' } };
+  return openSession(store, user, secure);
+}
+
+export async function assignPassword(store: CabinetStore, email: string, passwordValue: unknown, secure: boolean): Promise<AccountResult> {
+  if (!validPassword(passwordValue)) return { status: 400, body: { error: 'password' } };
+  const passwordHash = await hashPassword(passwordValue);
+  const existing = await store.findByEmail(email);
+  if (!existing) {
+    const user: CabinetUser = { id: randomUUID(), login: email, loginKey: email, passwordHash };
+    const inserted = await store.insertUser(user);
+    if (inserted === 'taken') return { status: 409, body: { error: 'email_taken' } };
+    await store.writeNotebook(user.id, emptyNotebook());
+    await store.clearSessions(user.id);
+    return openSession(store, user, secure);
+  }
+  await store.savePassword(existing.id, passwordHash);
+  await store.clearSessions(existing.id);
+  const refreshed = await store.findByEmail(email);
+  return openSession(store, { ...existing, ...refreshed, passwordHash, login: refreshed?.login || email }, secure);
+}
+
 export async function registerAccount(store: CabinetStore, loginValue: unknown, passwordValue: unknown, secure: boolean): Promise<AccountResult> {
+  const email = emailAddress(loginValue);
+  if (email === '') return { status: 400, body: { error: 'email' } };
+  if (email) return registerEmailAccount(store, email, passwordValue, secure);
   const login = normalizeLogin(loginValue);
   if (!login) return { status: 400, body: { error: 'login' } };
   if (!validPassword(passwordValue)) return { status: 400, body: { error: 'password' } };
@@ -303,6 +413,9 @@ export async function registerAccount(store: CabinetStore, loginValue: unknown, 
 }
 
 export async function loginAccount(store: CabinetStore, loginValue: unknown, passwordValue: unknown, secure: boolean): Promise<AccountResult> {
+  const email = emailAddress(loginValue);
+  if (email === '') return { status: 400, body: { error: 'email' } };
+  if (email) return loginEmailAccount(store, email, passwordValue, secure);
   const login = normalizeLogin(loginValue);
   if (!login) return { status: 400, body: { error: 'login' } };
   if (!validPassword(passwordValue)) return { status: 400, body: { error: 'password' } };
