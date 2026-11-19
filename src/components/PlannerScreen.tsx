@@ -66,6 +66,31 @@ function CarryLine({ count, label, onCarry }: { count: number; label: string; on
   );
 }
 
+function CaptureField({ onAdd }: { onAdd: (title: string) => void }) {
+  const [title, setTitle] = useState('');
+  return (
+    <form
+      className="px-4 sm:px-6"
+      onSubmit={(event) => {
+        event.preventDefault();
+        const next = title.trim();
+        if (!next) return;
+        onAdd(next);
+        setTitle('');
+      }}
+    >
+      <input
+        value={title}
+        onChange={(event) => setTitle(event.target.value)}
+        aria-label="Записать и забыть"
+        placeholder="Записать и забыть"
+        maxLength={160}
+        className="paper-field"
+      />
+    </form>
+  );
+}
+
 function AddRow({ label, onAdd }: { label: string; onAdd: (title: string) => void }) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
@@ -96,9 +121,11 @@ export function PlannerScreen(props: PlannerScreenProps) {
   const [detail, setDetail] = useState<string | null>(null);
   const grid = monthGrid(anchor);
   const monthKey = anchor.slice(0, 7);
+  const todayWeek = weekDates(today);
+  const inboxWeek = todayWeek[0];
   const weekKey = weekDates(today.slice(0, 7) === monthKey ? today : `${monthKey}-01`)[0];
   const goals = book.weekItems.filter((item) => item.week === weekKey && item.kind === 'goal');
-  const inbox = book.weekItems.filter((item) => item.week === weekKey && item.kind === 'inbox');
+  const inbox = book.weekItems.filter((item) => item.week === inboxWeek && item.kind === 'inbox');
 
   function shift(delta: number) {
     setDetail(null);
@@ -163,8 +190,6 @@ export function PlannerScreen(props: PlannerScreenProps) {
     );
   }
 
-  const week = weekDates(weekKey);
-
   return (
     <section>
       <header className="flex items-center justify-between gap-2 px-2 py-4 sm:px-4">
@@ -181,6 +206,26 @@ export function PlannerScreen(props: PlannerScreenProps) {
           <ChevronRight aria-hidden="true" size={22} />
         </button>
       </header>
+      <CaptureField onAdd={(title) => props.onAddWeekItem(inboxWeek, 'inbox', title)} />
+      <div className="px-4 pb-2 sm:px-6">
+        <p className="mt-3 text-sm text-muted">Список дел</p>
+        <ShortRule />
+        {inbox.map((item) => (
+          <div key={item.id}>
+            <div className="flex items-start">
+              <PaperCheck checked={item.completed} label={item.completed ? `Вернуть «${item.title}»` : `Отметить «${item.title}»`} onClick={() => props.onToggleWeekItem(item.id)} />
+              <p className={`min-w-0 flex-1 py-2.5 text-base break-words ${item.completed ? 'text-muted line-through' : 'text-ink'}`}>{item.title}</p>
+            </div>
+            <div className="flex flex-wrap pb-1 pl-11">
+              {todayWeek.map((day, index) => (
+                <button key={day} type="button" onClick={() => props.onAssignWeekItem(item.id, day)} className="paper-choice">
+                  {WEEKDAYS[index].label}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
       <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_18rem]">
         <div className="min-w-0 px-2 pb-4 sm:px-4">
           <div className="grid grid-cols-7">
@@ -223,23 +268,6 @@ export function PlannerScreen(props: PlannerScreenProps) {
             </div>
           ))}
           <AddRow label="Новая цель недели" onAdd={(title) => props.onAddWeekItem(weekKey, 'goal', title)} />
-          <p className="mt-6 text-sm text-muted">Список дел</p>
-          <ShortRule />
-          {inbox.map((item) => (
-            <div key={item.id}>
-              <div className="flex items-start">
-                <PaperCheck checked={item.completed} label={item.completed ? `Вернуть «${item.title}»` : `Отметить «${item.title}»`} onClick={() => props.onToggleWeekItem(item.id)} />
-                <p className={`min-w-0 flex-1 py-2.5 text-base break-words ${item.completed ? 'text-muted line-through' : 'text-ink'}`}>{item.title}</p>
-              </div>
-              <div className="flex flex-wrap pb-1 pl-11">
-                {week.map((day, index) => (
-                  <button key={day} type="button" onClick={() => props.onAssignWeekItem(item.id, day)} className="paper-choice">
-                    {WEEKDAYS[index].label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
         </aside>
       </div>
     </section>

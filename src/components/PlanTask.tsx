@@ -43,7 +43,7 @@ export function PlanTask({ task, today, onToggle, onMove, onPart, onPriority, on
   const notes = [priority, repeat, moved ? 'перенесено отдельно' : ''].filter(Boolean).join(' · ');
 
   return (
-    <article className="min-w-0 border-b border-line">
+    <article className="mx-3 min-w-0 border-b border-line">
       <div className="flex items-start gap-1">
         <PaperCheck checked={task.completed} label={task.completed ? `Вернуть «${task.title}»` : `Выполнить «${task.title}»`} onClick={() => onToggle(task.id)} />
         <div className="min-w-0 flex-1 py-2">
