@@ -106,7 +106,7 @@ export function AccountGate({ notice = null, browser = false, resetToken = null,
         <div className="border border-line bg-card px-6 py-10 text-center sm:px-10">
           <p className="text-xs font-semibold tracking-[0.22em] text-muted uppercase">Today Cat</p>
           <img src="/mascot/cat-wave.png" alt="Рыжий котёнок с поднятой лапкой" className="mx-auto mt-6 h-44 w-auto max-w-full object-contain sm:h-52" />
-          <h1 className="mt-8 text-center text-4xl leading-tight text-ink sm:text-5xl">Привет. Давай познакомимся.</h1>
+          <h1 className="mt-8 text-center text-4xl leading-tight text-ink sm:text-5xl">Привет! Окей, лэсгоу</h1>
           {resetToken ? (
             <form className="mt-8 text-left" onSubmit={(event) => { event.preventDefault(); void savePassword(); }}>
               <p className="text-sm text-muted">Задай новый пароль. После этого откроется кабинет.</p>

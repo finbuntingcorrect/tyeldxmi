@@ -55,7 +55,7 @@ export function Welcome({ name, theme, nameOnly = false, onName, onTheme, onChoo
           <img src="/mascot/cat-wave.png" alt="Рыжий котёнок с поднятой лапкой" className="mx-auto mt-6 h-44 w-auto max-w-full object-contain sm:h-52" />
           {step === 1 ? (
             <form className="mt-8" onSubmit={(event) => { event.preventDefault(); continueName(); }}>
-              <h1 className="text-4xl leading-tight text-ink sm:text-5xl">Привет. Давай познакомимся.</h1>
+              <h1 className="text-4xl leading-tight text-ink sm:text-5xl">Привет! Окей, лэсгоу</h1>
               <label htmlFor="your-name" className="mt-6 block font-serif text-2xl text-ink">Как тебя зовут?</label>
               <input id="your-name" value={draft} onChange={(event) => { setDraft(event.target.value); setNameHint(null); }} maxLength={40} autoComplete="nickname" placeholder="Твоё имя" className="paper-field mt-2 text-center text-lg" />
               {nameHint ? <p role="alert" className="mt-3 text-sm font-semibold text-danger">{nameHint}</p> : null}
@@ -64,7 +64,7 @@ export function Welcome({ name, theme, nameOnly = false, onName, onTheme, onChoo
           ) : null}
           {step === 2 ? (
             <div className="mt-8 text-left">
-              <h1 className="text-center text-4xl leading-tight text-ink">Приятно познакомиться, {name}!</h1>
+              <h1 className="text-center text-4xl leading-tight text-ink">Привет, {name}!</h1>
               <p className="mt-3 text-center text-2xl text-ink">Какой у тебя любимый цвет?</p>
               <div className="mt-6">
                 <ThemePicker theme={theme} onChange={(next) => { onTheme(next); setThemeHint(false); }} />

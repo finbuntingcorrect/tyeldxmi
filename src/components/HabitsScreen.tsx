@@ -1,7 +1,7 @@
 import { useState } from 'react';
+import { Check, X } from 'lucide-react';
 import { dateFromKey, formatLocalDate } from '../lib/date';
-import { habitSpan, nextHabitStatus, weekDates, type HabitStatus, type Notebook } from '../lib/notebook';
-import { WEEKDAYS } from '../lib/plannerCopy';
+import { habitSpan, nextHabitStatus, trackerProgressLabel, type HabitStatus, type Notebook } from '../lib/notebook';
 import type { RepeatKind } from '../types';
 
 const PRESETS = ['10 минут зарядки', 'Читать 20 минут', 'Учить английский'];
@@ -24,9 +24,9 @@ function statusLabel(status: HabitStatus | null) {
 }
 
 function markTone(status: HabitStatus | null) {
-  if (status === 'done') return 'border-ink bg-ink';
-  if (status === 'missed') return 'border-line bg-transparent';
-  return 'border-line bg-transparent opacity-40';
+  if (status === 'done') return 'border-ink bg-ink text-card';
+  if (status === 'missed') return 'border-danger text-danger';
+  return 'border-ink text-ink';
 }
 
 function HabitCard({
@@ -41,8 +41,7 @@ function HabitCard({
   onMark: HabitsScreenProps['onMark'];
 }) {
   const days = habitSpan(habit.start);
-  const week = weekDates(today);
-  const weekDone = week.filter((date) => marks.some((mark) => mark.habitId === habit.id && mark.date === date && mark.status === 'done')).length;
+  const done = days.filter((date) => marks.some((mark) => mark.habitId === habit.id && mark.date === date && mark.status === 'done')).length;
 
   function markDay(date: string, status: HabitStatus | null) {
     if (date > today || date < habit.start) return;
@@ -52,30 +51,9 @@ function HabitCard({
   return (
     <article data-habit={habit.id} className="py-2">
       <p className="text-lg break-words text-ink">{habit.title}</p>
-      <p className="mt-1 text-sm text-muted">На этой неделе {weekDone} точек</p>
+      <p className="mt-1 text-sm text-muted">{trackerProgressLabel(done)}</p>
       <p className="mt-1 text-xs text-muted">с {shortStart(habit.start)}</p>
-      <div className="mt-4 grid grid-cols-7 gap-1">
-        {week.map((date, index) => {
-          const status = marks.find((mark) => mark.habitId === habit.id && mark.date === date)?.status ?? null;
-          const locked = date > today || date < habit.start;
-          return (
-            <button
-              key={date}
-              type="button"
-              disabled={locked}
-              aria-current={date === today ? 'date' : undefined}
-              aria-pressed={status === 'done'}
-              aria-label={`${habit.title}, ${WEEKDAYS[index].label}, ${formatLocalDate(dateFromKey(date))}, ${statusLabel(status)}`}
-              onClick={() => markDay(date, status)}
-              className={`flex min-h-11 flex-col items-center justify-center gap-1 ${locked ? 'cursor-default opacity-40' : 'cursor-pointer'}`}
-            >
-              <span className="text-xs text-muted">{WEEKDAYS[index].label}</span>
-              <span aria-hidden="true" className={`h-3.5 w-3.5 rounded-full border ${markTone(status)} ${date === today ? 'ring-2 ring-primary ring-offset-2' : ''}`} />
-            </button>
-          );
-        })}
-      </div>
-      <div className="mt-4 grid grid-cols-6 gap-1.5">
+      <div className="mt-4 grid grid-cols-6 gap-2">
         {days.map((date) => {
           const status = marks.find((mark) => mark.habitId === habit.id && mark.date === date)?.status ?? null;
           const ahead = date > today;
@@ -88,9 +66,10 @@ function HabitCard({
               aria-pressed={status === 'done'}
               aria-label={`${habit.title}, ${formatLocalDate(dateFromKey(date))}, ${statusLabel(status)}`}
               onClick={() => markDay(date, status)}
-              className={`mx-auto grid h-6 w-6 place-items-center ${ahead ? 'cursor-default opacity-40' : 'cursor-pointer'}`}
+              className={`mx-auto grid aspect-square w-full max-w-11 place-items-center rounded-full border-2 ${markTone(status)} ${date === today ? 'ring-2 ring-primary ring-offset-2' : ''} ${ahead ? 'cursor-default opacity-40' : 'cursor-pointer'}`}
             >
-              <span aria-hidden="true" className={`h-3 w-3 rounded-full border ${markTone(status)} ${date === today ? 'ring-2 ring-primary ring-offset-1' : ''}`} />
+              {status === 'done' ? <Check aria-hidden="true" size={18} strokeWidth={2.5} /> : null}
+              {status === 'missed' ? <X aria-hidden="true" size={18} strokeWidth={2.5} /> : null}
             </button>
           );
         })}
@@ -117,7 +96,7 @@ export function HabitsScreen({ book, today, onCreate, onMark }: HabitsScreenProp
         <p className="text-xs font-semibold tracking-[0.16em] text-muted uppercase">Привычки</p>
         <h2 className="mt-1 font-serif text-4xl">Тридцать дней</h2>
         <div className="mx-3 mt-2 border-t border-line" />
-        {book.habits.length > 0 ? <p className="mt-2 text-sm text-muted">Точка: сделано, не в счёт, пусто.</p> : null}
+        {book.habits.length > 0 ? <p className="mt-2 text-sm text-muted">Щелчок по кружку — сделано. Ещё щелчок — не в счёт.</p> : null}
       </header>
       <div className="px-4 py-4 sm:px-6">
         <button type="button" onClick={() => setOpen((value) => !value)} className="paper-submit">Добавить привычку</button>
