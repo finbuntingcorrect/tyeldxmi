@@ -1,4 +1,5 @@
-import { useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
+import { Settings, X } from 'lucide-react';
 import { addDays } from '../../server/recurrence';
 import { DAY_PARTS, PRIORITIES, WEEKDAYS } from '../lib/plannerCopy';
 import type { NotebookTask, TaskDraft } from '../lib/notebook';
@@ -24,6 +25,9 @@ const SHELF_MOVES = DAY_PARTS.filter((part) => part.id !== 'anytime');
 
 export function PlanTask({ task, today, onToggle, onMove, onPart, onPriority, onUpdate, onSkip, onFocus, onNote, shelves = false }: PlanTaskProps) {
   const titleId = useId();
+  const dialogTitleId = useId();
+  const dateId = useId();
+  const panelRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [customDate, setCustomDate] = useState(task.date);
   const [title, setTitle] = useState(task.title);
@@ -42,6 +46,35 @@ export function PlanTask({ task, today, onToggle, onMove, onPart, onPriority, on
   const priority = task.priority === 'normal' ? '' : PRIORITIES.find((item) => item.id === task.priority)?.label ?? '';
   const notes = [priority, repeat, moved ? 'перенесено отдельно' : ''].filter(Boolean).join(' · ');
 
+  useEffect(() => {
+    if (!open) return;
+    panelRef.current?.focus();
+    function onKey(event: KeyboardEvent) {
+      if (event.key === 'Escape') setOpen(false);
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open]);
+
+  function openSettings() {
+    setTitle(task.title);
+    setRepeatKind(task.repeatKind ?? 'none');
+    setWeekdays(task.weekdays);
+    setCustomDate(task.date);
+    setOpen(true);
+  }
+
+  function applyDate() {
+    if (!customDate) return;
+    onMove(task.id, customDate);
+    setOpen(false);
+  }
+
+  function save(scope: 'one' | 'future') {
+    onUpdate(task.id, draft, scope);
+    setOpen(false);
+  }
+
   return (
     <article className="mx-3 min-w-0 border-b border-line">
       <div className="flex items-start gap-1">
@@ -51,9 +84,10 @@ export function PlanTask({ task, today, onToggle, onMove, onPart, onPriority, on
           <WhyLine text={task.note} onSave={(text) => onNote(task.id, text)} />
           {notes ? <p className="text-xs break-words text-muted">{notes}</p> : null}
           <div className="flex flex-wrap items-center">
-            <button type="button" onClick={() => onMove(task.id, addDays(task.date, 1))} className="paper-choice px-2">завтра</button>
             {task.date === today ? <button type="button" onClick={() => onFocus(task.id)} className="paper-choice my-1">В фокус</button> : null}
-            <button type="button" aria-expanded={open} aria-label={`Действия: ${task.title}`} onClick={() => setOpen((value) => !value)} className="paper-choice">Ещё</button>
+            <button type="button" aria-haspopup="dialog" aria-expanded={open} aria-label={`Настройки задачи «${task.title}»`} onClick={openSettings} className="grid h-11 w-11 place-items-center text-ink">
+              <Settings aria-hidden="true" size={18} />
+            </button>
           </div>
         </div>
       </div>
@@ -65,58 +99,77 @@ export function PlanTask({ task, today, onToggle, onMove, onPart, onPriority, on
         </div>
       ) : null}
       {open ? (
-        <div className="mb-3 ml-11 min-w-0 border-t border-line pt-2" role="group" aria-label="Меню задачи">
-          <div className="flex flex-wrap">
-            {DAY_PARTS.map((part) => (
-              <button key={part.id} type="button" aria-pressed={task.dayPart === part.id} onClick={() => onPart(task.id, part.id)} className="paper-choice">{part.label}</button>
-            ))}
-          </div>
-          <div className="flex flex-wrap">
-            {PRIORITIES.map((item) => (
-              <button key={item.id} type="button" aria-pressed={task.priority === item.id} onClick={() => onPriority(task.id, item.id)} className="paper-choice">{item.label}</button>
-            ))}
-          </div>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <button type="button" onClick={() => onMove(task.id, addDays(task.date, 1))} className="paper-choice">Перенести на завтра</button>
-            <button type="button" onClick={() => onMove(task.id, addDays(task.date, 7))} className="paper-choice">на следующую неделю</button>
-            <button type="button" onClick={() => onSkip(task.id)} className="paper-choice">{task.seriesId ? 'этот раз не надо' : 'Убрать'}</button>
-            <label className="flex min-h-11 min-w-0 flex-wrap items-center gap-2 text-sm font-semibold">
-              Выбрать дату
-              <input type="date" value={customDate} onChange={(event) => setCustomDate(event.target.value)} className="w-36 max-w-full bg-transparent" />
-              <button type="button" onClick={() => customDate && onMove(task.id, customDate)} className="paper-submit">Ок</button>
-            </label>
-          </div>
-          <p className="mt-3 text-sm font-semibold">Повторять</p>
-          <div className="flex flex-wrap">
-            {(['none', 'daily', 'weekdays', 'weekly'] as const).map((kind) => (
-              <button key={kind} type="button" aria-pressed={repeatKind === kind} onClick={() => setRepeatKind(kind)} className="paper-choice">
-                {kind === 'none' ? 'Без повтора' : kind === 'daily' ? 'Каждый день' : kind === 'weekdays' ? 'По будням' : 'По дням'}
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-[rgb(46_33_27_/_0.28)] px-4 py-6 sm:items-center" onClick={() => setOpen(false)}>
+          <div
+            ref={panelRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={dialogTitleId}
+            tabIndex={-1}
+            onClick={(event) => event.stopPropagation()}
+            className="max-h-[min(40rem,calc(100dvh-3rem))] w-full max-w-md overflow-y-auto border border-line bg-card p-5 outline-none"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <h2 id={dialogTitleId} className="text-2xl">Настройки задачи</h2>
+              <button type="button" aria-label="Закрыть" onClick={() => setOpen(false)} className="grid h-11 w-11 shrink-0 place-items-center text-ink">
+                <X aria-hidden="true" size={18} />
               </button>
-            ))}
-          </div>
-          {repeatKind === 'weekly' ? (
-            <div className="flex flex-wrap">
-              {WEEKDAYS.map((day) => {
-                const selected = weekdays.includes(day.id);
-                return (
-                  <button key={day.id} type="button" aria-pressed={selected} onClick={() => setWeekdays((current) => selected ? current.filter((item) => item !== day.id) : [...current, day.id])} className="paper-choice">
-                    {day.label}
-                  </button>
-                );
-              })}
             </div>
-          ) : null}
-          <label className="mt-2 block text-sm font-semibold" htmlFor={`${titleId}-title`}>Название</label>
-          <input id={`${titleId}-title`} value={title} onChange={(event) => setTitle(event.target.value)} maxLength={160} className="paper-field" />
-          <div className="mt-3 flex flex-wrap gap-2">
-            {task.seriesId ? (
-              <>
-                <button type="button" onClick={() => onUpdate(task.id, draft, 'one')} className="paper-choice">Только эту задачу</button>
-                <button type="button" onClick={() => onUpdate(task.id, draft, 'future')} className="paper-choice">Эту и будущие</button>
-              </>
-            ) : (
-              <button type="button" onClick={() => onUpdate(task.id, draft, 'one')} className="paper-submit">Сохранить</button>
-            )}
+            <p className="mt-1 break-words text-sm text-muted">{task.title}</p>
+            <div className="mt-3 flex flex-wrap">
+              {DAY_PARTS.map((part) => (
+                <button key={part.id} type="button" aria-pressed={task.dayPart === part.id} onClick={() => onPart(task.id, part.id)} className="paper-choice">{part.label}</button>
+              ))}
+            </div>
+            <div className="flex flex-wrap">
+              {PRIORITIES.map((item) => (
+                <button key={item.id} type="button" aria-pressed={task.priority === item.id} onClick={() => onPriority(task.id, item.id)} className="paper-choice">{item.label}</button>
+              ))}
+            </div>
+            <div className="mt-2 flex flex-wrap">
+              <button type="button" onClick={() => { onMove(task.id, addDays(task.date, 1)); setOpen(false); }} className="paper-choice">Перенести на завтра</button>
+              <button type="button" onClick={() => { onMove(task.id, addDays(task.date, 7)); setOpen(false); }} className="paper-choice">на следующую неделю</button>
+              <button type="button" onClick={() => { onSkip(task.id); setOpen(false); }} className="paper-choice">{task.seriesId ? 'этот раз не надо' : 'Убрать'}</button>
+            </div>
+            <form className="mt-3" onSubmit={(event) => { event.preventDefault(); applyDate(); }}>
+              <label htmlFor={dateId} className="text-sm font-semibold">Дата</label>
+              <div className="mt-1 flex items-end gap-2">
+                <input id={dateId} type="date" value={customDate} onChange={(event) => setCustomDate(event.target.value)} className="paper-field min-w-0 flex-1" />
+                <button type="submit" className="paper-submit shrink-0">Ок</button>
+              </div>
+            </form>
+            <p className="mt-3 text-sm font-semibold">Повторять</p>
+            <div className="flex flex-wrap">
+              {(['none', 'daily', 'weekdays', 'weekly'] as const).map((kind) => (
+                <button key={kind} type="button" aria-pressed={repeatKind === kind} onClick={() => setRepeatKind(kind)} className="paper-choice">
+                  {kind === 'none' ? 'Без повтора' : kind === 'daily' ? 'Каждый день' : kind === 'weekdays' ? 'По будням' : 'По дням'}
+                </button>
+              ))}
+            </div>
+            {repeatKind === 'weekly' ? (
+              <div className="flex flex-wrap">
+                {WEEKDAYS.map((day) => {
+                  const selected = weekdays.includes(day.id);
+                  return (
+                    <button key={day.id} type="button" aria-pressed={selected} onClick={() => setWeekdays((current) => selected ? current.filter((item) => item !== day.id) : [...current, day.id])} className="paper-choice">
+                      {day.label}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+            <label className="mt-2 block text-sm font-semibold" htmlFor={`${titleId}-title`}>Название</label>
+            <input id={`${titleId}-title`} value={title} onChange={(event) => setTitle(event.target.value)} maxLength={160} className="paper-field" />
+            <div className="mt-3 flex flex-wrap gap-2">
+              {task.seriesId ? (
+                <>
+                  <button type="button" onClick={() => save('one')} className="paper-choice">Только эту задачу</button>
+                  <button type="button" onClick={() => save('future')} className="paper-choice">Эту и будущие</button>
+                </>
+              ) : (
+                <button type="button" onClick={() => save('one')} className="paper-submit">Сохранить</button>
+              )}
+            </div>
           </div>
         </div>
       ) : null}
