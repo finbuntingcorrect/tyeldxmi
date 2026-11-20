@@ -1,7 +1,7 @@
 import { addDays, isDateKey, monthDay, occurrenceDates, weekday } from '../../server/recurrence.ts';
 import type { DayPart, Priority, RepeatKind } from '../types';
 import type { LegacyStoredTask } from '../types';
-import { defaultCatPrefs, parseCatPrefs, parseFocusSession, type CatPrefs, type FocusChange, type FocusSession } from './focusSession.ts';
+import { defaultCatPrefs, feedTreat, parseCatPrefs, parseFocusSession, type CatPrefs, type FocusChange, type FocusSession, type TreatKind } from './focusSession.ts';
 import { normalizeSchedule, sameSchedule } from './schedule.ts';
 
 export type AppMode = 'habits' | 'planner' | 'focus';
@@ -738,6 +738,12 @@ export function applyFocus(book: Notebook, session: FocusSession | null, change?
 }
 
 export function setCatPrefs(book: Notebook, cat: CatPrefs): Notebook {
+  return { ...book, cat };
+}
+
+export function markTreatFed(book: Notebook, date: string, kind: TreatKind): Notebook {
+  const cat = feedTreat(book.cat, date, kind);
+  if (cat === book.cat) return book;
   return { ...book, cat };
 }
 

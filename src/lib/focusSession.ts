@@ -36,6 +36,30 @@ export type FocusChange = {
   resetCycle?: boolean;
 };
 
+export type TreatKind = 'whiskas' | 'sheba';
+
+export type TreatDay = {
+  date: string;
+  whiskas: boolean;
+  sheba: boolean;
+};
+
+export const WHISKAS_MS = 20 * 60_000;
+export const SHEBA_MS = 40 * 60_000;
+
+/** One frame of the 3×2 treat sheet. Eating frames repeat, then lick and the happy pose. */
+export const TREAT_FRAMES: { frame: number; ms: number }[] = [
+  { frame: 0, ms: 420 },
+  { frame: 1, ms: 480 },
+  { frame: 2, ms: 380 },
+  { frame: 3, ms: 380 },
+  { frame: 2, ms: 380 },
+  { frame: 3, ms: 380 },
+  { frame: 2, ms: 380 },
+  { frame: 4, ms: 560 },
+  { frame: 5, ms: 1140 },
+];
+
 export type CatPrefs = {
   sound: boolean;
   volume: number;
@@ -54,6 +78,7 @@ export type CatPrefs = {
   focusCompleted: number;
   focusMsToday: number;
   focusCycle: number;
+  treats: TreatDay[];
 };
 
 export type CatPose = 'greet' | 'sleep' | 'idle' | 'focus' | 'pause' | 'remind' | 'break' | 'success';
@@ -77,7 +102,55 @@ export function defaultCatPrefs(): CatPrefs {
     focusCompleted: 0,
     focusMsToday: 0,
     focusCycle: 0,
+    treats: [],
   };
+}
+
+export function treatDurationMs() {
+  return TREAT_FRAMES.reduce((sum, item) => sum + item.ms, 0);
+}
+
+export function parseTreats(value: unknown): TreatDay[] {
+  if (!Array.isArray(value)) return [];
+  const days: TreatDay[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== 'object') continue;
+    const raw = item as Record<string, unknown>;
+    if (typeof raw.date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(raw.date)) continue;
+    days.push({ date: raw.date, whiskas: raw.whiskas === true, sheba: raw.sheba === true });
+  }
+  return days;
+}
+
+export function treatDay(cat: CatPrefs, date: string): TreatDay {
+  return cat.treats.find((item) => item.date === date) ?? { date, whiskas: false, sheba: false };
+}
+
+export function feedTreat(cat: CatPrefs, date: string, kind: TreatKind): CatPrefs {
+  const current = treatDay(cat, date);
+  if (current[kind]) return cat;
+  const next = { ...current, [kind]: true };
+  const treats = cat.treats.some((item) => item.date === date)
+    ? cat.treats.map((item) => (item.date === date ? next : item))
+    : [...cat.treats, next];
+  return { ...cat, treats };
+}
+
+/** Banked focus time for this date plus the current focus slice. Pauses and breaks add nothing. */
+export function focusWorkedMs(cat: CatPrefs, session: FocusSession | null, now: number, today: string) {
+  const banked = cat.focusDate === today ? cat.focusMsToday : 0;
+  return banked + (session ? unappliedFocusMs(session, now) : 0);
+}
+
+export function treatOffer(workedMs: number, fed: { whiskas: boolean; sheba: boolean }): { line: string; available: TreatKind[] } {
+  const available: TreatKind[] = [];
+  if (workedMs >= WHISKAS_MS && !fed.whiskas) available.push('whiskas');
+  if (workedMs >= SHEBA_MS && !fed.sheba) available.push('sheba');
+  if (fed.whiskas && fed.sheba) return { line: 'Все угощения сегодня получены', available };
+  const next = workedMs < WHISKAS_MS ? WHISKAS_MS : workedMs < SHEBA_MS ? SHEBA_MS : null;
+  if (next == null) return { line: '', available };
+  const minutes = Math.ceil((next - workedMs) / 60_000);
+  return { line: `До угощения — ${minutes} мин`, available };
 }
 
 export function parseFocusMinutes(value: unknown): number | null {
@@ -359,5 +432,6 @@ export function parseCatPrefs(value: unknown): CatPrefs {
     focusCompleted: typeof raw.focusCompleted === 'number' && raw.focusCompleted > 0 ? Math.round(raw.focusCompleted) : 0,
     focusMsToday: typeof raw.focusMsToday === 'number' && raw.focusMsToday > 0 ? Math.round(raw.focusMsToday) : 0,
     focusCycle: typeof raw.focusCycle === 'number' && raw.focusCycle > 0 ? Math.round(raw.focusCycle) : 0,
+    treats: parseTreats(raw.treats),
   };
 }

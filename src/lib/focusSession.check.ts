@@ -17,6 +17,14 @@ import {
   startBreak,
   startFocus,
   unappliedFocusMs,
+  defaultCatPrefs,
+  feedTreat,
+  focusWorkedMs,
+  treatDurationMs,
+  treatOffer,
+  TREAT_FRAMES,
+  WHISKAS_MS,
+  SHEBA_MS,
 } from './focusSession';
 
 const start = 1_000_000;
@@ -100,5 +108,33 @@ assert.equal(catFrame(390, 844, 24).lane, 0);
 assert.equal(catFrame(390, 844, 24).tight, true);
 assert.ok(catFrame(1280, 800, 24).lane > 80);
 assert.equal(catFrame(1280, 800, 24).tight, false);
+
+const duration = treatDurationMs();
+assert.ok(duration >= 4000 && duration <= 5000);
+assert.equal(TREAT_FRAMES[0].frame, 0);
+assert.equal(TREAT_FRAMES.at(-1)?.frame, 5);
+assert.ok(TREAT_FRAMES.filter((item) => item.frame === 2 || item.frame === 3).length >= 4);
+
+const idle = defaultCatPrefs();
+assert.deepEqual(treatOffer(0, { whiskas: false, sheba: false }), { line: 'До угощения — 20 мин', available: [] });
+assert.deepEqual(treatOffer(19 * 60_000, { whiskas: false, sheba: false }), { line: 'До угощения — 1 мин', available: [] });
+assert.deepEqual(treatOffer(WHISKAS_MS, { whiskas: false, sheba: false }).available, ['whiskas']);
+assert.equal(treatOffer(WHISKAS_MS, { whiskas: false, sheba: false }).line, 'До угощения — 20 мин');
+assert.deepEqual(treatOffer(SHEBA_MS, { whiskas: false, sheba: false }).available, ['whiskas', 'sheba']);
+assert.equal(treatOffer(45 * 60_000, { whiskas: false, sheba: false }).line, '');
+assert.deepEqual(treatOffer(45 * 60_000, { whiskas: true, sheba: false }).available, ['sheba']);
+assert.equal(treatOffer(45 * 60_000, { whiskas: true, sheba: true }).line, 'Все угощения сегодня получены');
+
+const todayCat = { ...idle, focusDate: '2026-11-20', focusMsToday: 19 * 60_000 };
+const running = startFocus('task-1', 45, start, 'long');
+assert.equal(focusWorkedMs(todayCat, running, start + 60_000, '2026-11-20'), 20 * 60_000);
+assert.equal(focusWorkedMs(todayCat, { ...running, phase: 'break' }, start + 5 * 60_000, '2026-11-20'), 19 * 60_000);
+const held = pauseSession(running, start + 60_000);
+assert.equal(focusWorkedMs(todayCat, held.session, start + 90_000, '2026-11-20'), 19 * 60_000);
+assert.equal(focusWorkedMs(todayCat, running, start + 60_000, '2026-11-21'), 60_000);
+const once = feedTreat(todayCat, '2026-11-20', 'whiskas');
+assert.equal(feedTreat(once, '2026-11-20', 'whiskas'), once);
+assert.equal(once.focusMsToday, todayCat.focusMsToday);
+assert.equal(once.treats.find((item) => item.date === '2026-11-19'), undefined);
 
 console.log('focus session ok');

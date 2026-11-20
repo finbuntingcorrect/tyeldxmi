@@ -31,6 +31,7 @@ import {
   nextHabitStatus,
   notebookIsEmpty,
   applyFocus,
+  markTreatFed,
   setHabitMark,
   returnRows,
   tasksForDate,
@@ -435,6 +436,18 @@ for (let step = 2; step <= 4; step += 1) {
 const keptToday = applyFocus(cycle, { ...cycle.focusSession!, signalId: 'next', settled: false, full: false, phase: 'focus' }, { taskId: timedId, resetCycle: true }, 200);
 assert.equal(keptToday.cat.focusCycle, 0);
 assert.equal(keptToday.cat.focusCompleted, 4);
+const withTreat = markTreatFed(keptToday, '2026-11-20', 'whiskas');
+assert.equal(withTreat.cat.treats.some((item) => item.date === '2026-11-20' && item.whiskas), true);
+assert.equal(markTreatFed(withTreat, '2026-11-20', 'whiskas'), withTreat);
+assert.equal(withTreat.focusSession?.signalId, keptToday.focusSession?.signalId);
+assert.equal(withTreat.cat.focusCompleted, 4);
+const nextMorning = new Date(2026, 10, 21, 9, 0, 0).getTime();
+const rolled = applyFocus(withTreat, null, undefined, nextMorning);
+assert.equal(rolled.cat.focusMsToday, 0);
+assert.equal(rolled.cat.focusCompleted, 0);
+assert.equal(rolled.cat.treats.some((item) => item.date === '2026-11-20' && item.whiskas && !item.sheba), true);
+const keptHistory = parseNotebook(JSON.parse(JSON.stringify(rolled)));
+assert.equal(keptHistory?.cat.treats.some((item) => item.date === '2026-11-20' && item.whiskas), true);
 const restored = parseNotebook(JSON.parse(JSON.stringify(same)));
 assert.equal(restored?.focusSession?.paused, true);
 assert.equal(restored?.focusSession?.taskId, timedId);

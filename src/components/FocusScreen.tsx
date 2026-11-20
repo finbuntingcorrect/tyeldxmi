@@ -2,15 +2,20 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { Volume2, VolumeX } from 'lucide-react';
 import { CatSprite, type CatClip } from './CatSprite';
 import { PaperCheck } from './PaperCheck';
+import { TreatSprite } from './TreatSprite';
 import {
   FOCUS_PRESETS,
   countWord,
   cycleMarks,
+  focusWorkedMs,
   formatClock,
   minutesLabel,
   remainingMs,
+  treatDay,
+  treatOffer,
   type FocusSession,
   type PhaseChoice,
+  type TreatKind,
 } from '../lib/focusSession';
 import { tasksForDate, type Notebook } from '../lib/notebook';
 
@@ -38,6 +43,7 @@ type FocusScreenProps = {
   onToggleSound: () => void;
   onDismissNotice: () => void;
   onDismissRemind: () => void;
+  onFeed: (kind: TreatKind) => Promise<boolean>;
 };
 
 
@@ -74,7 +80,9 @@ export function FocusScreen(props: FocusScreenProps) {
   const [hello, setHello] = useState(false);
   const [step, setStep] = useState(false);
   const [face, setFace] = useState<1 | -1>(1);
+  const [feeding, setFeeding] = useState<TreatKind | null>(null);
   const seen = useRef<string | null>(null);
+  const feedLock = useRef(false);
   const tasks = tasksForDate(book, props.today);
   const running = Boolean(session && !session.paused && !session.settled);
   const paused = Boolean(session && session.paused && !session.settled);
@@ -94,6 +102,7 @@ export function FocusScreen(props: FocusScreenProps) {
   const rounds = cat.rounds;
   const marks = cycleMarks(cat.focusCycle, rounds, Boolean(session?.phase === 'focus' && !session.full));
   const todayMinutes = Math.floor(cat.focusMsToday / 60_000);
+  const offer = treatOffer(focusWorkedMs(cat, session, now, props.today), treatDay(cat, props.today));
 
   useEffect(() => {
     if (reduced || session) return;
@@ -178,6 +187,17 @@ export function FocusScreen(props: FocusScreenProps) {
           ? (cat.focusCycle > 0 ? 'Начать следующий подход' : 'Начать фокус')
           : 'Начать перерыв';
 
+  async function feed(kind: TreatKind) {
+    if (feedLock.current || feeding) return;
+    feedLock.current = true;
+    const won = await props.onFeed(kind);
+    if (!won) {
+      feedLock.current = false;
+      return;
+    }
+    setFeeding(kind);
+  }
+
   function onPrimary() {
     if (running) props.onPause();
     else if (paused) props.onResume();
@@ -203,18 +223,43 @@ export function FocusScreen(props: FocusScreenProps) {
           </button>
         </div>
         {cat.autoStart ? <p className="mt-2 text-sm font-semibold text-ink">Автозапуск включён</p> : null}
-        <div className="mt-3 flex items-end justify-center gap-2 sm:gap-4">
-          <div className="@container relative aspect-square w-[min(18rem,calc(100%-7.5rem))] shrink-0 sm:w-72">
+        <div className="mx-auto mt-3 grid w-full max-w-xl grid-cols-[minmax(0,1fr)_7.5rem] items-start gap-x-2 sm:grid-cols-[minmax(0,1fr)_13rem] sm:gap-x-4">
+          <div className="@container relative mx-auto aspect-square w-full max-w-72">
             <Ring progress={progress} tone={tone} />
             <p aria-hidden="true" className="absolute inset-0 flex items-center justify-center font-sans text-[26cqw] leading-none font-semibold tabular-nums text-ink">{formatClock(left)}</p>
           </div>
-          <div className="relative h-28 w-28 shrink-0 sm:h-52 sm:w-52" aria-hidden="true">
-            <div
-              className="absolute inset-0"
-              style={reduced ? undefined : { transform: session?.phase === 'break' && step ? 'translateX(8px)' : 'translateX(0)', transition: 'transform 1.6s ease' }}
-            >
-              <CatSprite clip={clip} face={face} reduced={reduced} onFinished={() => setGroom(false)} />
-            </div>
+          <div className="relative mx-auto aspect-square w-full" aria-hidden={feeding ? undefined : true}>
+            {feeding ? (
+              <TreatSprite
+                kind={feeding}
+                reduced={reduced}
+                onDone={() => {
+                  feedLock.current = false;
+                  setFeeding(null);
+                }}
+              />
+            ) : (
+              <div
+                className="absolute inset-0"
+                style={reduced ? undefined : { transform: session?.phase === 'break' && step ? 'translateX(8px)' : 'translateX(0)', transition: 'transform 1.6s ease' }}
+              >
+                <CatSprite clip={clip} face={face} reduced={reduced} onFinished={() => setGroom(false)} />
+              </div>
+            )}
+          </div>
+          <p className="mt-2 min-h-5 text-center text-sm text-ink">{offer.line}</p>
+          <div className="mt-2 flex flex-col items-stretch gap-1">
+            {offer.available.map((kind) => (
+              <button
+                key={kind}
+                type="button"
+                disabled={Boolean(feeding)}
+                onClick={() => void feed(kind)}
+                className="treat-button"
+              >
+                {kind === 'whiskas' ? 'Угостить Whiskas' : 'Угостить Sheba'}
+              </button>
+            ))}
           </div>
         </div>
         {doneFocus ? <p className="mt-3 text-center text-sm text-ink">Отличный подход. Время отдохнуть</p> : null}

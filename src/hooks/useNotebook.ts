@@ -26,6 +26,7 @@ import {
   notebookIsEmpty,
   parseNotebook,
   applyFocus,
+  markTreatFed,
   setCatPrefs,
   setFocus,
   setHabitMark,
@@ -46,8 +47,10 @@ import {
   type TaskDuration,
   type WeekItem,
 } from '../lib/notebook';
-import type { CatPrefs, FocusChange, FocusSession } from '../lib/focusSession';
+import type { CatPrefs, FocusChange, FocusSession, TreatKind } from '../lib/focusSession';
 import { applyTheme } from '../lib/theme';
+import { localDateKey } from '../lib/date';
+import { readTreatMirror, treatMirrorKey } from '../lib/treats';
 import type { DayPart, Priority, RepeatKind } from '../types';
 
 type Status = 'loading' | 'anon' | 'ready';
@@ -209,6 +212,12 @@ export function useNotebook() {
     setStatus('anon');
   }
 
+  function feedTreat(date: string, kind: TreatKind) {
+    if (bookRef.current.cat.treats.some((item) => item.date === date && item[kind])) return;
+    commit((book) => markTreatFed(book, date, kind));
+  }
+  useTreatMirror(login, feedTreat);
+
   return {
     status,
     login,
@@ -254,5 +263,29 @@ export function useNotebook() {
       return change ? next.tasks.find((task) => task.id === change.taskId)?.focusMs ?? 0 : 0;
     },
     setCat: (cat: CatPrefs) => commit((book) => setCatPrefs(book, cat)),
+    feedTreat,
   };
+}
+
+function useTreatMirror(login: string, feed: (date: string, kind: TreatKind) => void) {
+  const feedRef = useRef(feed);
+  useEffect(() => {
+    feedRef.current = feed;
+  });
+  useEffect(() => {
+    if (!login) return;
+    const apply = () => {
+      const mirror = readTreatMirror(login);
+      const today = localDateKey();
+      if (!mirror || mirror.date !== today) return;
+      if (mirror.whiskas) feedRef.current(today, 'whiskas');
+      if (mirror.sheba) feedRef.current(today, 'sheba');
+    };
+    apply();
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === treatMirrorKey(login)) apply();
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, [login]);
 }
