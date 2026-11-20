@@ -1,7 +1,8 @@
-import { addDays, isDateKey, occurrenceDates, weekday } from '../../server/recurrence.ts';
+import { addDays, isDateKey, monthDay, occurrenceDates, weekday } from '../../server/recurrence.ts';
 import type { DayPart, Priority, RepeatKind } from '../types';
 import type { LegacyStoredTask } from '../types';
 import { defaultCatPrefs, parseCatPrefs, parseFocusSession, type CatPrefs, type FocusChange, type FocusSession } from './focusSession.ts';
+import { normalizeSchedule, sameSchedule } from './schedule.ts';
 
 export type AppMode = 'habits' | 'planner' | 'focus';
 export type AppTheme = 'blue' | 'pink' | 'yellow' | 'dark';
@@ -14,6 +15,8 @@ export type SeriesRule = {
   priority: Priority;
   repeatKind: RepeatKind;
   weekdays: number[];
+  interval: number;
+  monthDay: number | null;
   start: string;
   until: string | null;
 };
@@ -98,11 +101,16 @@ export type TaskDraft = {
   priority: Priority;
   repeatKind: RepeatKind | 'none';
   weekdays: number[];
+  interval?: number;
+  until?: string | null;
+  monthDay?: number | null;
+  note?: string | null;
 };
 
 const PARTS = new Set<DayPart>(['morning', 'afternoon', 'evening', 'anytime']);
 const PRIORITIES = new Set<Priority>(['high', 'normal', 'low']);
-const REPEATS = new Set<RepeatKind>(['daily', 'weekdays', 'weekly']);
+const SERIES_REPEATS = new Set<RepeatKind>(['daily', 'weekdays', 'weekly', 'monthly']);
+const HABIT_REPEATS = new Set<RepeatKind>(['daily', 'weekdays', 'weekly']);
 const MODES = new Set<AppMode>(['habits', 'planner', 'focus']);
 const THEMES = new Set<AppTheme>(['blue', 'pink', 'yellow', 'dark']);
 
@@ -164,6 +172,31 @@ function cleanWeekdays(days: number[]) {
   return [...new Set(days.filter((day) => day >= 0 && day <= 6))].sort((a, b) => a - b);
 }
 
+function draftNote(note: string | null | undefined) {
+  const text = note?.trim().slice(0, 120) ?? '';
+  return text || null;
+}
+
+function ruleFromDraft(id: string, title: string, dayPart: DayPart, priority: Priority, draft: TaskDraft, start: string): SeriesRule {
+  const schedule = normalizeSchedule(draft, draft.date || start);
+  return {
+    id,
+    title,
+    dayPart,
+    priority,
+    repeatKind: schedule.repeatKind === 'none' ? 'daily' : schedule.repeatKind,
+    weekdays: schedule.weekdays,
+    interval: schedule.interval,
+    monthDay: schedule.monthDay,
+    start,
+    until: schedule.until,
+  };
+}
+
+function scheduleOf(rule: SeriesRule) {
+  return normalizeSchedule(rule, rule.start);
+}
+
 function occurs(kind: RepeatKind, days: number[], start: string, until: string | null, date: string) {
   return occurrenceDates({ kind, weekdays: days, start, until, from: date, to: date }).length === 1;
 }
@@ -179,6 +212,8 @@ export function materialize(book: Notebook, from: string, to: string, now = new 
       until: rule.until,
       from,
       to,
+      interval: rule.interval,
+      monthDay: rule.monthDay,
     });
     for (const original of dates) {
       const taken = tasks.some((task) => task.seriesId === rule.id && task.originalDate === original)
@@ -336,9 +371,8 @@ export function assignWeekItem(book: Notebook, id: string, date: string, now = n
 export function createTask(book: Notebook, draft: TaskDraft, now = new Date().toISOString()): Notebook {
   const title = draft.title.trim().slice(0, 160);
   if (!title || !isDateKey(draft.date)) return book;
-  const weekdays = cleanWeekdays(draft.weekdays);
-  if (draft.repeatKind === 'weekly' && weekdays.length === 0) return book;
-  if (draft.repeatKind === 'none') {
+  const schedule = normalizeSchedule(draft, draft.date);
+  if (schedule.repeatKind === 'none') {
     return {
       ...book,
       tasks: [...book.tasks, {
@@ -357,23 +391,20 @@ export function createTask(book: Notebook, draft: TaskDraft, now = new Date().to
         weekdays: [],
         deleted: false,
         focusMs: 0,
-        note: null,
+        note: draftNote(draft.note),
         duration: null,
       }],
     };
   }
   const seriesId = createId();
-  const series: SeriesRule = {
-    id: seriesId,
-    title,
-    dayPart: draft.dayPart,
-    priority: draft.priority,
-    repeatKind: draft.repeatKind,
-    weekdays,
-    start: draft.date,
-    until: null,
+  const series = ruleFromDraft(seriesId, title, draft.dayPart, draft.priority, { ...draft, ...schedule }, draft.date);
+  const made = materialize({ ...book, series: [...book.series, series] }, draft.date, addDays(draft.date, 120), now);
+  const note = draftNote(draft.note);
+  if (!note) return made;
+  return {
+    ...made,
+    tasks: made.tasks.map((task) => task.seriesId === seriesId && task.originalDate === draft.date ? { ...task, note } : task),
   };
-  return materialize({ ...book, series: [...book.series, series] }, draft.date, addDays(draft.date, 120), now);
 }
 
 export function toggleTask(book: Notebook, id: string, now = new Date().toISOString()): Notebook {
@@ -513,9 +544,9 @@ export function updateTask(book: Notebook, id: string, draft: TaskDraft, scope: 
   const title = draft.title.trim().slice(0, 160);
   const task = book.tasks.find((item) => item.id === id && !item.deleted);
   if (!task || !title || !isDateKey(draft.date)) return book;
-  const weekdays = cleanWeekdays(draft.weekdays);
-  const repeat = draft.repeatKind;
-  if (repeat === 'weekly' && weekdays.length === 0) return book;
+  const schedule = normalizeSchedule(draft, draft.date);
+  const repeat = schedule.repeatKind;
+  const weekdays = schedule.weekdays;
   const patch = (item: NotebookTask, extra: Partial<NotebookTask> = {}): NotebookTask => ({
     ...item,
     title,
@@ -525,43 +556,35 @@ export function updateTask(book: Notebook, id: string, draft: TaskDraft, scope: 
     exception: true,
     ...extra,
   });
+  const rule = task.seriesId ? book.series.find((item) => item.id === task.seriesId) : undefined;
+  const sameSeries = rule ? sameSchedule(scheduleOf(rule), schedule) : false;
+  const detach = () => ({
+    ...book,
+    skips: task.seriesId ? [...book.skips, { seriesId: task.seriesId, originalDate: task.originalDate || task.date }] : book.skips,
+    tasks: book.tasks.map((item) => item.id === id ? { ...patch(item), seriesId: null, repeatKind: null, weekdays: [] } : item),
+  });
 
   if (scope === 'one' || !task.seriesId) {
     let next: Notebook = { ...book, tasks: book.tasks.map((item) => item.id === id ? patch(item) : item) };
     if (!task.seriesId && repeat !== 'none') {
       const seriesId = createId();
+      const created = ruleFromDraft(seriesId, title, draft.dayPart, draft.priority, { ...draft, ...schedule }, draft.date);
       next = {
         ...next,
-        series: [...next.series, {
-          id: seriesId,
-          title,
-          dayPart: draft.dayPart,
-          priority: draft.priority,
-          repeatKind: repeat,
-          weekdays,
-          start: task.originalDate || task.date,
-          until: null,
-        }],
-        tasks: next.tasks.map((item) => item.id === id ? { ...item, seriesId, originalDate: item.originalDate || item.date, repeatKind: repeat, weekdays } : item),
+        series: [...next.series, created],
+        tasks: next.tasks.map((item) => item.id === id ? { ...item, seriesId, originalDate: draft.date, repeatKind: repeat, weekdays } : item),
       };
       return materialize(next, draft.date, addDays(draft.date, 120), now);
     }
-    if (task.seriesId && repeat === 'none') {
-      return {
-        ...next,
-        skips: [...next.skips, { seriesId: task.seriesId, originalDate: task.originalDate || task.date }],
-        tasks: next.tasks.map((item) => item.id === id ? { ...patch(item), seriesId: null, repeatKind: null, weekdays: [] } : item),
-      };
-    }
+    if (task.seriesId && (repeat === 'none' || !sameSeries)) return detach();
     return next;
   }
 
   const original = task.originalDate || task.date;
-  const samePattern = repeat !== 'none' && repeat === task.repeatKind && weekdays.join(',') === task.weekdays.join(',');
-  if (samePattern) {
+  if (sameSeries) {
     return {
       ...book,
-      series: book.series.map((rule) => rule.id === task.seriesId ? { ...rule, title, dayPart: draft.dayPart, priority: draft.priority } : rule),
+      series: book.series.map((item) => item.id === task.seriesId ? { ...item, title, dayPart: draft.dayPart, priority: draft.priority } : item),
       tasks: book.tasks.map((item) => {
         if (item.id === id) return { ...patch(item), exception: draft.date !== original };
         if (item.seriesId === task.seriesId && item.originalDate && item.originalDate >= original && !item.exception && !item.completed && !item.deleted) {
@@ -575,7 +598,7 @@ export function updateTask(book: Notebook, id: string, draft: TaskDraft, scope: 
   const until = addDays(original, -1);
   let next: Notebook = {
     ...book,
-    series: book.series.map((rule) => rule.id === task.seriesId ? { ...rule, until } : rule),
+    series: book.series.map((item) => item.id === task.seriesId ? { ...item, until } : item),
     tasks: book.tasks.map((item) => {
       if (item.seriesId === task.seriesId && item.originalDate && item.originalDate >= original && !item.exception && !item.completed) {
         return { ...item, deleted: true };
@@ -584,42 +607,57 @@ export function updateTask(book: Notebook, id: string, draft: TaskDraft, scope: 
     }),
   };
   if (repeat === 'none') {
-    next = {
+    return {
       ...next,
       tasks: next.tasks.map((item) => item.id === id ? { ...patch(item), seriesId: null, repeatKind: null, weekdays: [], deleted: false } : item),
     };
-    return next;
   }
   const seriesId = createId();
+  const created = ruleFromDraft(seriesId, title, draft.dayPart, draft.priority, { ...draft, ...schedule }, draft.date);
   next = {
     ...next,
-    series: [...next.series, {
-      id: seriesId,
-      title,
-      dayPart: draft.dayPart,
-      priority: draft.priority,
-      repeatKind: repeat,
-      weekdays,
-      start: original,
-      until: null,
-    }],
+    series: [...next.series, created],
     tasks: next.tasks.map((item) => item.id === id ? {
       ...patch(item),
       seriesId,
-      originalDate: original,
-      exception: draft.date !== original,
+      originalDate: draft.date,
+      exception: false,
       repeatKind: repeat,
       weekdays,
       deleted: false,
     } : item),
   };
-  return materialize(next, original, addDays(original, 120), now);
+  return materialize(next, draft.date, addDays(draft.date, 120), now);
+}
+
+export function deleteFollowingOccurrences(book: Notebook, id: string): Notebook {
+  const task = book.tasks.find((item) => item.id === id && !item.deleted);
+  if (!task) return book;
+  if (!task.seriesId) return skipThisOccurrence(book, id);
+  const original = task.originalDate || task.date;
+  const until = addDays(original, -1);
+  return {
+    ...book,
+    focusId: book.focusId === id ? null : book.focusId,
+    series: book.series.map((rule) => {
+      if (rule.id !== task.seriesId) return rule;
+      const nextUntil = rule.until && rule.until < until ? rule.until : until;
+      return { ...rule, until: nextUntil };
+    }),
+    tasks: book.tasks.map((item) => {
+      if (item.id === id) return { ...item, deleted: true };
+      if (item.seriesId !== task.seriesId || item.deleted || item.completed) return item;
+      const itemDate = item.originalDate || item.date;
+      if (itemDate >= original) return { ...item, deleted: true };
+      return item;
+    }),
+  };
 }
 
 export function createHabit(book: Notebook, title: string, repeatKind: RepeatKind, weekdays: number[], start: string): Notebook {
   const name = title.trim().slice(0, 160);
   const days = cleanWeekdays(weekdays);
-  if (!name || !isDateKey(start) || !REPEATS.has(repeatKind)) return book;
+  if (!name || !isDateKey(start) || !HABIT_REPEATS.has(repeatKind)) return book;
   if (repeatKind === 'weekly' && days.length === 0) return book;
   return {
     ...book,
@@ -711,8 +749,21 @@ function asPriority(value: unknown): Priority {
   return typeof value === 'string' && PRIORITIES.has(value as Priority) ? value as Priority : 'normal';
 }
 
-function asRepeat(value: unknown): RepeatKind | null {
-  return typeof value === 'string' && REPEATS.has(value as RepeatKind) ? value as RepeatKind : null;
+function asSeriesRepeat(value: unknown): RepeatKind | null {
+  return typeof value === 'string' && SERIES_REPEATS.has(value as RepeatKind) ? value as RepeatKind : null;
+}
+
+function asHabitRepeat(value: unknown): RepeatKind | null {
+  return typeof value === 'string' && HABIT_REPEATS.has(value as RepeatKind) ? value as RepeatKind : null;
+}
+
+function asInterval(value: unknown) {
+  const number = typeof value === 'number' ? value : 1;
+  return Number.isInteger(number) && number >= 1 && number <= 99 ? number : 1;
+}
+
+function asMonthDay(value: unknown) {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 1 && value <= 31 ? value : null;
 }
 
 function asMode(value: unknown): AppMode | null {
@@ -740,7 +791,7 @@ export function parseNotebook(value: unknown): Notebook | null {
       if (!item || typeof item !== 'object') continue;
       const task = item as Record<string, unknown>;
       if (typeof task.id !== 'string' || typeof task.title !== 'string' || typeof task.date !== 'string' || !isDateKey(task.date)) continue;
-      const repeat = asRepeat(task.repeatKind);
+      const repeat = asSeriesRepeat(task.repeatKind);
       book.tasks.push({
         id: task.id,
         title: task.title.trim().slice(0, 160),
@@ -766,7 +817,7 @@ export function parseNotebook(value: unknown): Notebook | null {
     for (const item of raw.series) {
       if (!item || typeof item !== 'object') continue;
       const rule = item as Record<string, unknown>;
-      const repeat = asRepeat(rule.repeatKind);
+      const repeat = asSeriesRepeat(rule.repeatKind);
       if (typeof rule.id !== 'string' || typeof rule.title !== 'string' || typeof rule.start !== 'string' || !repeat || !isDateKey(rule.start)) continue;
       book.series.push({
         id: rule.id,
@@ -775,6 +826,8 @@ export function parseNotebook(value: unknown): Notebook | null {
         priority: asPriority(rule.priority),
         repeatKind: repeat,
         weekdays: Array.isArray(rule.weekdays) ? cleanWeekdays(rule.weekdays.map(Number)) : [],
+        interval: asInterval(rule.interval),
+        monthDay: repeat === 'monthly' ? (asMonthDay(rule.monthDay) ?? monthDay(rule.start)) : null,
         start: rule.start,
         until: typeof rule.until === 'string' && isDateKey(rule.until) ? rule.until : null,
       });
@@ -793,7 +846,7 @@ export function parseNotebook(value: unknown): Notebook | null {
     for (const item of raw.habits) {
       if (!item || typeof item !== 'object') continue;
       const habit = item as Record<string, unknown>;
-      const repeat = asRepeat(habit.repeatKind);
+      const repeat = asHabitRepeat(habit.repeatKind);
       if (typeof habit.id !== 'string' || typeof habit.title !== 'string' || typeof habit.start !== 'string' || !repeat || !isDateKey(habit.start)) continue;
       book.habits.push({
         id: habit.id,

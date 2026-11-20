@@ -8,7 +8,7 @@ import { dateFromKey, formatLocalDate } from '../lib/date';
 import type { DayPart, Priority } from '../types';
 import { AppLink } from './AppLink';
 import { PaperCheck } from './PaperCheck';
-import { PlanTask } from './PlanTask';
+import { AddTask, PlanTask } from './PlanTask';
 
 type PlannerScreenProps = {
   book: Notebook;
@@ -24,6 +24,7 @@ type PlannerScreenProps = {
   onAssignWeekItem: (id: string, date: string) => void;
   onCarry: (from: string, to: string) => void;
   onSkip: (id: string) => void;
+  onDeleteFollowing: (id: string) => void;
   onFocus: (id: string) => void;
   onNote: (id: string, text: string) => void;
 };
@@ -132,10 +133,6 @@ function AddRow({ label, onAdd }: { label: string; onAdd: (title: string) => voi
   );
 }
 
-function createOn(props: PlannerScreenProps, date: string, dayPart: DayPart, title: string) {
-  props.onCreate({ title, date, dayPart, priority: 'normal', repeatKind: 'none', weekdays: [] });
-}
-
 function renderTask(props: PlannerScreenProps, task: NotebookTask, shelves = false) {
   return (
     <PlanTask
@@ -149,6 +146,8 @@ function renderTask(props: PlannerScreenProps, task: NotebookTask, shelves = fal
       onPriority={props.onPriority}
       onUpdate={props.onUpdate}
       onSkip={props.onSkip}
+      onDeleteFollowing={props.onDeleteFollowing}
+      series={props.book.series.find((rule) => rule.id === task.seriesId) ?? null}
       onFocus={props.onFocus}
       onNote={props.onNote}
     />
@@ -178,7 +177,7 @@ export function DayBoard(props: PlannerScreenProps & { date: string }) {
               <p className="px-1 text-sm text-muted">{part.label}</p>
               <ShortRule />
               {rows.map((task) => renderTask(props, task, part.id === 'anytime'))}
-              <AddRow label={`Новая задача, ${part.label}`} onAdd={(title) => createOn(props, date, part.id, title)} />
+              <AddTask date={date} part={part.id} onCreate={props.onCreate} />
             </div>
           );
         })}

@@ -14,7 +14,7 @@ export type DayPart = 'morning' | 'afternoon' | 'evening' | 'anytime';
 
 export type Priority = 'high' | 'normal' | 'low';
 
-export type RepeatKind = 'daily' | 'weekdays' | 'weekly';
+export type RepeatKind = 'daily' | 'weekdays' | 'weekly' | 'monthly';
 
 export type TaskEdit = {
   title: string;

@@ -25,7 +25,9 @@ import {
   setDayNote,
   setTaskDuration,
   setTaskNote,
+  deleteFollowingOccurrences,
   skipThisOccurrence,
+  updateTask,
   nextHabitStatus,
   notebookIsEmpty,
   applyFocus,
@@ -278,6 +280,26 @@ const oldNote = parseNotebook({ version: 1, tasks: [{ id: 'old-note', title: 'С
 assert.equal(oldNote?.tasks[0].note, null);
 why = setTaskNote(why, whyId, '   ');
 assert.equal(why.tasks[0].note, null);
+const notedTask = createTask(emptyNotebook(), {
+  title: 'С заметкой',
+  date: '2026-11-16',
+  dayPart: 'morning',
+  priority: 'high',
+  repeatKind: 'none',
+  weekdays: [],
+  note: '  не забыть  ',
+});
+assert.equal(notedTask.tasks[0].note, 'не забыть');
+const notedDaily = createTask(emptyNotebook(), {
+  title: 'Каждый день',
+  date: '2026-11-16',
+  dayPart: 'morning',
+  priority: 'normal',
+  repeatKind: 'daily',
+  weekdays: [],
+  note: 'утром',
+});
+assert.equal(tasksForDate(notedDaily, '2026-11-16')[0].note, 'утром');
 why = setTaskDuration(why, whyId, 'long');
 assert.equal(why.tasks[0].duration, 'long');
 assert.equal(parseNotebook(JSON.parse(JSON.stringify(why)))?.tasks[0].duration, 'long');
@@ -402,5 +424,91 @@ assert.equal(restored?.focusSession?.taskId, timedId);
 assert.equal(restored?.tasks[0].focusMs, 60_000);
 assert.equal(restored?.cat.reminders, false);
 assert.equal(restored?.cat.sound, false);
+
+let repeated = createTask(emptyNotebook(), {
+  title: 'Страница',
+  date: '2026-11-16',
+  dayPart: 'morning',
+  priority: 'normal',
+  repeatKind: 'daily',
+  weekdays: [],
+}, '2026-11-16T08:00:00.000Z');
+repeated = materialize(repeated, '2026-11-16', '2026-11-18');
+const firstRepeat = tasksForDate(repeated, '2026-11-16')[0];
+const secondRepeat = tasksForDate(repeated, '2026-11-17')[0];
+repeated = toggleTask(repeated, firstRepeat.id, '2026-11-16T21:00:00.000Z');
+assert.equal(tasksForDate(repeated, '2026-11-16')[0].completed, true);
+assert.equal(tasksForDate(repeated, '2026-11-17')[0].completed, false);
+const beforeAnotherPass = repeated.tasks.filter((task) => task.seriesId === firstRepeat.seriesId && !task.deleted).length;
+repeated = materialize(repeated, '2026-11-16', '2026-11-18');
+assert.equal(repeated.tasks.filter((task) => task.seriesId === firstRepeat.seriesId && !task.deleted).length, beforeAnotherPass);
+assert.equal(tasksForDate(repeated, '2026-11-17').filter((task) => task.id === secondRepeat.id).length, 1);
+
+let monthEnd = createTask(emptyNotebook(), {
+  title: 'Отчёт',
+  date: '2026-01-31',
+  dayPart: 'anytime',
+  priority: 'normal',
+  repeatKind: 'monthly',
+  weekdays: [],
+  monthDay: 31,
+}, '2026-01-31T08:00:00.000Z');
+monthEnd = materialize(monthEnd, '2026-01-31', '2026-04-30');
+assert.equal(tasksForDate(monthEnd, '2026-01-31').length, 1);
+assert.equal(tasksForDate(monthEnd, '2026-02-27').length, 0);
+assert.equal(tasksForDate(monthEnd, '2026-02-28').length, 1);
+assert.equal(tasksForDate(monthEnd, '2026-03-31').length, 1);
+assert.equal(tasksForDate(monthEnd, '2026-04-30').length, 1);
+const february = tasksForDate(monthEnd, '2026-02-28')[0];
+monthEnd = skipThisOccurrence(monthEnd, february.id);
+monthEnd = materialize(monthEnd, '2026-01-31', '2026-03-31');
+assert.equal(tasksForDate(monthEnd, '2026-02-28').length, 0);
+assert.equal(tasksForDate(monthEnd, '2026-03-31').length, 1);
+assert.equal(monthEnd.series[0].monthDay, 31);
+assert.equal(monthEnd.series[0].until, null);
+
+let editable = createTask(emptyNotebook(), {
+  title: 'Зарядка',
+  date: '2026-11-16',
+  dayPart: 'morning',
+  priority: 'normal',
+  repeatKind: 'daily',
+  weekdays: [],
+}, '2026-11-16T08:00:00.000Z');
+editable = materialize(editable, '2026-11-16', '2026-11-20');
+const keptDone = tasksForDate(editable, '2026-11-16')[0];
+editable = toggleTask(editable, keptDone.id, '2026-11-16T21:00:00.000Z');
+const changedDay = tasksForDate(editable, '2026-11-18')[0];
+editable = updateTask(editable, changedDay.id, {
+  title: 'Пробежка',
+  date: '2026-11-18',
+  dayPart: 'morning',
+  priority: 'normal',
+  repeatKind: 'daily',
+  weekdays: [],
+}, 'future', '2026-11-18T08:00:00.000Z');
+assert.equal(tasksForDate(editable, '2026-11-16')[0].title, 'Зарядка');
+assert.equal(tasksForDate(editable, '2026-11-16')[0].completed, true);
+assert.equal(tasksForDate(editable, '2026-11-18')[0].title, 'Пробежка');
+assert.equal(tasksForDate(editable, '2026-11-20')[0].title, 'Пробежка');
+const visibleBefore = editable.tasks.filter((task) => !task.deleted && task.title === 'Пробежка').length;
+editable = materialize(editable, '2026-11-16', '2026-11-20');
+assert.equal(editable.tasks.filter((task) => !task.deleted && task.title === 'Пробежка').length, visibleBefore);
+
+const cut = tasksForDate(editable, '2026-11-19')[0];
+editable = deleteFollowingOccurrences(editable, cut.id);
+editable = materialize(editable, '2026-11-16', '2026-11-20');
+assert.equal(tasksForDate(editable, '2026-11-16')[0].completed, true);
+assert.equal(tasksForDate(editable, '2026-11-18').length, 1);
+assert.equal(tasksForDate(editable, '2026-11-19').length, 0);
+assert.equal(tasksForDate(editable, '2026-11-20').length, 0);
+
+const legacySeries = parseNotebook({
+  series: [{ id: 'old', title: 'Пн и ср', start: '2026-11-02', repeatKind: 'weekly', weekdays: [1, 3], until: '2026-12-01' }],
+});
+assert.equal(legacySeries?.series[0].interval, 1);
+assert.equal(legacySeries?.series[0].monthDay, null);
+assert.equal(legacySeries?.series[0].until, '2026-12-01');
+assert.deepEqual(legacySeries?.series[0].weekdays, [1, 3]);
 
 console.log('notebook ok');
