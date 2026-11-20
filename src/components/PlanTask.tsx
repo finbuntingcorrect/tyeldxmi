@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { Flag, Minus, MoreHorizontal, Repeat, X } from 'lucide-react';
+import { Minus, MoreHorizontal, Repeat, X } from 'lucide-react';
 import { addDays } from '../../server/recurrence';
 import { dateFromKey, formatLocalDate } from '../lib/date';
 import type { NotebookTask, SeriesRule, TaskDraft } from '../lib/notebook';
@@ -262,6 +262,15 @@ export function PlanTask({ task, today, series = null, onToggle, onMove, onUpdat
   }
 
   useEffect(() => {
+    if (!open && !removing) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [open, removing]);
+
+  useEffect(() => {
     if (!open) return;
     function onKey(event: KeyboardEvent) {
       if (event.key !== 'Escape') return;
@@ -288,9 +297,13 @@ export function PlanTask({ task, today, series = null, onToggle, onMove, onUpdat
     };
   }, [menu]);
 
+  const overdue = !task.completed && task.date < today;
+  const overdueDate = overdue
+    ? new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long' }).format(dateFromKey(task.date))
+    : '';
   return (
-    <div className="border-b border-line/70">
-      <div className="flex items-center">
+    <div>
+      <div className="flex items-start">
         <PaperCheck
           checked={task.completed}
           label={task.completed ? `Вернуть «${task.title}»` : `Выполнить «${task.title}»`}
@@ -300,22 +313,26 @@ export function PlanTask({ task, today, series = null, onToggle, onMove, onUpdat
           ref={titleButtonRef}
           type="button"
           onClick={openEditor}
-          className={`min-h-11 min-w-0 flex-1 py-2 text-left text-base break-words ${task.completed ? 'text-muted line-through' : 'text-ink'}`}
+          className="min-h-11 min-w-0 flex-1 py-2 text-left text-base break-words text-ink"
         >
-          {task.title}
+          {task.priority === 'high' && !task.completed ? (
+            <span className="task-title-important"><span aria-hidden="true">! </span>{task.title}</span>
+          ) : (
+            <span className={task.completed ? 'text-muted' : task.priority === 'low' ? 'text-low' : undefined}>
+              {task.priority === 'high' ? <span aria-hidden="true">! </span> : null}
+              <span className={task.completed ? 'line-through' : undefined}>{task.title}</span>
+            </span>
+          )}
+          {task.priority === 'high' ? <span className="sr-only"> Важный.</span> : null}
+          {overdue ? <span className="ml-2 align-middle text-xs font-semibold text-overdue">Просрочено {overdueDate}</span> : null}
         </button>
         {savedRepeat.repeatKind !== 'none' ? (
           <span role="img" aria-label={scheduleLabel(savedRepeat)} className="grid h-11 w-7 shrink-0 place-items-center text-muted">
             <Repeat aria-hidden="true" size={15} />
           </span>
         ) : null}
-        {task.priority === 'high' ? (
-          <span role="img" aria-label="Важный" className="grid h-11 w-7 shrink-0 place-items-center text-ink">
-            <Flag aria-hidden="true" size={15} />
-          </span>
-        ) : null}
         {task.priority === 'low' ? (
-          <span role="img" aria-label="Низкий" className="grid h-11 w-7 shrink-0 place-items-center text-muted">
+          <span role="img" aria-label="Низкий" className="grid h-11 w-7 shrink-0 place-items-center text-low">
             <Minus aria-hidden="true" size={15} />
           </span>
         ) : null}
@@ -380,7 +397,7 @@ export function PlanTask({ task, today, series = null, onToggle, onMove, onUpdat
                 <RepeatField date={date} value={repeat} onChange={(next) => { setSchedule(next); setAskScope(false); }} />
                 <NoteField id={noteId} open={noteOpen} note={note} onOpen={() => setNoteOpen(true)} onChange={(value) => { setNote(value); setAskScope(false); }} />
               </div>
-              <div className="flex flex-col gap-2 border-t border-line px-5 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+              <div data-dialog-footer="" className="flex flex-col gap-2 border-t border-line px-5 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
                 {askScope ? (
                   <>
                     <button type="button" onClick={() => commit('one')} className="paper-submit min-h-11">Только это повторение</button>

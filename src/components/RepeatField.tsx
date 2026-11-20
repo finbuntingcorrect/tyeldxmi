@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { weekday } from '../../server/recurrence';
 import { WEEKDAYS } from '../lib/plannerCopy';
 import {
@@ -41,6 +41,7 @@ function daysOf(schedule: RepeatSchedule, date: string) {
 
 export function RepeatField({ date, value, onChange }: RepeatFieldProps) {
   const fieldRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const intervalId = useId();
   const unitId = useId();
   const untilId = useId();
@@ -57,13 +58,36 @@ export function RepeatField({ date, value, onChange }: RepeatFieldProps) {
   useEffect(() => {
     if (!menu && !custom) return;
     function onPointer(event: PointerEvent) {
-      if (!fieldRef.current?.contains(event.target as Node)) {
-        setMenu(false);
-        setCustom(false);
-      }
+      const target = event.target as Node;
+      if (fieldRef.current?.contains(target) || panelRef.current?.contains(target)) return;
+      setMenu(false);
+      setCustom(false);
     }
     document.addEventListener('pointerdown', onPointer);
     return () => document.removeEventListener('pointerdown', onPointer);
+  }, [menu, custom]);
+
+  useLayoutEffect(() => {
+    const panel = panelRef.current;
+    if (!panel) return;
+    function place() {
+      const dialog = fieldRef.current?.closest('[role="dialog"]');
+      if (!(dialog instanceof HTMLElement) || !panel) return;
+      const footer = dialog.querySelector('[data-dialog-footer]');
+      const dialogBox = dialog.getBoundingClientRect();
+      const footerTop = footer instanceof HTMLElement ? footer.getBoundingClientRect().top : dialogBox.bottom;
+      const top = Math.max(dialogBox.top + 8, 8);
+      panel.style.position = 'fixed';
+      panel.style.left = `${dialogBox.left + 16}px`;
+      panel.style.width = `${Math.max(160, dialogBox.width - 32)}px`;
+      panel.style.bottom = `${Math.max(8, window.innerHeight - footerTop + 8)}px`;
+      panel.style.maxHeight = `${Math.max(120, footerTop - top - 8)}px`;
+      panel.style.overflowY = 'auto';
+      panel.style.zIndex = '70';
+    }
+    place();
+    window.addEventListener('resize', place);
+    return () => window.removeEventListener('resize', place);
   }, [menu, custom]);
 
   function openCustom() {
@@ -102,78 +126,131 @@ export function RepeatField({ date, value, onChange }: RepeatFieldProps) {
       >
         Повтор: {scheduleLabel(value)}
       </button>
-      {menu ? (
-        <div role="menu" className="mt-1 border border-line bg-card py-1">
-          {choices.map((choice) => (
+      {menu || custom ? (
+        <div ref={panelRef} className="border border-line bg-card shadow-sm">
+          {menu ? <RepeatMenu choices={choices} date={date} onChange={onChange} onClose={() => setMenu(false)} onCustom={openCustom} /> : null}
+          {custom ? (
+            <CustomPanel
+              intervalId={intervalId}
+              unitId={unitId}
+              untilId={untilId}
+              interval={interval}
+              unit={unit}
+              days={days}
+              until={until}
+              date={date}
+              hint={hint}
+              onInterval={setInterval}
+              onUnit={setUnit}
+              onDays={setDays}
+              onUntil={setUntil}
+              onApply={applyCustom}
+              onCancel={() => setCustom(false)}
+            />
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function RepeatMenu({ choices, date, onChange, onClose, onCustom }: {
+  choices: ReturnType<typeof menuChoices>;
+  date: string;
+  onChange: (next: RepeatSchedule) => void;
+  onClose: () => void;
+  onCustom: () => void;
+}) {
+  return (
+    <div role="menu" className="py-1">
+      {choices.map((choice) => (
+        <button
+          key={choice.id}
+          type="button"
+          role="menuitem"
+          onClick={() => { onChange(presetSchedule(choice.id, date)); onClose(); }}
+          className="block min-h-11 w-full px-3 py-2 text-left text-sm"
+        >
+          <span className="block font-semibold">{choice.label}</span>
+          {choice.hint ? <span className="mt-0.5 block text-xs text-muted">{choice.hint}</span> : null}
+        </button>
+      ))}
+      <div className="mt-1 border-t border-line pt-1">
+        <button type="button" role="menuitem" onClick={onCustom} className="block min-h-11 w-full px-3 text-left text-sm font-semibold">
+          Другое…
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function CustomPanel(props: {
+  intervalId: string;
+  unitId: string;
+  untilId: string;
+  interval: number;
+  unit: Unit;
+  days: number[];
+  until: string | null;
+  date: string;
+  hint: string | null;
+  onInterval: (value: number) => void;
+  onUnit: (value: Unit) => void;
+  onDays: (value: number[] | ((current: number[]) => number[])) => void;
+  onUntil: (value: string | null) => void;
+  onApply: () => void;
+  onCancel: () => void;
+}) {
+  const { interval, unit, days, until, date, hint } = props;
+  return (
+    <div className="px-3 py-3">
+      <p className="text-sm font-semibold">Повторять каждые</p>
+      <div className="mt-2 flex gap-2">
+        <input
+          id={props.intervalId}
+          aria-label="Интервал"
+          type="number"
+          min={1}
+          max={99}
+          inputMode="numeric"
+          value={interval}
+          onChange={(event) => props.onInterval(Number(event.target.value))}
+          className="paper-field w-16 text-base"
+        />
+        <select id={props.unitId} aria-label="Единица повтора" value={unit} onChange={(event) => props.onUnit(event.target.value as Unit)} className="paper-field text-base">
+          <option value="day">{unitNoun(interval, 'день', 'дня', 'дней')}</option>
+          <option value="week">{unitNoun(interval, 'неделю', 'недели', 'недель')}</option>
+          <option value="month">{unitNoun(interval, 'месяц', 'месяца', 'месяцев')}</option>
+        </select>
+      </div>
+      {unit === 'week' ? (
+        <div className="mt-2 flex flex-wrap gap-1">
+          {WEEKDAYS.map((day) => (
             <button
-              key={choice.id}
+              key={day.id}
               type="button"
-              role="menuitem"
-              onClick={() => { onChange(presetSchedule(choice.id, date)); setMenu(false); }}
-              className="block min-h-11 w-full px-3 py-2 text-left text-sm"
+              aria-pressed={days.includes(day.id)}
+              onClick={() => props.onDays((current) => current.includes(day.id) ? current.filter((item) => item !== day.id) : [...current, day.id])}
+              className="paper-choice min-w-11"
             >
-              <span className="block font-semibold">{choice.label}</span>
-              {choice.hint ? <span className="mt-0.5 block text-xs text-muted">{choice.hint}</span> : null}
+              {day.label}
             </button>
           ))}
-          <div className="mt-1 border-t border-line pt-1">
-            <button type="button" role="menuitem" onClick={openCustom} className="block min-h-11 w-full px-3 text-left text-sm font-semibold">
-              Другое…
-            </button>
-          </div>
         </div>
       ) : null}
-      {custom ? (
-        <div className="mt-1 border border-line bg-card px-3 py-3">
-          <p className="text-sm font-semibold">Повторять каждые</p>
-          <div className="mt-2 flex gap-2">
-            <input
-              id={intervalId}
-              aria-label="Интервал"
-              type="number"
-              min={1}
-              max={99}
-              inputMode="numeric"
-              value={interval}
-              onChange={(event) => setInterval(Number(event.target.value))}
-              className="paper-field w-16 text-base"
-            />
-            <select id={unitId} aria-label="Единица повтора" value={unit} onChange={(event) => setUnit(event.target.value as Unit)} className="paper-field text-base">
-              <option value="day">{unitNoun(interval, 'день', 'дня', 'дней')}</option>
-              <option value="week">{unitNoun(interval, 'неделю', 'недели', 'недель')}</option>
-              <option value="month">{unitNoun(interval, 'месяц', 'месяца', 'месяцев')}</option>
-            </select>
-          </div>
-          {unit === 'week' ? (
-            <div className="mt-2 flex flex-wrap gap-1">
-              {WEEKDAYS.map((day) => (
-                <button
-                  key={day.id}
-                  type="button"
-                  aria-pressed={days.includes(day.id)}
-                  onClick={() => setDays((current) => current.includes(day.id) ? current.filter((item) => item !== day.id) : [...current, day.id])}
-                  className="paper-choice min-w-11"
-                >
-                  {day.label}
-                </button>
-              ))}
-            </div>
-          ) : null}
-          <p className="mt-3 text-sm font-semibold">Окончание</p>
-          <div className="mt-1 flex flex-wrap gap-1">
-            <button type="button" aria-pressed={!until} onClick={() => setUntil(null)} className="paper-choice">Без даты</button>
-            <button type="button" aria-pressed={Boolean(until)} onClick={() => setUntil(until || date)} className="paper-choice">До даты</button>
-          </div>
-          {until ? (
-            <input id={untilId} aria-label="Дата окончания" type="date" value={until} onChange={(event) => setUntil(event.target.value || date)} className="paper-field mt-1 text-base" />
-          ) : null}
-          {hint ? <p className="mt-2 text-xs text-muted">{hint}</p> : null}
-          <div className="mt-3 flex gap-2">
-            <button type="button" onClick={applyCustom} className="paper-submit min-h-11 flex-1">Готово</button>
-            <button type="button" onClick={() => setCustom(false)} className="paper-choice min-h-11 flex-1">Отмена</button>
-          </div>
-        </div>
+      <p className="mt-3 text-sm font-semibold">Окончание</p>
+      <div className="mt-1 flex flex-wrap gap-1">
+        <button type="button" aria-pressed={!until} onClick={() => props.onUntil(null)} className="paper-choice">Без даты</button>
+        <button type="button" aria-pressed={Boolean(until)} onClick={() => props.onUntil(until || date)} className="paper-choice">До даты</button>
+      </div>
+      {until ? (
+        <input id={props.untilId} aria-label="Дата окончания" type="date" value={until} onChange={(event) => props.onUntil(event.target.value || date)} className="paper-field mt-1 text-base" />
       ) : null}
+      {hint ? <p className="mt-2 text-xs text-muted">{hint}</p> : null}
+      <div className="mt-3 flex gap-2">
+        <button type="button" onClick={props.onApply} className="paper-submit min-h-11 flex-1">Готово</button>
+        <button type="button" onClick={props.onCancel} className="paper-choice min-h-11 flex-1">Отмена</button>
+      </div>
     </div>
   );
 }
