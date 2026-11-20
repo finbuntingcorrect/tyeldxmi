@@ -175,18 +175,6 @@ html[data-theme='dark'] {
   background-size: 18px 18px;
 }
 
-.day-load-1 {
-  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
-}
-
-.day-load-2 {
-  background: color-mix(in srgb, var(--color-primary) 22%, transparent);
-}
-
-.day-load-3 {
-  background: color-mix(in srgb, var(--color-primary) 34%, transparent);
-}
-
 .paper-field {
   min-height: 2.75rem;
   width: 100%;
