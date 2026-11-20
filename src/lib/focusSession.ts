@@ -1,10 +1,15 @@
-export const FOCUS_PRESETS = [15, 20, 25, 45] as const;
+export const FOCUS_PRESETS = [20, 25, 45] as const;
 export const DEFAULT_FOCUS_MINUTES = 20;
 export const BREAK_MINUTES = 5;
+export const LONG_BREAK_MINUTES = 15;
+export const DEFAULT_ROUNDS = 4;
 export const MIN_FOCUS_MINUTES = 1;
 export const MAX_FOCUS_MINUTES = 180;
+export const AUTO_ADVANCE_WINDOW_MS = 5_000;
 
 export type FocusPhase = 'focus' | 'break';
+export type BreakKind = 'short' | 'long';
+export type PhaseChoice = 'focus' | BreakKind;
 
 export type FocusSession = {
   taskId: string;
@@ -17,8 +22,18 @@ export type FocusSession = {
   /** Focus time of the current slice already added to the task. */
   sliceAppliedMs: number;
   settled: boolean;
+  /** True only when the phase reached 00:00. An early finish stays false. */
+  full: boolean;
+  plannedBreak: BreakKind;
   reminded: boolean;
   signalId: string;
+};
+
+export type FocusChange = {
+  taskId: string;
+  addMs?: number;
+  focusMs?: number;
+  resetCycle?: boolean;
 };
 
 export type CatPrefs = {
@@ -30,6 +45,15 @@ export type CatPrefs = {
   reminders: boolean;
   x: number | null;
   y: number | null;
+  pomodoroMinutes: number;
+  shortMinutes: number;
+  longMinutes: number;
+  rounds: number;
+  autoStart: boolean;
+  focusDate: string;
+  focusCompleted: number;
+  focusMsToday: number;
+  focusCycle: number;
 };
 
 export type CatPose = 'greet' | 'sleep' | 'idle' | 'focus' | 'pause' | 'remind' | 'break' | 'success';
@@ -44,6 +68,15 @@ export function defaultCatPrefs(): CatPrefs {
     reminders: false,
     x: null,
     y: null,
+    pomodoroMinutes: DEFAULT_FOCUS_MINUTES,
+    shortMinutes: BREAK_MINUTES,
+    longMinutes: LONG_BREAK_MINUTES,
+    rounds: DEFAULT_ROUNDS,
+    autoStart: false,
+    focusDate: '',
+    focusCompleted: 0,
+    focusMsToday: 0,
+    focusCycle: 0,
   };
 }
 
@@ -84,7 +117,25 @@ export function formatClock(ms: number): string {
   const safe = Math.max(0, Math.ceil(ms / 1000));
   const minutes = Math.floor(safe / 60);
   const seconds = safe % 60;
-  return `${minutes}:${String(seconds).padStart(2, '0')}`;
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+}
+
+export function plannedBreakFor(cycle: number, rounds: number): BreakKind {
+  const size = Math.max(1, Math.round(rounds) || DEFAULT_ROUNDS);
+  return cycle + 1 >= size ? 'long' : 'short';
+}
+
+export function shouldAutoAdvance(endsAt: number | null, now: number, auto: boolean): boolean {
+  if (!auto || endsAt == null) return false;
+  return now >= endsAt && now - endsAt <= AUTO_ADVANCE_WINDOW_MS;
+}
+
+export function countWord(count: number, one: string, few: string, many: string) {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  if (mod10 === 1 && mod100 !== 11) return one;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few;
+  return many;
 }
 
 function slice(taskId: string, phase: FocusPhase, focusMinutes: number, durationMs: number, now: number, signalId: string, reminded = false): FocusSession {
@@ -98,6 +149,8 @@ function slice(taskId: string, phase: FocusPhase, focusMinutes: number, duration
     paused: false,
     sliceAppliedMs: 0,
     settled: false,
+    full: false,
+    plannedBreak: 'short',
     reminded,
     signalId,
   };
@@ -146,6 +199,7 @@ export function settleSession(session: FocusSession, now: number): { session: Fo
     session: {
       ...session,
       settled: true,
+      full: true,
       pausedRemainingMs: 0,
       sliceAppliedMs: session.phase === 'focus' ? session.durationMs : session.sliceAppliedMs,
     },
@@ -160,6 +214,7 @@ export function finishEarly(session: FocusSession, now: number): { session: Focu
     session: {
       ...session,
       settled: true,
+      full: false,
       paused: true,
       endsAt: null,
       pausedRemainingMs: 0,
@@ -168,8 +223,15 @@ export function finishEarly(session: FocusSession, now: number): { session: Focu
   };
 }
 
-export function startBreak(session: FocusSession, now: number, signalId: string): FocusSession {
-  return slice(session.taskId, 'break', session.focusMinutes, BREAK_MINUTES * 60_000, now, signalId, true);
+export function startBreak(session: FocusSession, now: number, signalId: string, minutes = BREAK_MINUTES, kind: BreakKind = 'short'): FocusSession {
+  const next = slice(session.taskId, 'break', session.focusMinutes, Math.max(1, minutes) * 60_000, now, signalId, true);
+  return { ...next, plannedBreak: kind };
+}
+
+export function startIdle(taskId: string, phase: PhaseChoice, focusMinutes: number, phaseMinutes: number, now: number, signalId: string): FocusSession {
+  if (phase === 'focus') return startFocus(taskId, focusMinutes, now, signalId);
+  const next = slice(taskId, 'break', focusMinutes, Math.max(1, phaseMinutes) * 60_000, now, signalId, true);
+  return { ...next, plannedBreak: phase };
 }
 
 export function startAnother(session: FocusSession, now: number, signalId: string): FocusSession {
@@ -239,9 +301,15 @@ export function parseFocusSession(value: unknown): FocusSession | null {
     paused: raw.paused === true,
     sliceAppliedMs: typeof raw.sliceAppliedMs === 'number' ? Math.max(0, raw.sliceAppliedMs) : 0,
     settled: raw.settled === true,
+    full: typeof raw.full === 'boolean' ? raw.full : raw.settled === true && raw.paused !== true,
+    plannedBreak: raw.plannedBreak === 'long' ? 'long' : 'short',
     reminded: raw.reminded === true,
     signalId: raw.signalId,
   };
+}
+
+function storedMinutes(value: unknown, fallback: number, min: number, max: number) {
+  return typeof value === 'number' && Number.isInteger(value) && value >= min && value <= max ? value : fallback;
 }
 
 export function parseCatPrefs(value: unknown): CatPrefs {
@@ -258,5 +326,14 @@ export function parseCatPrefs(value: unknown): CatPrefs {
     reminders: raw.reminders === true,
     x: typeof raw.x === 'number' ? raw.x : null,
     y: typeof raw.y === 'number' ? raw.y : null,
+    pomodoroMinutes: storedMinutes(raw.pomodoroMinutes, base.pomodoroMinutes, MIN_FOCUS_MINUTES, MAX_FOCUS_MINUTES),
+    shortMinutes: storedMinutes(raw.shortMinutes, base.shortMinutes, 1, 60),
+    longMinutes: storedMinutes(raw.longMinutes, base.longMinutes, 1, 60),
+    rounds: storedMinutes(raw.rounds, base.rounds, 1, 8),
+    autoStart: raw.autoStart === true,
+    focusDate: typeof raw.focusDate === 'string' ? raw.focusDate : '',
+    focusCompleted: typeof raw.focusCompleted === 'number' && raw.focusCompleted > 0 ? Math.round(raw.focusCompleted) : 0,
+    focusMsToday: typeof raw.focusMsToday === 'number' && raw.focusMsToday > 0 ? Math.round(raw.focusMsToday) : 0,
+    focusCycle: typeof raw.focusCycle === 'number' && raw.focusCycle > 0 ? Math.round(raw.focusCycle) : 0,
   };
 }

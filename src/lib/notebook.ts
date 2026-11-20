@@ -1,7 +1,7 @@
 import { addDays, isDateKey, occurrenceDates, weekday } from '../../server/recurrence.ts';
 import type { DayPart, Priority, RepeatKind } from '../types';
 import type { LegacyStoredTask } from '../types';
-import { defaultCatPrefs, parseCatPrefs, parseFocusSession, type CatPrefs, type FocusSession } from './focusSession.ts';
+import { defaultCatPrefs, parseCatPrefs, parseFocusSession, type CatPrefs, type FocusChange, type FocusSession } from './focusSession.ts';
 
 export type AppMode = 'habits' | 'planner' | 'focus';
 export type AppTheme = 'blue' | 'pink' | 'yellow' | 'dark';
@@ -658,7 +658,18 @@ export function fromLegacyTasks(tasks: LegacyStoredTask[]): Notebook {
   return book;
 }
 
-export function applyFocus(book: Notebook, session: FocusSession | null, change?: { taskId: string; addMs?: number; focusMs?: number }, at = Date.now()): Notebook {
+function localKey(at: number) {
+  const date = new Date(at);
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
+export function applyFocus(book: Notebook, session: FocusSession | null, change?: FocusChange, at = Date.now()): Notebook {
+  const date = localKey(at);
+  let cat = book.cat.focusDate === date
+    ? book.cat
+    : { ...book.cat, focusDate: date, focusCompleted: 0, focusMsToday: 0 };
   const tasks = change
     ? book.tasks.map((task) => {
         if (task.id !== change.taskId) return task;
@@ -666,7 +677,15 @@ export function applyFocus(book: Notebook, session: FocusSession | null, change?
         return { ...task, focusMs: Math.max(0, Math.round(focusMs)) };
       })
     : book.tasks;
-  return { ...book, tasks, focusSession: session, focusAt: at };
+  if (change?.addMs && change.addMs > 0 && session?.phase === 'focus') {
+    cat = { ...cat, focusMsToday: cat.focusMsToday + Math.round(change.addMs) };
+  }
+  const sameFull = book.focusSession?.full === true && book.focusSession.signalId === session?.signalId;
+  if (session?.phase === 'focus' && session.settled && session.full && !sameFull) {
+    cat = { ...cat, focusCompleted: cat.focusCompleted + 1, focusCycle: cat.focusCycle + 1 };
+  }
+  if (change?.resetCycle) cat = { ...cat, focusCycle: 0 };
+  return { ...book, tasks, cat, focusSession: session, focusAt: at };
 }
 
 export function setCatPrefs(book: Notebook, cat: CatPrefs): Notebook {

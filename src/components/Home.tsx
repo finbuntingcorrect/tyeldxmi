@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react';
 import { localDateKey, dateFromKey, formatLocalDate } from '../lib/date';
-import { DEFAULT_FOCUS_MINUTES, catPose } from '../lib/focusSession';
+import { catPose } from '../lib/focusSession';
 import { habitsForDate, tasksForDate } from '../lib/notebook';
 import { unlockSound } from '../lib/focusSound';
 import { useFocusController } from '../hooks/useFocusController';
 import { useNotebook } from '../hooks/useNotebook';
-import type { Priority } from '../types';
 import { AccountGate, CabinetSplash } from './AccountGate';
 import { CatCompanion } from './CatCompanion';
 import { FocusBar } from './FocusBar';
@@ -22,8 +21,7 @@ export function Home() {
   const [burst, setBurst] = useState(0);
   const [settings, setSettings] = useState(false);
   const [greeting, setGreeting] = useState(false);
-  const [pickedMinutes, setPickedMinutes] = useState<number | null>(null);
-  const [conflict, setConflict] = useState<string | null>(null);
+  const [conflict, setConflict] = useState<{ id: string | null } | null>(null);
   const [reduced, setReduced] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   const [soundNote, setSoundNote] = useState<string | null>(null);
   const book = notebook.book;
@@ -35,6 +33,11 @@ export function Home() {
     reminders: book.cat.reminders,
     sound: book.cat.sound,
     volume: book.cat.volume,
+    autoStart: book.cat.autoStart,
+    rounds: book.cat.rounds,
+    cycle: book.cat.focusCycle,
+    shortMinutes: book.cat.shortMinutes,
+    longMinutes: book.cat.longMinutes,
     onApply: notebook.applyFocus,
   });
 
@@ -101,7 +104,6 @@ export function Home() {
     : open
       ? 'Есть незакрытые дела'
       : todayTasks.length === 0 && todayHabits.length === 0 ? 'На сегодня тихо' : 'Можно отдохнуть';
-  const minutes = pickedMinutes ?? book.focusSession?.focusMinutes ?? DEFAULT_FOCUS_MINUTES;
   const showingGreeting = greeting && mode === 'planner';
   const pose = catPose({
     greeting: showingGreeting,
@@ -125,31 +127,37 @@ export function Home() {
 
   function requestFocus(taskId: string) {
     const current = book.focusSession;
-    if (current && current.taskId !== taskId) {
-      setConflict(taskId);
+    if (current && !current.settled && current.taskId !== taskId) {
+      setConflict({ id: taskId });
       return;
     }
     notebook.setFocus(taskId, today);
     notebook.chooseMode('focus');
   }
 
+  function selectTask(id: string | null) {
+    const current = book.focusSession;
+    if (current && !current.settled && (current.taskId || null) !== id) {
+      setConflict({ id });
+      return;
+    }
+    notebook.setFocus(id, today);
+  }
+
   function confirmConflict() {
     if (!conflict) return;
     if (book.focusSession && !book.focusSession.settled) focus.finish();
     focus.clear();
-    notebook.setFocus(conflict, today);
+    notebook.setFocus(conflict.id, today);
     notebook.chooseMode('focus');
     setConflict(null);
   }
 
-  function startSelected() {
-    if (!book.focusId) return;
-    const current = book.focusSession;
-    if (current && !current.settled && current.taskId !== book.focusId) {
-      setConflict(book.focusId);
-      return;
-    }
-    focus.start(book.focusId, minutes);
+  function addFocusTask(title: string) {
+    const before = book.tasks.length;
+    const next = notebook.createTask({ title, date: today, dayPart: 'anytime', priority: 'normal', repeatKind: 'none', weekdays: [] });
+    const created = next.tasks.length > before ? next.tasks[next.tasks.length - 1] : null;
+    if (created) selectTask(created.id);
   }
 
   function completeSessionTask() {
@@ -174,8 +182,8 @@ export function Home() {
 
   return (
     <div style={{ paddingRight: 'var(--cat-lane, 0px)' }}>
-    <div className={`mx-auto w-full min-w-0 max-w-6xl px-2 py-4 sm:px-6 sm:py-10 ${session ? 'pb-40' : ''}`}>
-      <div className={`min-w-0 overflow-x-clip border border-line bg-card ${session ? 'pb-36' : ''}`}>
+    <div className={`mx-auto w-full min-w-0 max-w-6xl px-2 py-4 sm:px-6 sm:py-10 ${session && !session.settled && mode !== 'focus' ? 'pb-28' : ''}`}>
+      <div className="min-w-0 overflow-x-clip border border-line bg-card">
         <header className="flex flex-col gap-2 px-3 py-4 sm:flex-row sm:items-end sm:justify-between sm:px-6">
           <div className="min-w-0">
             <h1 className="text-2xl leading-tight break-words sm:text-4xl">{book.name ? `Привет, ${book.name}` : 'Today Cat'}</h1>
@@ -227,21 +235,33 @@ export function Home() {
           <FocusScreen
             book={book}
             today={today}
-            minutes={minutes}
             session={session}
-            onMinutes={setPickedMinutes}
-            onCreate={(title, priority: Priority) => notebook.createTask({ title, date: today, dayPart: 'anytime', priority, repeatKind: 'none', weekdays: [] })}
+            now={focus.now}
+            reduced={reduced}
+            notice={focus.notice ?? soundNote}
+            remind={focus.remindOpen}
+            onStartPhase={(phase, taskId, minutes) => { focus.startPhase(taskId, phase, minutes, book.cat.pomodoroMinutes); }}
+            onPause={focus.pause}
+            onResume={focus.resume}
+            onFinish={focus.finish}
+            onBreak={focus.beginBreak}
+            onSkipBreak={focus.skipBreak}
+            onAgain={() => focus.again(book.cat.pomodoroMinutes)}
+            onReset={() => { if (session && !session.settled) focus.finish(); focus.clear(); }}
+            onCompleteTask={completeSessionTask}
             onToggle={toggle}
-            onPriority={notebook.setPriority}
-            onFocus={(id) => { if (id) requestFocus(id); else notebook.setFocus(null, today); }}
-            onMove={notebook.moveTask}
-            onStart={startSelected}
+            onSelectTask={selectTask}
+            onCreate={addFocusTask}
+            onMinutes={(value) => notebook.setCat({ ...book.cat, pomodoroMinutes: value })}
+            onToggleSound={() => void toggleSound()}
+            onDismissNotice={() => { focus.clearNotice(); setSoundNote(null); }}
+            onDismissRemind={focus.dismissRemind}
           />
         ) : null}
       </div>
       <CatCompanion
         pose={pose}
-        hidden={book.cat.hidden}
+        hidden={book.cat.hidden || mode === 'focus'}
         pinned={book.cat.pinned}
         walks={book.cat.walks}
         sound={book.cat.sound}
@@ -257,30 +277,23 @@ export function Home() {
         onWorking={focus.dismissRemind}
         onPause={() => { focus.dismissRemind(); focus.pause(); }}
       />
-      {session ? (
+      {session && !session.settled && mode !== 'focus' ? (
         <FocusBar
           session={session}
-          title={sessionTask?.title ?? 'Задача недоступна'}
+          title={sessionTask?.title ?? 'Свободная сессия'}
           remaining={focus.remaining}
-          minutes={minutes}
-          notice={focus.notice ?? soundNote}
+          onOpen={() => notebook.chooseMode('focus')}
           onPause={focus.pause}
           onResume={focus.resume}
-          onFinish={focus.finish}
-          onBreak={focus.beginBreak}
-          onAgain={() => focus.again(minutes)}
-          onComplete={completeSessionTask}
-          onClose={focus.clear}
-          onDismissNotice={() => { focus.clearNotice(); setSoundNote(null); }}
         />
       ) : null}
       {conflict ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-[rgb(46_33_27_/_0.28)] px-4 py-6 sm:items-center">
           <div role="dialog" aria-modal="true" aria-labelledby="focus-conflict-title" className="w-full max-w-md border border-line bg-card p-5">
             <h2 id="focus-conflict-title" className="text-2xl">Сначала заверши текущую сессию</h2>
-            <p className="mt-2 text-sm text-ink">Сейчас идёт другая задача.</p>
+            <p className="mt-2 text-sm text-ink">Отработанное время сохранится.</p>
             <div className="mt-4 flex flex-wrap gap-2">
-              <button type="button" autoFocus onClick={confirmConflict} className="paper-submit">Завершить сессию</button>
+              <button type="button" autoFocus onClick={confirmConflict} className="paper-submit">Завершить и переключить</button>
               <button type="button" onClick={() => setConflict(null)} className="paper-choice">Оставить</button>
             </div>
           </div>

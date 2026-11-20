@@ -6,10 +6,12 @@ import {
   formatClock,
   parseFocusMinutes,
   pauseSession,
+  plannedBreakFor,
   remainingMs,
   reminderDue,
   resumeSession,
   settleSession,
+  shouldAutoAdvance,
   startBreak,
   startFocus,
   unappliedFocusMs,
@@ -28,8 +30,9 @@ assert.equal(parseFocusMinutes(''), null);
 assert.equal(remainingMs(session, start), 20 * 60_000);
 assert.equal(remainingMs(session, start + 5 * 60_000), 15 * 60_000);
 assert.equal(remainingMs(session, start + 25 * 60_000), 0);
-assert.equal(formatClock(0), '0:00');
-assert.equal(formatClock(65_000), '1:05');
+assert.equal(formatClock(0), '00:00');
+assert.equal(formatClock(65_000), '01:05');
+assert.equal(formatClock(-50), '00:00');
 
 const paused = pauseSession(session, start + 5 * 60_000);
 assert.equal(paused.addMs, 5 * 60_000);
@@ -43,16 +46,26 @@ assert.equal(remainingMs(resumed, start + 10 * 60_000), 15 * 60_000);
 const finished = settleSession(resumed, start + 25 * 60_000);
 assert.equal(finished.addMs, 15 * 60_000);
 assert.equal(finished.session.settled, true);
+assert.equal(finished.session.full, true);
 assert.equal(settleSession(finished.session, start + 30 * 60_000).addMs, 0);
 assert.equal(pauseSession(finished.session, start + 30 * 60_000).addMs, 0);
 
 const early = finishEarly(session, start + 3 * 60_000);
 assert.equal(early.addMs, 3 * 60_000);
+assert.equal(early.session.full, false);
 assert.equal(finishEarly(early.session, start + 4 * 60_000).addMs, 0);
 
 const broke = startBreak(finished.session, start + 25 * 60_000, 'sig-break');
 assert.equal(unappliedFocusMs(broke, start + 26 * 60_000), 0);
 assert.equal(settleSession(broke, start + 31 * 60_000).addMs, 0);
+assert.equal(plannedBreakFor(0, 4), 'short');
+assert.equal(plannedBreakFor(3, 4), 'long');
+assert.equal(shouldAutoAdvance(start + 20 * 60_000, start + 20 * 60_000 + 1000, true), true);
+assert.equal(shouldAutoAdvance(start + 20 * 60_000, start + 20 * 60_000 + 60_000, true), false);
+assert.equal(shouldAutoAdvance(start + 20 * 60_000, start + 20 * 60_000 + 1000, false), false);
+const long = startBreak(finished.session, start + 25 * 60_000, 'sig-long', 15, 'long');
+assert.equal(long.durationMs, 15 * 60_000);
+assert.equal(long.plannedBreak, 'long');
 
 assert.equal(reminderDue(session, start + 9 * 60_000, true), false);
 assert.equal(reminderDue(session, start + 10 * 60_000, true), true);

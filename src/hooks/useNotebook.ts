@@ -45,7 +45,7 @@ import {
   type TaskDuration,
   type WeekItem,
 } from '../lib/notebook';
-import type { CatPrefs, FocusSession } from '../lib/focusSession';
+import type { CatPrefs, FocusChange, FocusSession } from '../lib/focusSession';
 import { applyTheme } from '../lib/theme';
 import type { DayPart, Priority, RepeatKind } from '../types';
 
@@ -247,7 +247,7 @@ export function useNotebook() {
     addWeekItem: (week: string, kind: WeekItem['kind'], title: string) => commit((book) => addWeekItem(book, week, kind, title)),
     toggleWeekItem: (id: string) => commit((book) => toggleWeekItem(book, id)),
     assignWeekItem: (id: string, date: string) => commit((book) => assignWeekItem(book, id, date)),
-    applyFocus: (session: FocusSession | null, change?: { taskId: string; addMs?: number; focusMs?: number }, at?: number) => {
+    applyFocus: (session: FocusSession | null, change?: FocusChange, at?: number) => {
       const next = commit((book) => applyFocus(book, session, change, at));
       return change ? next.tasks.find((task) => task.id === change.taskId)?.focusMs ?? 0 : 0;
     },

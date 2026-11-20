@@ -6,18 +6,23 @@ import {
   markReminded,
   parseFocusSession,
   pauseSession,
+  plannedBreakFor,
   remainingMs,
   reminderDue,
   resumeSession,
   settleSession,
+  shouldAutoAdvance,
   startAnother,
   startBreak,
   startFocus,
+  startIdle,
+  type FocusChange,
   type FocusSession,
+  type PhaseChoice,
 } from '../lib/focusSession';
 import { playChime, playMeow, unlockSound } from '../lib/focusSound';
 
-type Apply = (session: FocusSession | null, change?: { taskId: string; addMs?: number; focusMs?: number }, at?: number) => number;
+type Apply = (session: FocusSession | null, change?: FocusChange, at?: number) => number;
 
 type Options = {
   login: string;
@@ -26,6 +31,11 @@ type Options = {
   reminders: boolean;
   sound: boolean;
   volume: number;
+  autoStart: boolean;
+  rounds: number;
+  cycle: number;
+  shortMinutes: number;
+  longMinutes: number;
   onApply: Apply;
 };
 
@@ -35,7 +45,7 @@ function signal() {
 
 const appliedBanks = new Set<string>();
 
-export function useFocusController({ login, session, focusAt, reminders, sound, volume, onApply }: Options) {
+export function useFocusController({ login, session, focusAt, reminders, sound, volume, autoStart, rounds, cycle, shortMinutes, longMinutes, onApply }: Options) {
   const [now, setNow] = useState(() => Date.now());
   const [remindOpen, setRemindOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -45,6 +55,11 @@ export function useFocusController({ login, session, focusAt, reminders, sound, 
   const remindersRef = useRef(reminders);
   const soundRef = useRef(sound);
   const volumeRef = useRef(volume);
+  const autoRef = useRef(autoStart);
+  const roundsRef = useRef(rounds);
+  const cycleRef = useRef(cycle);
+  const shortRef = useRef(shortMinutes);
+  const longRef = useRef(longMinutes);
   const onApplyRef = useRef(onApply);
 
   useEffect(() => {
@@ -54,16 +69,23 @@ export function useFocusController({ login, session, focusAt, reminders, sound, 
     remindersRef.current = reminders;
     soundRef.current = sound;
     volumeRef.current = volume;
+    autoRef.current = autoStart;
+    roundsRef.current = rounds;
+    cycleRef.current = cycle;
+    shortRef.current = shortMinutes;
+    longRef.current = longMinutes;
     onApplyRef.current = onApply;
-  }, [session, focusAt, login, reminders, sound, volume, onApply]);
+  }, [session, focusAt, login, reminders, sound, volume, autoStart, rounds, cycle, shortMinutes, longMinutes, onApply]);
 
-  function publish(next: FocusSession | null, addMs = 0) {
+  function publish(next: FocusSession | null, addMs = 0, resetCycle = false) {
     const at = Date.now();
     sessionRef.current = next;
     focusAtRef.current = at;
-    const change = next && addMs > 0 ? { taskId: next.taskId, addMs } : undefined;
+    const change: FocusChange | undefined = addMs > 0 || resetCycle
+      ? { taskId: next?.taskId ?? '', addMs, resetCycle }
+      : undefined;
     const focusMs = onApplyRef.current(next, change, at);
-    writeLive(loginRef.current, { at, session: next, focus: change ? { taskId: change.taskId, focusMs } : undefined });
+    writeLive(loginRef.current, { at, session: next, focus: change && addMs > 0 ? { taskId: change.taskId, focusMs } : undefined });
   }
 
   function bank(next: FocusSession, addMs: number) {
@@ -110,8 +132,20 @@ export function useFocusController({ login, session, focusAt, reminders, sound, 
     }
     if (!isExpired(current, clock)) return;
     const settled = settleSession(current, clock);
-    bank(settled.session, settled.addMs);
-    void chime(settled.session.signalId);
+    const kind = settled.session.phase === 'focus' && settled.session.full
+      ? plannedBreakFor(cycleRef.current, roundsRef.current)
+      : settled.session.plannedBreak;
+    const done = { ...settled.session, plannedBreak: kind };
+    const advance = shouldAutoAdvance(current.endsAt, clock, autoRef.current) && done.full;
+    bank(done, settled.addMs);
+    void chime(done.signalId);
+    if (!advance) return;
+    if (done.phase === 'focus') {
+      const minutes = kind === 'long' ? longRef.current : shortRef.current;
+      publish(startBreak(done, clock, signal(), minutes, kind), 0, kind === 'long');
+      return;
+    }
+    publish(startAnother(done, clock, signal()));
   }
 
   useEffect(() => {
@@ -208,8 +242,32 @@ export function useFocusController({ login, session, focusAt, reminders, sound, 
     const current = sessionRef.current;
     if (!current || current.phase !== 'focus' || !current.settled) return;
     takeLead(loginRef.current, true);
-    publish(startBreak(current, Date.now(), signal()));
+    const kind = current.full ? current.plannedBreak : 'short';
+    const minutes = kind === 'long' ? longRef.current : shortRef.current;
+    publish(startBreak(current, Date.now(), signal(), minutes, kind), 0, kind === 'long');
     setRemindOpen(false);
+  }
+
+  function skipBreak() {
+    const current = sessionRef.current;
+    if (!current?.settled || current.phase !== 'focus') return;
+    takeLead(loginRef.current, true);
+    publish(null, 0, current.full && current.plannedBreak === 'long');
+    setRemindOpen(false);
+  }
+
+  function startPhase(taskId: string, phase: PhaseChoice, minutes: number, focusMinutes: number) {
+    const current = sessionRef.current;
+    if (current && !current.settled) return false;
+    takeLead(loginRef.current, true);
+    if (soundRef.current) {
+      void unlockSound().then((ready) => {
+        if (!ready) setNotice('Звук не включился. Таймер идёт.');
+      });
+    }
+    publish(startIdle(taskId, phase, focusMinutes, minutes, Date.now(), signal()));
+    setRemindOpen(false);
+    return true;
   }
 
   function again(minutes: number) {
@@ -233,6 +291,8 @@ export function useFocusController({ login, session, focusAt, reminders, sound, 
     finish,
     clear,
     beginBreak,
+    skipBreak,
+    startPhase,
     again,
   };
 }

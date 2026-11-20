@@ -379,10 +379,18 @@ const timed = createTask(emptyNotebook(), {
   weekdays: [],
 });
 const timedId = timed.tasks[0].id;
-const banked = applyFocus(timed, { taskId: timedId, phase: 'focus', focusMinutes: 20, durationMs: 1_200_000, endsAt: null, pausedRemainingMs: 1_140_000, paused: true, sliceAppliedMs: 60_000, settled: false, reminded: false, signalId: 'sig' }, { taskId: timedId, addMs: 60_000 }, 50);
+const banked = applyFocus(timed, { taskId: timedId, phase: 'focus', focusMinutes: 20, durationMs: 1_200_000, endsAt: null, pausedRemainingMs: 1_140_000, paused: true, sliceAppliedMs: 60_000, settled: false, full: false, plannedBreak: 'short', reminded: false, signalId: 'sig' }, { taskId: timedId, addMs: 60_000 }, 50);
 assert.equal(banked.tasks[0].focusMs, 60_000);
+assert.equal(banked.cat.focusMsToday, 60_000);
+assert.equal(banked.cat.focusCompleted, 0);
 const same = applyFocus(banked, banked.focusSession, { taskId: timedId, focusMs: 60_000 }, 60);
 assert.equal(same.tasks[0].focusMs, 60_000);
+assert.equal(same.cat.focusMsToday, 60_000);
+const rounded = applyFocus(same, { ...same.focusSession!, settled: true, full: true, paused: false }, { taskId: timedId, addMs: 0 }, 70);
+assert.equal(rounded.cat.focusCompleted, 1);
+assert.equal(rounded.cat.focusCycle, 1);
+const twice = applyFocus(rounded, rounded.focusSession, { taskId: timedId, focusMs: 60_000 }, 80);
+assert.equal(twice.cat.focusCompleted, 1);
 const restored = parseNotebook(JSON.parse(JSON.stringify(same)));
 assert.equal(restored?.focusSession?.paused, true);
 assert.equal(restored?.focusSession?.taskId, timedId);

@@ -1,122 +1,359 @@
-import { useState } from 'react';
-import { addDays } from '../../server/recurrence';
-import { FOCUS_PRESETS, minutesLabel, parseFocusMinutes, type FocusSession } from '../lib/focusSession';
-import { PRIORITIES } from '../lib/plannerCopy';
-import { tasksForDate, type Notebook } from '../lib/notebook';
-import type { Priority } from '../types';
+import { useEffect, useId, useRef, useState } from 'react';
+import { Volume2, VolumeX } from 'lucide-react';
+import { CatSprite, type CatClip } from './CatSprite';
 import { PaperCheck } from './PaperCheck';
+import {
+  FOCUS_PRESETS,
+  countWord,
+  formatClock,
+  minutesLabel,
+  remainingMs,
+  type FocusSession,
+  type PhaseChoice,
+} from '../lib/focusSession';
+import { tasksForDate, type Notebook } from '../lib/notebook';
 
 type FocusScreenProps = {
   book: Notebook;
   today: string;
-  minutes: number;
   session: FocusSession | null;
-  onMinutes: (minutes: number) => void;
-  onCreate: (title: string, priority: Priority) => void;
+  now: number;
+  reduced: boolean;
+  notice: string | null;
+  remind: boolean;
+  onStartPhase: (phase: PhaseChoice, taskId: string, minutes: number) => void;
+  onPause: () => void;
+  onResume: () => void;
+  onFinish: () => void;
+  onBreak: () => void;
+  onSkipBreak: () => void;
+  onAgain: () => void;
+  onReset: () => void;
+  onCompleteTask: () => void;
   onToggle: (id: string) => void;
-  onPriority: (id: string, priority: Priority) => void;
-  onFocus: (id: string | null) => void;
-  onMove: (id: string, date: string) => void;
-  onStart: () => void;
+  onSelectTask: (id: string | null) => void;
+  onCreate: (title: string) => void;
+  onMinutes: (minutes: number) => void;
+  onToggleSound: () => void;
+  onDismissNotice: () => void;
+  onDismissRemind: () => void;
 };
 
-export function FocusScreen({ book, today, minutes, session, onMinutes, onCreate, onToggle, onPriority, onFocus, onMove, onStart }: FocusScreenProps) {
-  const tasks = tasksForDate(book, today);
-  const main = tasks.find((task) => task.id === book.focusId) || null;
-  const rest = tasks.filter((task) => task.id !== main?.id);
-  const [title, setTitle] = useState('');
-  const [priority, setPriority] = useState<Priority>('normal');
-  const [custom, setCustom] = useState('');
-  const [customError, setCustomError] = useState<string | null>(null);
-  const busy = session != null && !session.settled;
-  const focusedHere = session?.taskId === main?.id;
-  const openCount = tasks.filter((task) => !task.completed).length;
+const PHASES: { id: PhaseChoice; label: string }[] = [
+  { id: 'focus', label: 'Фокус' },
+  { id: 'short', label: 'Короткий перерыв' },
+  { id: 'long', label: 'Длинный перерыв' },
+];
 
-  function applyCustom() {
-    const parsed = parseFocusMinutes(custom);
-    if (parsed == null) {
-      setCustomError('Укажи целое число минут от 1 до 180.');
-      return;
-    }
-    onMinutes(parsed);
-    setCustomError(null);
+function Ring({ progress, tone }: { progress: number; tone: 'focus' | 'break' }) {
+  const radius = 46;
+  const turn = 2 * Math.PI * radius;
+  const left = Math.max(0, Math.min(1, progress));
+  return (
+    <svg viewBox="0 0 100 100" className="h-full w-full -rotate-90" aria-hidden="true">
+      <circle cx="50" cy="50" r={radius} fill="none" stroke="var(--color-line)" strokeWidth="2.5" />
+      <circle
+        cx="50"
+        cy="50"
+        r={radius}
+        fill="none"
+        stroke={tone === 'break' ? 'var(--color-break)' : 'var(--color-focus)'}
+        strokeWidth="2.5"
+        strokeDasharray={`${turn * left} ${turn}`}
+        style={{ transition: 'stroke-dasharray 1s linear' }}
+      />
+    </svg>
+  );
+}
+
+export function FocusScreen(props: FocusScreenProps) {
+  const { book, session, now, reduced } = props;
+  const cat = book.cat;
+  const titleId = useId();
+  const [choice, setChoice] = useState<PhaseChoice>('focus');
+  const [adding, setAdding] = useState(false);
+  const [draft, setDraft] = useState('');
+  const [menu, setMenu] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
+  const [groom, setGroom] = useState(false);
+  const [hello, setHello] = useState(false);
+  const [step, setStep] = useState(false);
+  const [face, setFace] = useState<1 | -1>(1);
+  const seen = useRef<string | null>(null);
+  const tasks = tasksForDate(book, props.today);
+  const running = Boolean(session && !session.paused && !session.settled);
+  const paused = Boolean(session && session.paused && !session.settled);
+  const doneFocus = Boolean(session?.settled && session.phase === 'focus' && session.full);
+  const early = Boolean(session?.settled && session.phase === 'focus' && !session.full);
+  const doneBreak = Boolean(session?.settled && session.phase === 'break');
+  const locked = running || paused;
+  const phase: PhaseChoice = !session ? choice : session.phase === 'focus' ? 'focus' : session.plannedBreak;
+  const tone = phase === 'focus' ? 'focus' : 'break';
+  const focusMinutes = cat.pomodoroMinutes;
+  const phaseMinutes = phase === 'focus' ? focusMinutes : phase === 'long' ? cat.longMinutes : cat.shortMinutes;
+  const duration = session ? session.durationMs : phaseMinutes * 60_000;
+  const left = session ? remainingMs(session, now) : duration;
+  const progress = duration > 0 ? left / duration : 0;
+  const linkedId = session?.taskId || book.focusId || '';
+  const linked = book.tasks.find((task) => task.id === linkedId && !task.deleted) ?? null;
+  const rounds = cat.rounds;
+  const approach = session?.plannedBreak === 'long' && (session.phase === 'break' || (session.phase === 'focus' && session.settled))
+    ? rounds
+    : session?.phase === 'focus' && session.settled
+      ? Math.max(1, Math.min(cat.focusCycle, rounds))
+      : Math.min(cat.focusCycle + 1, rounds);
+  const filled = session?.phase === 'break' && session.plannedBreak === 'long'
+    ? rounds
+    : session?.phase === 'focus' && !session.settled
+      ? Math.min(cat.focusCycle, rounds)
+      : Math.min(cat.focusCycle, rounds);
+  const todayMinutes = Math.floor(cat.focusMsToday / 60_000);
+  const breakLabel = session?.plannedBreak === 'long' ? `Перерыв ${cat.longMinutes} минут` : `Перерыв ${cat.shortMinutes} минут`;
+
+  useEffect(() => {
+    if (reduced || session) return;
+    const id = window.setInterval(() => setGroom(true), 14_000);
+    return () => window.clearInterval(id);
+  }, [reduced, session]);
+
+  useEffect(() => {
+    if (!session || session.settled || session.paused || session.phase !== 'focus') return;
+    if (seen.current === session.signalId) return;
+    seen.current = session.signalId;
+    const start = window.setTimeout(() => setHello(true), 0);
+    const stop = window.setTimeout(() => setHello(false), 2000);
+    return () => {
+      window.clearTimeout(start);
+      window.clearTimeout(stop);
+    };
+  }, [session]);
+
+  useEffect(() => {
+    if (reduced || session?.phase !== 'break' || session.settled || session.paused) return;
+    const id = window.setInterval(() => {
+      setStep((value) => !value);
+      setFace((value) => (value === 1 ? -1 : 1));
+    }, 7000);
+    return () => window.clearInterval(id);
+  }, [reduced, session?.phase, session?.settled, session?.paused, session?.signalId]);
+
+  const live = !session
+    ? ''
+    : running && session.phase === 'focus'
+      ? 'Фокус начался'
+      : running && session.phase === 'break'
+        ? 'Перерыв начался'
+        : paused
+          ? 'Пауза'
+          : doneFocus
+            ? 'Подход завершён. Время отдохнуть'
+            : doneBreak
+              ? 'Перерыв закончился'
+              : early
+                ? 'Сессия завершена раньше. Время сохранено'
+                : '';
+
+  function begin() {
+    props.onStartPhase(phase, book.focusId ?? '', phase === 'focus' ? focusMinutes : phaseMinutes);
+  }
+
+  function addTask() {
+    const title = draft.trim();
+    if (!title) return;
+    props.onCreate(title);
+    setDraft('');
+    setAdding(false);
+  }
+
+  const clip: CatClip = !session && groom && !reduced
+    ? 'groom'
+    : !session
+      ? (tasks.some((task) => !task.completed) ? 'blink' : 'sleep')
+      : hello && session.phase === 'focus'
+        ? 'stretch'
+        : doneFocus
+          ? 'stretch'
+          : paused || early
+            ? 'sleep'
+            : session.phase === 'break'
+              ? (!reduced && step ? 'walk' : 'stretch')
+              : running && session.phase === 'focus'
+                ? 'think'
+                : 'blink';
+
+  const primaryLabel = running
+    ? 'Пауза'
+    : paused
+      ? 'Продолжить'
+      : doneFocus
+        ? 'Начать перерыв'
+      : doneBreak
+        ? 'Начать следующий подход'
+        : phase === 'focus'
+          ? (cat.focusCycle > 0 ? 'Начать следующий подход' : 'Начать фокус')
+          : 'Начать перерыв';
+
+  function onPrimary() {
+    if (running) props.onPause();
+    else if (paused) props.onResume();
+    else if (doneFocus) props.onBreak();
+    else if (doneBreak) props.onAgain();
+    else begin();
   }
 
   return (
-    <section className="pb-4">
-      <header className="px-4 py-4 sm:px-6">
-        <p className="text-xs font-semibold tracking-[0.16em] text-muted uppercase">Сегодня</p>
-        <h2 className="mt-1 font-serif text-4xl">Главное сегодня</h2>
-        <div className="mx-3 mt-2 border-t border-line" />
-      </header>
-      <div className="px-4 py-4 sm:px-6">
-        {main ? (
-          <div className="flex items-start gap-1">
-            <PaperCheck checked={main.completed} label={main.completed ? `Вернуть «${main.title}»` : `Выполнить «${main.title}»`} onClick={() => onToggle(main.id)} />
-            <div className="min-w-0 flex-1 py-2">
-              <p className="text-xs font-semibold tracking-[0.14em] text-primary uppercase">В фокусе</p>
-              <p className={`font-serif text-2xl leading-snug ${main.completed ? 'text-muted line-through' : 'text-ink'}`}>{main.title}</p>
-              <p className="mt-1 text-xs text-muted">
-                {PRIORITIES.find((item) => item.id === main.priority)?.label}
-                {main.focusMs >= 30_000 ? ` · уже ${minutesLabel(Math.max(1, Math.round(main.focusMs / 60_000)))}` : ''}
-              </p>
-              <p className="mt-3 text-sm text-ink">Длительность: {minutesLabel(minutes)}</p>
-              <div className="mt-1 flex flex-wrap">
-                {FOCUS_PRESETS.map((preset) => (
-                  <button key={preset} type="button" aria-pressed={minutes === preset} disabled={busy} onClick={() => onMinutes(preset)} className="paper-choice">{preset}</button>
-                ))}
-              </div>
-              <form className="mt-2 flex flex-wrap items-end gap-2" onSubmit={(event) => { event.preventDefault(); applyCustom(); }}>
-                <label className="text-sm font-semibold text-ink" htmlFor="focus-minutes">Свои минуты</label>
-                <input id="focus-minutes" inputMode="numeric" value={custom} onChange={(event) => { setCustom(event.target.value); setCustomError(null); }} className="paper-field max-w-28" />
-                <button type="submit" className="paper-choice" disabled={busy}>Применить</button>
-              </form>
-              {customError ? <p role="alert" className="mt-1 text-sm font-semibold text-danger">{customError}</p> : null}
-              {focusedHere ? null : (
-                <button type="button" onClick={onStart} disabled={main.completed || busy} className="paper-submit mt-3">Начать</button>
-              )}
-              <button type="button" onClick={() => onFocus(null)} className="paper-choice mt-2 px-0">Убрать из главного</button>
+    <section className="lg:grid lg:grid-cols-[minmax(0,1fr)_17rem] lg:items-start">
+      <div className="mx-auto w-full max-w-[760px] px-4 py-4 sm:px-6">
+        <h2 className="sr-only">Фокус</h2>
+        <p className="sr-only" aria-live="polite">{live}</p>
+        <div className="flex items-start justify-between gap-3">
+          <div role="tablist" aria-label="Фаза таймера" className="flex min-w-0 flex-1">
+            {PHASES.map((item) => {
+              const selected = phase === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={selected}
+                  disabled={locked && !selected}
+                  onClick={() => { if (!locked) setChoice(item.id); }}
+                  className={`min-h-11 min-w-0 flex-1 border-b-2 px-1 text-xs leading-tight font-semibold sm:px-3 sm:text-sm ${selected ? 'border-current text-ink' : 'border-transparent text-muted'}`}
+                  style={selected ? { color: item.id === 'focus' ? 'var(--color-focus)' : 'var(--color-break)', borderColor: 'currentColor' } : undefined}
+                >
+                  {item.label}
+                </button>
+              );
+            })}
+          </div>
+          <button
+            type="button"
+            aria-pressed={cat.sound}
+            aria-label={cat.sound ? 'Выключить звук' : 'Включить звук'}
+            onClick={props.onToggleSound}
+            className="grid h-11 w-11 shrink-0 place-items-center text-ink"
+          >
+            {cat.sound ? <Volume2 size={18} aria-hidden="true" /> : <VolumeX size={18} aria-hidden="true" />}
+          </button>
+        </div>
+        {cat.autoStart ? <p className="mt-2 text-sm font-semibold text-ink">Автозапуск включён</p> : null}
+        <p className="mt-3 min-h-11 break-words text-base text-ink">{linked ? linked.title : 'Свободная сессия'}</p>
+        <div className="mt-2 flex items-end justify-center gap-2 sm:gap-6">
+          <div className="relative h-36 w-36 shrink-0 sm:h-64 sm:w-64">
+            <Ring progress={progress} tone={tone} />
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+              <p aria-hidden="true" className="font-sans text-[3.5rem] leading-none font-semibold tabular-nums text-ink sm:text-[6.5rem]">{formatClock(left)}</p>
+              <p className="mt-1 text-xs font-semibold tracking-wide text-muted uppercase">{PHASES.find((item) => item.id === phase)?.label}</p>
             </div>
           </div>
-        ) : (
-          <p className="py-2 text-sm text-muted">{tasks.length === 0 ? 'На сегодня задач нет.' : 'Нет главной задачи.'}</p>
-        )}
-      </div>
-      <form className="px-4 py-4 sm:px-6" onSubmit={(event) => { event.preventDefault(); onCreate(title, priority); setTitle(''); }}>
-        <label htmlFor="focus-task" className="text-xs font-semibold tracking-[0.14em] text-muted uppercase">Новая задача</label>
-        <div className="mt-1 flex flex-col gap-3 sm:flex-row sm:items-end">
-          <input id="focus-task" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Задача на сегодня" maxLength={160} className="paper-field" />
-          <button type="submit" className="paper-choice">Добавить</button>
+          <div className="relative h-36 w-36 shrink-0 sm:h-52 sm:w-52" aria-hidden="true">
+            <div
+              className="absolute inset-0"
+              style={reduced ? undefined : { transform: session?.phase === 'break' && step ? 'translateX(8px)' : 'translateX(0)', transition: 'transform 1.6s ease' }}
+            >
+              <CatSprite clip={clip} face={face} reduced={reduced} onFinished={() => setGroom(false)} />
+            </div>
+          </div>
         </div>
-        <div className="mt-2 flex flex-wrap">
-          {PRIORITIES.map((item) => (
-            <button key={item.id} type="button" aria-pressed={priority === item.id} onClick={() => setPriority(item.id)} className="paper-choice">{item.label}</button>
-          ))}
+        {doneFocus ? <p className="mt-3 text-center text-sm text-ink">Отличный подход. Время отдохнуть</p> : null}
+        {early ? <p className="mt-3 text-center text-sm text-muted">Время сохранено</p> : null}
+        {props.remind && running ? (
+          <p className="mt-2 text-center text-sm text-muted">
+            Середина подхода
+            <button type="button" onClick={props.onDismissRemind} className="paper-choice">Работаю</button>
+          </p>
+        ) : null}
+        {props.notice ? (
+          <p role="status" className="mt-2 text-center text-sm text-ink">
+            {props.notice}
+            <button type="button" onClick={props.onDismissNotice} className="paper-choice">Скрыть</button>
+          </p>
+        ) : null}
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+          <button
+            type="button"
+            onClick={onPrimary}
+            className="paper-submit min-w-44"
+            style={{ background: doneFocus || tone === 'break' && !doneBreak ? 'var(--color-break)' : 'var(--color-focus)', color: doneFocus || tone === 'break' && !doneBreak ? '#fffaf3' : 'var(--color-on-focus)' }}
+          >
+            {primaryLabel}
+          </button>
+          {locked ? <button type="button" onClick={props.onFinish} className="paper-choice">Завершить</button> : null}
+          {doneFocus ? <button type="button" onClick={props.onSkipBreak} className="paper-choice">Пропустить перерыв</button> : null}
+          {doneFocus && linked && !linked.completed ? <button type="button" onClick={props.onCompleteTask} className="paper-choice">Завершить задачу</button> : null}
+          {doneBreak && linked && !linked.completed ? <button type="button" onClick={props.onCompleteTask} className="paper-choice">Завершить задачу</button> : null}
+          <button type="button" aria-expanded={menu} onClick={() => { setMenu((value) => !value); setConfirmReset(false); }} className="paper-choice">Ещё</button>
         </div>
-      </form>
-      <div className="px-4 py-4 sm:px-6">
-        <p className="text-sm text-muted">Не влезло</p>
-        {openCount > 6 ? <p className="mt-1 text-sm text-muted">Вот это одно. Остальное может поехать дальше.</p> : null}
-        <div className="mx-3 mt-2 border-t border-line" />
-        <div>
-          {main && rest.length === 0 ? <p className="py-3 text-sm text-muted">Других дел нет.</p> : null}
-          {rest.map((task) => (
-            <article key={task.id} className="mx-3 flex items-start gap-1 border-b border-line">
-              <PaperCheck checked={task.completed} label={task.completed ? `Вернуть «${task.title}»` : `Выполнить «${task.title}»`} onClick={() => onToggle(task.id)} />
-              <div className="min-w-0 flex-1 py-2.5">
-                <p className={`text-base leading-snug break-words ${task.completed ? 'text-muted line-through' : 'text-ink'}`}>{task.title}</p>
-                <div className="mt-1 flex flex-wrap">
-                  <button type="button" onClick={() => onMove(task.id, addDays(task.date, 1))} className="paper-choice px-2">завтра</button>
-                  {PRIORITIES.map((item) => (
-                    <button key={item.id} type="button" aria-pressed={task.priority === item.id} onClick={() => onPriority(task.id, item.id)} className="paper-choice">{item.label}</button>
-                  ))}
-                  <button type="button" onClick={() => onFocus(task.id)} className="paper-choice">В фокус</button>
-                </div>
+        {menu ? (
+          <div className="mx-auto mt-2 max-w-sm text-center">
+            {confirmReset ? (
+              <div>
+                <p className="text-sm text-ink">Сбросить таймер? Уже отработанное время останется.</p>
+                <button type="button" onClick={() => { props.onReset(); setMenu(false); setConfirmReset(false); }} className="paper-choice">Сбросить</button>
+                <button type="button" onClick={() => setConfirmReset(false)} className="paper-choice">Отмена</button>
               </div>
-            </article>
+            ) : (
+              <button type="button" onClick={() => setConfirmReset(true)} className="paper-choice">Сброс</button>
+            )}
+          </div>
+        ) : null}
+        {!locked && phase === 'focus' ? (
+          <div className="mt-3 flex flex-wrap justify-center">
+            {FOCUS_PRESETS.map((preset) => (
+              <button key={preset} type="button" aria-pressed={focusMinutes === preset} onClick={() => props.onMinutes(preset)} className="paper-choice">{preset}</button>
+            ))}
+          </div>
+        ) : null}
+        <p className="mt-4 text-center text-sm text-ink">Подход {approach} из {rounds}</p>
+        <div className="mt-1 flex justify-center gap-2" aria-hidden="true">
+          {Array.from({ length: rounds }, (_, index) => (
+            <span key={index} className={`h-2.5 w-2.5 rounded-full border ${index < filled ? 'border-ink bg-ink' : 'border-line bg-transparent'}`} />
           ))}
         </div>
+        <p className="mt-2 text-center text-sm text-muted">
+          Сегодня {cat.focusCompleted} {countWord(cat.focusCompleted, 'подход', 'подхода', 'подходов')} · {minutesLabel(todayMinutes)}
+        </p>
+        {doneFocus ? <p className="sr-only">{breakLabel}</p> : null}
       </div>
+      <aside className="px-4 pb-6 sm:px-6 lg:px-3 lg:py-4">
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-muted">Задачи</p>
+          <button type="button" aria-expanded={adding} onClick={() => setAdding((value) => !value)} className="min-h-11 px-2 text-sm font-semibold text-ink">+ Задача</button>
+        </div>
+        {adding ? (
+          <form className="mt-1 flex flex-col gap-2 sm:flex-row sm:items-end" onSubmit={(event) => { event.preventDefault(); addTask(); }}>
+            <input
+              autoFocus
+              aria-label="Новая задача"
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              onFocus={(event) => event.currentTarget.scrollIntoView({ block: 'center' })}
+              maxLength={160}
+              className="paper-field"
+              id={titleId}
+            />
+            <button type="submit" className="paper-choice sm:shrink-0">Ок</button>
+          </form>
+        ) : null}
+        <button
+          type="button"
+          aria-pressed={!linked}
+          onClick={() => props.onSelectTask(null)}
+          className="mt-2 min-h-11 w-full px-1 text-left text-sm font-semibold text-ink"
+        >
+          Без задачи
+        </button>
+        <div className="lg:max-h-[32rem] lg:overflow-y-auto">
+          {tasks.map((task) => (
+            <div key={task.id} className={`flex items-start ${task.id === linked?.id ? 'bg-field' : ''}`}>
+              <PaperCheck checked={task.completed} label={task.completed ? `Вернуть «${task.title}»` : `Выполнить «${task.title}»`} onClick={() => props.onToggle(task.id)} />
+              <button type="button" onClick={() => props.onSelectTask(task.id)} className="min-h-11 min-w-0 flex-1 py-2 text-left">
+                <span className={`block break-words text-base ${task.completed ? 'text-muted line-through' : 'text-ink'}`}>{task.title}</span>
+              </button>
+            </div>
+          ))}
+        </div>
+      </aside>
     </section>
   );
 }

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { CatPrefs } from '../lib/focusSession';
+import { parseFocusMinutes, type CatPrefs } from '../lib/focusSession';
 import { playMeow, unlockSound } from '../lib/focusSound';
 import type { AppTheme } from '../lib/notebook';
 import { ThemePicker } from './ThemePicker';
@@ -14,6 +14,12 @@ type SettingsPanelProps = {
   onCat: (cat: CatPrefs) => void;
   here?: boolean;
 };
+
+function saveMinute(input: HTMLInputElement, current: number, max: number, apply: (value: number) => void) {
+  const number = Number(input.value);
+  if (!Number.isInteger(number) || number < 1 || number > max) input.value = String(current);
+  else apply(number);
+}
 
 export function SettingsPanel({ login, name, theme, cat, onName, onTheme, onCat, here = false }: SettingsPanelProps) {
   const [draft, setDraft] = useState(name);
@@ -77,6 +83,29 @@ export function SettingsPanel({ login, name, theme, cat, onName, onTheme, onCat,
       <input id="sound-volume" type="range" min={0} max={100} value={Math.round(volume * 100)} onChange={(event) => setDraftVolume(Number(event.target.value) / 100)} onPointerUp={(event) => commitVolume(Number(event.currentTarget.value) / 100)} onKeyUp={(event) => commitVolume(Number(event.currentTarget.value) / 100)} onBlur={(event) => commitVolume(Number(event.currentTarget.value) / 100)} className="mt-2 w-full max-w-xs" />
       <button type="button" onClick={() => void testSound()} className="paper-choice mt-2 px-0">Проверить звук</button>
       {soundNote ? <p role="status" className="mt-2 text-sm text-ink">{soundNote}</p> : null}
+      <h3 className="mt-6 text-2xl text-ink">Помидор</h3>
+      <div className="mt-3 grid max-w-sm gap-3">
+        <label className="text-sm font-semibold text-ink" htmlFor="pomodoro-focus">Фокус, минуты
+          <input id="pomodoro-focus" inputMode="numeric" defaultValue={cat.pomodoroMinutes} key={`focus-${cat.pomodoroMinutes}`} onBlur={(event) => {
+            const next = parseFocusMinutes(event.target.value);
+            if (next == null) event.target.value = String(cat.pomodoroMinutes);
+            else onCat({ ...cat, pomodoroMinutes: next });
+          }} className="paper-field mt-1" />
+        </label>
+        <label className="text-sm font-semibold text-ink" htmlFor="pomodoro-short">Короткий перерыв, минуты
+          <input id="pomodoro-short" inputMode="numeric" defaultValue={cat.shortMinutes} key={`short-${cat.shortMinutes}`} onBlur={(event) => saveMinute(event.target, cat.shortMinutes, 60, (value) => onCat({ ...cat, shortMinutes: value }))} className="paper-field mt-1" />
+        </label>
+        <label className="text-sm font-semibold text-ink" htmlFor="pomodoro-long">Длинный перерыв, минуты
+          <input id="pomodoro-long" inputMode="numeric" defaultValue={cat.longMinutes} key={`long-${cat.longMinutes}`} onBlur={(event) => saveMinute(event.target, cat.longMinutes, 60, (value) => onCat({ ...cat, longMinutes: value }))} className="paper-field mt-1" />
+        </label>
+        <label className="text-sm font-semibold text-ink" htmlFor="pomodoro-rounds">Подходов до длинного перерыва
+          <input id="pomodoro-rounds" inputMode="numeric" defaultValue={cat.rounds} key={`rounds-${cat.rounds}`} onBlur={(event) => saveMinute(event.target, cat.rounds, 8, (value) => onCat({ ...cat, rounds: value }))} className="paper-field mt-1" />
+        </label>
+      </div>
+      <label className="mt-3 flex min-h-11 items-center gap-3 text-sm font-semibold text-ink">
+        <input type="checkbox" checked={cat.autoStart} onChange={(event) => onCat({ ...cat, autoStart: event.target.checked })} />
+        Автозапуск следующей фазы
+      </label>
       <h3 className="mt-6 text-2xl text-ink">Котёнок</h3>
       <label className="mt-3 flex min-h-11 items-center gap-3 text-sm font-semibold text-ink">
         <input type="checkbox" checked={cat.reminders} onChange={(event) => onCat({ ...cat, reminders: event.target.checked })} />
