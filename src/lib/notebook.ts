@@ -98,6 +98,7 @@ export type TaskDraft = {
   priority: Priority;
   repeatKind: RepeatKind | 'none';
   weekdays: number[];
+  note?: string | null;
 };
 
 const PARTS = new Set<DayPart>(['morning', 'afternoon', 'evening', 'anytime']);
@@ -162,6 +163,11 @@ export function monthGrid(anchor: string): string[] {
 
 function cleanWeekdays(days: number[]) {
   return [...new Set(days.filter((day) => day >= 0 && day <= 6))].sort((a, b) => a - b);
+}
+
+function draftNote(note: string | null | undefined) {
+  const text = note?.trim().slice(0, 120) ?? '';
+  return text || null;
 }
 
 function occurs(kind: RepeatKind, days: number[], start: string, until: string | null, date: string) {
@@ -357,7 +363,7 @@ export function createTask(book: Notebook, draft: TaskDraft, now = new Date().to
         weekdays: [],
         deleted: false,
         focusMs: 0,
-        note: null,
+        note: draftNote(draft.note),
         duration: null,
       }],
     };
@@ -373,7 +379,13 @@ export function createTask(book: Notebook, draft: TaskDraft, now = new Date().to
     start: draft.date,
     until: null,
   };
-  return materialize({ ...book, series: [...book.series, series] }, draft.date, addDays(draft.date, 120), now);
+  const made = materialize({ ...book, series: [...book.series, series] }, draft.date, addDays(draft.date, 120), now);
+  const note = draftNote(draft.note);
+  if (!note) return made;
+  return {
+    ...made,
+    tasks: made.tasks.map((task) => task.seriesId === seriesId && task.originalDate === draft.date ? { ...task, note } : task),
+  };
 }
 
 export function toggleTask(book: Notebook, id: string, now = new Date().toISOString()): Notebook {

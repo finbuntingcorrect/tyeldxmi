@@ -278,6 +278,26 @@ const oldNote = parseNotebook({ version: 1, tasks: [{ id: 'old-note', title: 'С
 assert.equal(oldNote?.tasks[0].note, null);
 why = setTaskNote(why, whyId, '   ');
 assert.equal(why.tasks[0].note, null);
+const notedTask = createTask(emptyNotebook(), {
+  title: 'С заметкой',
+  date: '2026-11-16',
+  dayPart: 'morning',
+  priority: 'high',
+  repeatKind: 'none',
+  weekdays: [],
+  note: '  не забыть  ',
+});
+assert.equal(notedTask.tasks[0].note, 'не забыть');
+const notedDaily = createTask(emptyNotebook(), {
+  title: 'Каждый день',
+  date: '2026-11-16',
+  dayPart: 'morning',
+  priority: 'normal',
+  repeatKind: 'daily',
+  weekdays: [],
+  note: 'утром',
+});
+assert.equal(tasksForDate(notedDaily, '2026-11-16')[0].note, 'утром');
 why = setTaskDuration(why, whyId, 'long');
 assert.equal(why.tasks[0].duration, 'long');
 assert.equal(parseNotebook(JSON.parse(JSON.stringify(why)))?.tasks[0].duration, 'long');
