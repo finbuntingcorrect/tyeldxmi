@@ -218,8 +218,8 @@ export function Home() {
             <p className="text-sm text-muted">{hint}</p>
           </div>
           <div className="flex shrink-0 items-center gap-4">
-            <AppLink href="/settings" aria-current={page.name === 'settings' ? 'page' : undefined} className={`min-h-11 px-1 text-sm font-semibold underline underline-offset-4 ${page.name === 'settings' ? 'decoration-primary' : 'decoration-line'}`}>Настройки</AppLink>
-            <button type="button" onClick={() => void notebook.signOut()} className="min-h-11 px-1 text-sm font-semibold underline underline-offset-4 decoration-line">Выйти</button>
+            <AppLink href="/settings" aria-current={page.name === 'settings' ? 'page' : undefined} className={`min-h-11 px-1 text-sm font-semibold ${page.name === 'settings' ? 'text-ink' : 'text-muted'}`}>Настройки</AppLink>
+            <button type="button" onClick={() => void notebook.signOut()} className="min-h-11 px-1 text-sm font-semibold text-muted">Выйти</button>
           </div>
         </header>
         <ModeSwitch page={page} />
@@ -315,7 +315,7 @@ export function Home() {
       </div>
       <CatCompanion
         pose={pose}
-        hidden={book.cat.hidden || page.name === 'focus'}
+        hidden={book.cat.hidden || page.name === 'focus' || page.name === 'calendar' || page.name === 'day'}
         pinned={book.cat.pinned}
         walks={book.cat.walks}
         sound={book.cat.sound}

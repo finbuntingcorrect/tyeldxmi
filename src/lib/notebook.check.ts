@@ -511,4 +511,12 @@ assert.equal(legacySeries?.series[0].monthDay, null);
 assert.equal(legacySeries?.series[0].until, '2026-12-01');
 assert.deepEqual(legacySeries?.series[0].weekdays, [1, 3]);
 
+let ranked = emptyNotebook();
+ranked = createTask(ranked, { title: 'Позже обычная', date: '2026-11-20', dayPart: 'morning', priority: 'normal', repeatKind: 'none', weekdays: [] }, '2026-11-20T10:00:00.000Z');
+ranked = createTask(ranked, { title: 'Низкая', date: '2026-11-20', dayPart: 'morning', priority: 'low', repeatKind: 'none', weekdays: [] }, '2026-11-20T08:00:00.000Z');
+ranked = createTask(ranked, { title: 'Важная', date: '2026-11-20', dayPart: 'morning', priority: 'high', repeatKind: 'none', weekdays: [] }, '2026-11-20T09:00:00.000Z');
+ranked = createTask(ranked, { title: 'Раньше обычная', date: '2026-11-20', dayPart: 'morning', priority: 'normal', repeatKind: 'none', weekdays: [] }, '2026-11-20T07:00:00.000Z');
+const morningOrder = tasksForDate(ranked, '2026-11-20').filter((task) => task.dayPart === 'morning').map((task) => task.title);
+assert.deepEqual(morningOrder, ['Важная', 'Раньше обычная', 'Позже обычная', 'Низкая']);
+
 console.log('notebook ok');

@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { addDays } from '../../server/recurrence';
-import { DAY_PARTS, WEEKDAYS } from '../lib/plannerCopy';
+import { DAY_PARTS, WEEKDAYS, priorityRank } from '../lib/plannerCopy';
 import { monthGrid, tasksForDate, weekDates, type Notebook, type NotebookTask, type TaskDraft, type WeekItem } from '../lib/notebook';
-import { isMonthKey } from '../lib/route';
+import { isMonthKey, isPageDate } from '../lib/route';
 import { dateFromKey, formatLocalDate } from '../lib/date';
 import type { DayPart, Priority } from '../types';
 import { AppLink } from './AppLink';
@@ -47,19 +47,16 @@ function openCount(tasks: { completed: boolean }[]) {
   return tasks.filter((task) => !task.completed).length;
 }
 
-function loadClass(open: number) {
-  if (open >= 4) return 'day-load-3';
-  if (open === 3) return 'day-load-2';
-  if (open >= 1) return 'day-load-1';
-  return '';
-}
+const SELECTED_DAY_KEY = 'today-cat.selected-day';
 
-function loadWidth(open: number) {
-  if (open >= 4) return '100%';
-  if (open === 3) return '75%';
-  if (open === 2) return '50%';
-  if (open === 1) return '25%';
-  return '0%';
+function readSelectedDay() {
+  if (typeof sessionStorage === 'undefined') return null;
+  try {
+    const value = sessionStorage.getItem(SELECTED_DAY_KEY);
+    return value && isPageDate(value) ? value : null;
+  } catch {
+    return null;
+  }
 }
 
 function openLabel(count: number) {
@@ -70,16 +67,12 @@ function openLabel(count: number) {
   return `${count} дел не закрыто`;
 }
 
-function ShortRule() {
-  return <div className="mx-3 mt-1 border-t border-line" />;
-}
-
 function CarryLine({ count, label, onCarry }: { count: number; label: string; onCarry: () => void }) {
   if (count === 0) return null;
   return (
     <p className="flex flex-wrap items-baseline gap-x-3 px-1 py-1 text-sm text-muted">
       <span>{openLabel(count)}</span>
-      <button type="button" onClick={onCarry} className="min-h-11 font-semibold text-ink underline decoration-line underline-offset-4">{label}</button>
+      <button type="button" onClick={onCarry} className="min-h-11 font-semibold text-ink">{label}</button>
     </p>
   );
 }
@@ -157,25 +150,37 @@ function renderTask(props: PlannerScreenProps, task: NotebookTask, shelves = fal
 export function DayBoard(props: PlannerScreenProps & { date: string }) {
   const { book, today, date } = props;
   const tasks = tasksForDate(book, date);
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(SELECTED_DAY_KEY, date);
+    } catch {
+      // The calendar highlight is optional when storage is blocked.
+    }
+  }, [date]);
   return (
     <section>
       <header className="px-4 py-4 sm:px-6">
-        <AppLink href="/" className="text-sm font-semibold text-muted">К месяцу</AppLink>
-        <h2 className="mt-2 font-serif text-3xl leading-tight break-words sm:text-5xl">{formatLocalDate(dateFromKey(date))}</h2>
-        <ShortRule />
+        <AppLink href="/" className="inline-flex min-h-11 items-center text-sm font-semibold text-ink">К месяцу</AppLink>
+        <h2 className="date-selected mt-1 inline-flex max-w-full flex-wrap items-center gap-3 px-3 py-2 font-serif text-3xl leading-tight break-words sm:text-5xl">
+          {date === today ? (
+            <span aria-hidden="true" className="inline-grid h-9 w-9 shrink-0 place-items-center rounded-full font-sans text-base" style={{ background: 'var(--color-primary)', color: 'var(--color-on-primary)' }}>{Number(date.slice(8))}</span>
+          ) : null}
+          <span>{formatLocalDate(dateFromKey(date))}</span>
+        </h2>
         <CarryLine
           count={date > today ? 0 : openCount(tasks)}
           label={date < today ? 'Перенести на сегодня' : 'Перенести на завтра'}
           onCarry={() => props.onCarry(date, date < today ? today : addDays(date, 1))}
         />
       </header>
-      <div className="paper-dots px-3 pb-4 sm:px-6">
+      <div className="bg-card px-3 pb-4 sm:px-6">
         {DAY_PARTS.map((part) => {
-          const rows = tasks.filter((task) => task.dayPart === part.id);
+          const rows = tasks
+            .filter((task) => task.dayPart === part.id)
+            .sort((a, b) => priorityRank(a.priority) - priorityRank(b.priority) || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
           return (
-            <div key={part.id} className="pt-3">
+            <div key={part.id} className="pt-4">
               <p className="px-1 text-sm text-muted">{part.label}</p>
-              <ShortRule />
               {rows.map((task) => renderTask(props, task, part.id === 'anytime'))}
               <AddTask date={date} part={part.id} onCreate={props.onCreate} />
             </div>
@@ -194,6 +199,7 @@ export function MonthBoard(props: PlannerScreenProps) {
   });
   const grid = monthGrid(anchor);
   const monthKey = anchor.slice(0, 7);
+  const selectedDay = readSelectedDay();
   const todayWeek = weekDates(today);
   const inboxWeek = todayWeek[0];
   const weekKey = weekDates(today.slice(0, 7) === monthKey ? today : `${monthKey}-01`)[0];
@@ -213,9 +219,8 @@ export function MonthBoard(props: PlannerScreenProps) {
         </button>
         <div className="min-w-0 text-center">
           <h2 className="font-serif text-3xl leading-tight break-words sm:text-5xl">{monthTitle(anchor)}</h2>
-          <p className="mt-1 text-sm text-muted">Гуще клетка — больше открытых дел.</p>
           {today.slice(0, 7) !== monthKey ? (
-            <button type="button" onClick={() => showMonth(today)} className="mt-1 min-h-11 text-sm font-semibold text-ink underline decoration-line underline-offset-4">К сегодня</button>
+            <button type="button" onClick={() => showMonth(today)} className="mt-1 min-h-11 text-sm font-semibold text-ink">К сегодня</button>
           ) : null}
         </div>
         <button type="button" aria-label="Следующий месяц" onClick={() => showMonth(shiftMonth(anchor, 1))} className="grid h-11 w-11 shrink-0 place-items-center text-ink">
@@ -225,7 +230,6 @@ export function MonthBoard(props: PlannerScreenProps) {
       <CaptureField onAdd={(title) => props.onAddWeekItem(inboxWeek, 'inbox', title)} />
       <div className="px-4 pb-2 sm:px-6">
         <p className="mt-3 text-sm text-muted">Список дел</p>
-        <ShortRule />
         {inbox.map((item) => (
           <div key={item.id}>
             <div className="flex items-start">
@@ -249,15 +253,25 @@ export function MonthBoard(props: PlannerScreenProps) {
               <p key={day.id} className="px-1 py-1 text-center text-xs text-muted">{day.label}</p>
             ))}
           </div>
-          <div className="grid grid-cols-7 border-l border-t border-line">
+          <div className="grid grid-cols-7 border-l border-t border-line bg-card">
             {grid.map((day) => {
               const tasks = tasksForDate(book, day);
               const outside = day.slice(0, 7) !== monthKey;
               const shown = tasks.slice(0, 2);
-              const rest = tasks.length - shown.length;
+              const hidden = tasks.slice(2);
+              const rest = hidden.length;
+              const hiddenImportant = hidden.some((task) => task.priority === 'high');
               const open = openCount(tasks);
               const number = Number(day.slice(8));
-              const name = open === 0 ? `${number}, свободно` : `${number}, ${openLabel(open)}`;
+              const importantOpen = tasks.some((task) => task.priority === 'high' && !task.completed);
+              const selected = selectedDay === day;
+              const name = [
+                `${number}`,
+                open === 0 ? 'свободно' : openLabel(open),
+                day === today ? 'сегодня' : '',
+                selected ? 'выбранный день' : '',
+                importantOpen ? 'есть важное' : '',
+              ].filter(Boolean).join(', ');
               return (
                 <AppLink
                   key={day}
@@ -265,14 +279,25 @@ export function MonthBoard(props: PlannerScreenProps) {
                   state={{ month: monthKey }}
                   aria-current={day === today ? 'date' : undefined}
                   aria-label={name}
-                  className={`flex min-h-20 min-w-0 flex-col border-r border-b border-line px-1 py-1 text-left sm:min-h-28 ${loadClass(open)} ${day === today ? 'shadow-[inset_0_-2px_0_var(--color-primary)]' : ''}`}
+                  className={`flex min-h-20 min-w-0 flex-col overflow-hidden border-r border-b border-line bg-card px-1 py-1 text-left sm:min-h-28 ${selected ? 'date-selected' : ''}`}
                 >
-                  <span className={`block text-sm ${day === today ? 'text-primary' : outside ? 'text-muted' : 'text-ink'}`}>{number}</span>
+                  <span className={`block text-sm ${outside && day !== today ? 'text-muted' : 'text-ink'}`}>
+                    {day === today ? (
+                      <span className="inline-grid h-6 w-6 place-items-center rounded-full" style={{ background: 'var(--color-primary)', color: 'var(--color-on-primary)' }}>{number}</span>
+                    ) : number}
+                  </span>
                   {shown.map((task) => (
-                    <p key={task.id} className={`truncate text-xs ${task.completed || outside ? 'text-muted' : 'text-ink'} ${task.completed ? 'line-through' : ''}`}>{task.title}</p>
+                    <p key={task.id} className="mt-0.5 flex min-w-0 items-center gap-0.5">
+                      {task.priority === 'high' ? <span aria-hidden="true" className="shrink-0 text-[11px] font-bold" style={{ color: task.completed ? 'var(--color-muted)' : 'var(--color-important)' }}>!</span> : null}
+                      <span className={`min-w-0 truncate text-xs ${task.completed ? 'text-muted line-through' : task.priority === 'high' ? 'task-chip' : task.priority === 'low' || outside ? 'text-low' : 'text-ink'}`}>{task.title}</span>
+                    </p>
                   ))}
-                  {rest > 0 ? <p className="truncate text-xs text-muted">ещё {rest}</p> : null}
-                  {open > 0 ? <span aria-hidden="true" className="mt-auto block h-1" style={{ width: loadWidth(open), background: 'var(--color-primary)' }} /> : null}
+                  {rest > 0 ? (
+                    <p className="mt-0.5 flex min-w-0 items-center gap-0.5 overflow-hidden text-[11px] leading-none whitespace-nowrap text-muted">
+                      {hiddenImportant ? <span aria-hidden="true" className="shrink-0 font-bold" style={{ color: 'var(--color-important)' }}>!</span> : null}
+                      <span className="truncate">Ещё {rest}</span>
+                    </p>
+                  ) : null}
                 </AppLink>
               );
             })}
@@ -280,7 +305,6 @@ export function MonthBoard(props: PlannerScreenProps) {
         </div>
         <aside className="px-3 py-4 sm:px-5">
           <p className="text-sm text-muted">Цели недели</p>
-          <ShortRule />
           {goals.map((item) => (
             <div key={item.id} className="flex items-start">
               <PaperCheck checked={item.completed} label={item.completed ? `Вернуть цель «${item.title}»` : `Отметить цель «${item.title}»`} onClick={() => props.onToggleWeekItem(item.id)} />
