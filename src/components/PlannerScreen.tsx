@@ -49,12 +49,6 @@ function openCount(tasks: { completed: boolean }[]) {
 
 const SELECTED_DAY_KEY = 'today-cat.selected-day';
 
-function viewedMonth(date: string) {
-  const month = (window.history.state as { month?: string } | null)?.month;
-  if (month && isMonthKey(month)) return month;
-  return date.slice(0, 7);
-}
-
 function readSelectedDay() {
   if (typeof sessionStorage === 'undefined') return null;
   try {
@@ -83,32 +77,19 @@ function CarryLine({ count, label, onCarry }: { count: number; label: string; on
   );
 }
 
-function CaptureField({ onAdd }: { onAdd: (title: string) => void }) {
-  const [title, setTitle] = useState('');
-  return (
-    <form
-      className="px-4 sm:px-6"
-      onSubmit={(event) => {
-        event.preventDefault();
-        const next = title.trim();
-        if (!next) return;
-        onAdd(next);
-        setTitle('');
-      }}
-    >
-      <input
-        value={title}
-        onChange={(event) => setTitle(event.target.value)}
-        aria-label="Записать и забыть"
-        placeholder="Записать и забыть"
-        maxLength={160}
-        className="paper-field"
-      />
-    </form>
-  );
+function weekSpan(start: string) {
+  const days = weekDates(start);
+  const first = dateFromKey(days[0]);
+  const last = dateFromKey(days[6]);
+  const day = new Intl.DateTimeFormat('ru-RU', { day: 'numeric' });
+  const dayMonth = new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long' });
+  if (first.getMonth() === last.getMonth() && first.getFullYear() === last.getFullYear()) {
+    return `${day.format(first)}–${dayMonth.format(last)}`;
+  }
+  return `${dayMonth.format(first)} – ${dayMonth.format(last)}`;
 }
 
-function AddRow({ label, onAdd }: { label: string; onAdd: (title: string) => void }) {
+function AddGoal({ onAdd }: { onAdd: (title: string) => void }) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
 
@@ -121,13 +102,13 @@ function AddRow({ label, onAdd }: { label: string; onAdd: (title: string) => voi
   }
 
   if (!open) {
-    return <button type="button" onClick={() => setOpen(true)} className="min-h-11 px-1 text-sm font-semibold text-muted">+ Добавить</button>;
+    return <button type="button" onClick={() => setOpen(true)} className="mt-1 min-h-11 px-1 text-sm font-semibold text-ink">+ Добавить цель</button>;
   }
 
   return (
-    <form className="flex min-w-0 flex-col items-stretch gap-2 py-1 sm:flex-row sm:items-end" onSubmit={(event) => { event.preventDefault(); submit(); }}>
-      <input autoFocus aria-label={label} value={title} onChange={(event) => setTitle(event.target.value)} maxLength={160} className="paper-field min-w-0 sm:flex-1" />
-      <button type="submit" className="paper-submit sm:shrink-0">Ок</button>
+    <form className="mt-2 flex min-w-0 flex-col items-stretch gap-2" onSubmit={(event) => { event.preventDefault(); submit(); }}>
+      <input autoFocus aria-label="Новая цель недели" value={title} onChange={(event) => setTitle(event.target.value)} maxLength={160} className="paper-field min-w-0" />
+      <button type="submit" className="paper-submit">Добавить</button>
     </form>
   );
 }
@@ -165,14 +146,24 @@ export function DayBoard(props: PlannerScreenProps & { date: string }) {
   }, [date]);
   return (
     <section>
-      <header className="px-4 py-4 sm:px-6">
-        <AppLink href="/" state={{ month: viewedMonth(date) }} className="inline-flex min-h-11 items-center text-sm font-semibold text-ink">К месяцу</AppLink>
-        <h2 className="date-selected mt-1 inline-flex max-w-full flex-wrap items-center gap-3 px-3 py-2 font-serif text-3xl leading-tight break-words sm:text-5xl">
-          {date === today ? (
-            <span aria-hidden="true" className="inline-grid h-9 w-9 shrink-0 place-items-center rounded-full font-sans text-base" style={{ background: 'var(--color-primary)', color: 'var(--color-on-primary)' }}>{Number(date.slice(8))}</span>
-          ) : null}
-          <span>{formatLocalDate(dateFromKey(date))}</span>
-        </h2>
+      <header className="px-3 pt-3 pb-1 sm:px-5">
+        <div className="flex min-w-0 items-start gap-1">
+          <AppLink
+            href="/"
+            state={{ month: date.slice(0, 7) }}
+            aria-label="Вернуться к календарю"
+            title="Вернуться к календарю"
+            className="grid h-11 w-11 shrink-0 place-items-center text-ink"
+          >
+            <ChevronLeft aria-hidden="true" size={22} />
+          </AppLink>
+          <h2 className="min-w-0 flex-1 pt-2 font-serif text-[1.5rem] leading-[1.2] break-words text-ink sm:text-[2rem]">
+            {date === today ? (
+              <span aria-hidden="true" className="mr-2 inline-grid h-7 w-7 shrink-0 place-items-center rounded-full align-middle font-sans text-sm" style={{ background: 'var(--color-primary)', color: 'var(--color-on-primary)' }}>{Number(date.slice(8))}</span>
+            ) : null}
+            {formatLocalDate(dateFromKey(date))}
+          </h2>
+        </div>
         <CarryLine
           count={date > today ? 0 : openCount(tasks)}
           label={date < today ? 'Перенести на сегодня' : 'Перенести на завтра'}
@@ -185,7 +176,7 @@ export function DayBoard(props: PlannerScreenProps & { date: string }) {
             .filter((task) => task.dayPart === part.id)
             .sort((a, b) => priorityRank(a.priority) - priorityRank(b.priority) || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
           return (
-            <div key={part.id} className="pt-4">
+            <div key={part.id} className={part.id === DAY_PARTS[0].id ? 'pt-1' : 'pt-4'}>
               <p className="px-1 text-sm text-muted">{part.label}</p>
               {rows.map((task) => renderTask(props, task, part.id === 'anytime'))}
               <AddTask date={date} part={part.id} onCreate={props.onCreate} />
@@ -206,11 +197,8 @@ export function MonthBoard(props: PlannerScreenProps) {
   const grid = monthGrid(anchor);
   const monthKey = anchor.slice(0, 7);
   const selectedDay = readSelectedDay();
-  const todayWeek = weekDates(today);
-  const inboxWeek = todayWeek[0];
   const weekKey = weekDates(today.slice(0, 7) === monthKey ? today : `${monthKey}-01`)[0];
   const goals = book.weekItems.filter((item) => item.week === weekKey && item.kind === 'goal');
-  const inbox = book.weekItems.filter((item) => item.week === inboxWeek && item.kind === 'inbox');
 
   function showMonth(next: string) {
     setAnchor(next);
@@ -233,26 +221,7 @@ export function MonthBoard(props: PlannerScreenProps) {
           <ChevronRight aria-hidden="true" size={22} />
         </button>
       </header>
-      <CaptureField onAdd={(title) => props.onAddWeekItem(inboxWeek, 'inbox', title)} />
-      <div className="px-4 pb-2 sm:px-6">
-        <p className="mt-3 text-sm text-muted">Список дел</p>
-        {inbox.map((item) => (
-          <div key={item.id}>
-            <div className="flex items-start">
-              <PaperCheck checked={item.completed} label={item.completed ? `Вернуть «${item.title}»` : `Отметить «${item.title}»`} onClick={() => props.onToggleWeekItem(item.id)} />
-              <p className={`min-w-0 flex-1 py-2.5 text-base break-words ${item.completed ? 'text-muted line-through' : 'text-ink'}`}>{item.title}</p>
-            </div>
-            <div className="flex flex-wrap pb-1 pl-11">
-              {todayWeek.map((day, index) => (
-                <button key={day} type="button" onClick={() => props.onAssignWeekItem(item.id, day)} className="paper-choice">
-                  {WEEKDAYS[index].label}
-                </button>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-      <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_18rem]">
+      <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start lg:gap-3 lg:pr-4">
         <div className="min-w-0 px-2 pb-4 sm:px-4">
           <div className="grid grid-cols-7">
             {WEEKDAYS.map((day) => (
@@ -309,15 +278,18 @@ export function MonthBoard(props: PlannerScreenProps) {
             })}
           </div>
         </div>
-        <aside className="px-3 py-4 sm:px-5">
-          <p className="text-sm text-muted">Цели недели</p>
-          {goals.map((item) => (
-            <div key={item.id} className="flex items-start">
-              <PaperCheck checked={item.completed} label={item.completed ? `Вернуть цель «${item.title}»` : `Отметить цель «${item.title}»`} onClick={() => props.onToggleWeekItem(item.id)} />
-              <p className={`min-w-0 flex-1 py-2.5 text-base break-words ${item.completed ? 'text-muted line-through' : 'text-ink'}`}>{item.title}</p>
-            </div>
-          ))}
-          <AddRow label="Новая цель недели" onAdd={(title) => props.onAddWeekItem(weekKey, 'goal', title)} />
+        <aside className="week-goals mx-3 mb-4 p-5 lg:mx-0 lg:mt-1">
+          <h3 className="font-serif text-[1.375rem] leading-tight text-ink">Цели недели</h3>
+          <p className="mt-1 text-sm text-muted">{weekSpan(weekKey)}</p>
+          <div className="mt-2">
+            {goals.map((item) => (
+              <div key={item.id} className="flex items-start">
+                <PaperCheck checked={item.completed} label={item.completed ? `Вернуть цель «${item.title}»` : `Отметить цель «${item.title}»`} onClick={() => props.onToggleWeekItem(item.id)} />
+                <p className={`min-w-0 flex-1 py-2.5 text-base break-words ${item.completed ? 'text-muted line-through' : 'text-ink'}`}>{item.title}</p>
+              </div>
+            ))}
+            <AddGoal onAdd={(title) => props.onAddWeekItem(weekKey, 'goal', title)} />
+          </div>
         </aside>
       </div>
     </section>

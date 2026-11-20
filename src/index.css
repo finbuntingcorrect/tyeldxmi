@@ -181,6 +181,22 @@ html[data-theme='dark'] {
   box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--color-ink) 72%, transparent);
 }
 
+html {
+  --color-goal: #f6e4d4;
+  --color-goal-accent: #e6a04b;
+}
+
+html[data-theme='dark'] {
+  --color-goal: #3c312b;
+  --color-goal-accent: #e6a04b;
+}
+
+.week-goals {
+  background: var(--color-goal);
+  box-shadow: inset 3px 0 0 var(--color-goal-accent);
+  color: var(--color-ink);
+}
+
 .task-title-important {
   background: var(--color-important-soft);
   color: var(--color-important);
