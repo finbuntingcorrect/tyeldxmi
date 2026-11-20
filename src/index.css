@@ -345,6 +345,7 @@ html[data-theme='dark'] {
   font-size: 1.35rem;
   font-weight: 600;
   color: #2e211b;
+  white-space: nowrap;
 }
 
 .public-bar-actions {
@@ -369,19 +370,21 @@ html[data-theme='dark'] {
   background: #c87424;
 }
 
-.public-quiet,
-.public-text {
+.public-secondary {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   min-height: 2.75rem;
-  padding: 0 0.55rem;
+  padding: 0 1rem;
+  border: 2px solid #2e211b;
+  background: #fef4e4;
   color: #2e211b;
   font-weight: 700;
-  text-underline-offset: 0.18rem;
+  text-decoration: none;
 }
 
-.public-quiet {
-  text-decoration: underline;
+.public-secondary:hover {
+  background: #f3e2cc;
 }
 
 .hero {
@@ -488,6 +491,9 @@ html[data-theme='dark'] {
 }
 
 .public-again {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
   padding: 0.8rem 1.25rem 1.4rem;
 }
 
@@ -638,13 +644,21 @@ html[data-theme='dark'] {
   }
 }
 
-@media (max-width: 420px) {
+@media (max-width: 520px) {
   .public-bar {
-    align-items: flex-start;
+    flex-wrap: wrap;
+    align-items: center;
   }
 
   .public-bar-actions {
+    margin-left: auto;
+  }
+}
+
+@media (max-width: 420px) {
+  .hero-actions,
+  .public-again {
     flex-direction: column;
-    align-items: flex-end;
+    align-items: stretch;
   }
 }

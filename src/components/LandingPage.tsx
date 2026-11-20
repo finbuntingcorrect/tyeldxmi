@@ -16,8 +16,8 @@ export function LandingPage({ signedIn }: { signedIn: boolean }) {
             <AppLink href="/app" className="public-primary">Открыть планер</AppLink>
           ) : (
             <>
-              <AppLink href="/login" className="public-quiet">Войти</AppLink>
-              <AppLink href="/signup" className="public-primary">Начать пользоваться</AppLink>
+              <AppLink href="/login" className="public-secondary">Войти</AppLink>
+              <AppLink href="/signup" className="public-primary">Регистрация</AppLink>
             </>
           )}
         </div>
@@ -30,8 +30,8 @@ export function LandingPage({ signedIn }: { signedIn: boolean }) {
             <AppLink href="/app" className="public-primary">Открыть планер</AppLink>
           ) : (
             <div className="hero-actions">
-              <AppLink href="/signup" className="public-primary">Начать пользоваться</AppLink>
-              <AppLink href="/login" className="public-text">Уже есть аккаунт? Войти</AppLink>
+              <AppLink href="/signup" className="public-primary">Регистрация</AppLink>
+              <AppLink href="/login" className="public-secondary">Войти</AppLink>
             </div>
           )}
         </div>
@@ -72,7 +72,8 @@ export function LandingPage({ signedIn }: { signedIn: boolean }) {
       </section>
       {signedIn ? null : (
         <section className="public-again">
-          <AppLink href="/signup" className="public-primary">Начать пользоваться</AppLink>
+          <AppLink href="/signup" className="public-primary">Регистрация</AppLink>
+          <AppLink href="/login" className="public-secondary">Войти</AppLink>
         </section>
       )}
       <footer className="public-foot">Today Cat</footer>
