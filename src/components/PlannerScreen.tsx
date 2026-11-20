@@ -49,6 +49,12 @@ function openCount(tasks: { completed: boolean }[]) {
 
 const SELECTED_DAY_KEY = 'today-cat.selected-day';
 
+function viewedMonth(date: string) {
+  const month = (window.history.state as { month?: string } | null)?.month;
+  if (month && isMonthKey(month)) return month;
+  return date.slice(0, 7);
+}
+
 function readSelectedDay() {
   if (typeof sessionStorage === 'undefined') return null;
   try {
@@ -160,7 +166,7 @@ export function DayBoard(props: PlannerScreenProps & { date: string }) {
   return (
     <section>
       <header className="px-4 py-4 sm:px-6">
-        <AppLink href="/" className="inline-flex min-h-11 items-center text-sm font-semibold text-ink">К месяцу</AppLink>
+        <AppLink href="/" state={{ month: viewedMonth(date) }} className="inline-flex min-h-11 items-center text-sm font-semibold text-ink">К месяцу</AppLink>
         <h2 className="date-selected mt-1 inline-flex max-w-full flex-wrap items-center gap-3 px-3 py-2 font-serif text-3xl leading-tight break-words sm:text-5xl">
           {date === today ? (
             <span aria-hidden="true" className="inline-grid h-9 w-9 shrink-0 place-items-center rounded-full font-sans text-base" style={{ background: 'var(--color-primary)', color: 'var(--color-on-primary)' }}>{Number(date.slice(8))}</span>

@@ -262,6 +262,15 @@ export function PlanTask({ task, today, series = null, onToggle, onMove, onUpdat
   }
 
   useEffect(() => {
+    if (!open && !removing) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [open, removing]);
+
+  useEffect(() => {
     if (!open) return;
     function onKey(event: KeyboardEvent) {
       if (event.key !== 'Escape') return;
@@ -294,7 +303,7 @@ export function PlanTask({ task, today, series = null, onToggle, onMove, onUpdat
     : '';
   return (
     <div>
-      <div className="flex items-center">
+      <div className="flex items-start">
         <PaperCheck
           checked={task.completed}
           label={task.completed ? `Вернуть «${task.title}»` : `Выполнить «${task.title}»`}
@@ -388,7 +397,7 @@ export function PlanTask({ task, today, series = null, onToggle, onMove, onUpdat
                 <RepeatField date={date} value={repeat} onChange={(next) => { setSchedule(next); setAskScope(false); }} />
                 <NoteField id={noteId} open={noteOpen} note={note} onOpen={() => setNoteOpen(true)} onChange={(value) => { setNote(value); setAskScope(false); }} />
               </div>
-              <div className="flex flex-col gap-2 border-t border-line px-5 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+              <div data-dialog-footer="" className="flex flex-col gap-2 border-t border-line px-5 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
                 {askScope ? (
                   <>
                     <button type="button" onClick={() => commit('one')} className="paper-submit min-h-11">Только это повторение</button>
