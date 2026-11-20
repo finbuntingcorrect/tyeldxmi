@@ -125,6 +125,15 @@ export function plannedBreakFor(cycle: number, rounds: number): BreakKind {
   return cycle + 1 >= size ? 'long' : 'short';
 }
 
+/** Circles count finished focus sessions only. An open attempt does not fill one. */
+export function cycleMarks(completed: number, rounds: number, attemptOpen: boolean): { label: string; filled: number } {
+  const size = Math.max(1, Math.round(rounds) || DEFAULT_ROUNDS);
+  const done = Math.max(0, Math.min(size, Math.round(completed) || 0));
+  if (!attemptOpen && done >= size) return { label: 'Цикл завершён', filled: size };
+  const approach = attemptOpen ? Math.min(size, done + 1) : Math.max(1, done);
+  return { label: `Подход ${approach} из ${size}`, filled: done };
+}
+
 export function shouldAutoAdvance(endsAt: number | null, now: number, auto: boolean): boolean {
   if (!auto || endsAt == null) return false;
   return now >= endsAt && now - endsAt <= AUTO_ADVANCE_WINDOW_MS;

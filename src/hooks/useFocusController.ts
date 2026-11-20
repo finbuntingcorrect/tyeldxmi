@@ -77,6 +77,11 @@ export function useFocusController({ login, session, focusAt, reminders, sound, 
     onApplyRef.current = onApply;
   }, [session, focusAt, login, reminders, sound, volume, autoStart, rounds, cycle, shortMinutes, longMinutes, onApply]);
 
+  function openingNewCycle() {
+    const size = Math.max(1, Math.round(roundsRef.current) || 1);
+    return cycleRef.current >= size;
+  }
+
   function publish(next: FocusSession | null, addMs = 0, resetCycle = false) {
     const at = Date.now();
     sessionRef.current = next;
@@ -142,10 +147,10 @@ export function useFocusController({ login, session, focusAt, reminders, sound, 
     if (!advance) return;
     if (done.phase === 'focus') {
       const minutes = kind === 'long' ? longRef.current : shortRef.current;
-      publish(startBreak(done, clock, signal(), minutes, kind), 0, kind === 'long');
+      publish(startBreak(done, clock, signal(), minutes, kind));
       return;
     }
-    publish(startAnother(done, clock, signal()));
+    publish(startAnother(done, clock, signal()), 0, openingNewCycle());
   }
 
   useEffect(() => {
@@ -202,7 +207,7 @@ export function useFocusController({ login, session, focusAt, reminders, sound, 
         if (!ready) setNotice('Звук не включился. Таймер идёт.');
       });
     }
-    publish(startFocus(taskId, minutes, Date.now(), signal()));
+    publish(startFocus(taskId, minutes, Date.now(), signal()), 0, openingNewCycle());
     setRemindOpen(false);
     return true;
   }
@@ -244,7 +249,7 @@ export function useFocusController({ login, session, focusAt, reminders, sound, 
     takeLead(loginRef.current, true);
     const kind = current.full ? current.plannedBreak : 'short';
     const minutes = kind === 'long' ? longRef.current : shortRef.current;
-    publish(startBreak(current, Date.now(), signal(), minutes, kind), 0, kind === 'long');
+    publish(startBreak(current, Date.now(), signal(), minutes, kind));
     setRemindOpen(false);
   }
 
@@ -252,7 +257,7 @@ export function useFocusController({ login, session, focusAt, reminders, sound, 
     const current = sessionRef.current;
     if (!current?.settled || current.phase !== 'focus') return;
     takeLead(loginRef.current, true);
-    publish(null, 0, current.full && current.plannedBreak === 'long');
+    publish(null);
     setRemindOpen(false);
   }
 
@@ -265,7 +270,7 @@ export function useFocusController({ login, session, focusAt, reminders, sound, 
         if (!ready) setNotice('Звук не включился. Таймер идёт.');
       });
     }
-    publish(startIdle(taskId, phase, focusMinutes, minutes, Date.now(), signal()));
+    publish(startIdle(taskId, phase, focusMinutes, minutes, Date.now(), signal()), 0, phase === 'focus' && openingNewCycle());
     setRemindOpen(false);
     return true;
   }
@@ -274,7 +279,7 @@ export function useFocusController({ login, session, focusAt, reminders, sound, 
     const current = sessionRef.current;
     if (!current?.settled) return;
     takeLead(loginRef.current, true);
-    publish(startAnother({ ...current, focusMinutes: minutes }, Date.now(), signal()));
+    publish(startAnother({ ...current, focusMinutes: minutes }, Date.now(), signal()), 0, openingNewCycle());
     setRemindOpen(false);
   }
 

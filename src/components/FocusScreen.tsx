@@ -5,6 +5,7 @@ import { PaperCheck } from './PaperCheck';
 import {
   FOCUS_PRESETS,
   countWord,
+  cycleMarks,
   formatClock,
   minutesLabel,
   remainingMs,
@@ -65,7 +66,6 @@ export function FocusScreen(props: FocusScreenProps) {
   const { book, session, now, reduced } = props;
   const cat = book.cat;
   const titleId = useId();
-  const [choice, setChoice] = useState<PhaseChoice>('focus');
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState('');
   const [menu, setMenu] = useState(false);
@@ -82,7 +82,7 @@ export function FocusScreen(props: FocusScreenProps) {
   const early = Boolean(session?.settled && session.phase === 'focus' && !session.full);
   const doneBreak = Boolean(session?.settled && session.phase === 'break');
   const locked = running || paused;
-  const phase: PhaseChoice = !session ? choice : session.phase === 'focus' ? 'focus' : session.plannedBreak;
+  const phase: PhaseChoice = !session || session.phase === 'focus' ? 'focus' : session.plannedBreak;
   const tone = phase === 'focus' ? 'focus' : 'break';
   const focusMinutes = cat.pomodoroMinutes;
   const phaseMinutes = phase === 'focus' ? focusMinutes : phase === 'long' ? cat.longMinutes : cat.shortMinutes;
@@ -92,22 +92,8 @@ export function FocusScreen(props: FocusScreenProps) {
   const linkedId = session?.taskId || book.focusId || '';
   const linked = book.tasks.find((task) => task.id === linkedId && !task.deleted) ?? null;
   const rounds = cat.rounds;
-  const approach = session?.plannedBreak === 'long' && (session.phase === 'break' || (session.phase === 'focus' && session.settled))
-    ? rounds
-    : session?.phase === 'focus' && session.settled
-      ? Math.max(1, Math.min(cat.focusCycle, rounds))
-      : Math.min(cat.focusCycle + 1, rounds);
-  const filled = session?.phase === 'break' && session.plannedBreak === 'long'
-    ? rounds
-    : session?.phase === 'focus' && !session.settled
-      ? Math.min(cat.focusCycle, rounds)
-      : Math.min(cat.focusCycle, rounds);
+  const marks = cycleMarks(cat.focusCycle, rounds, Boolean(session?.phase === 'focus' && !session.full));
   const todayMinutes = Math.floor(cat.focusMsToday / 60_000);
-  const phases: { id: PhaseChoice; label: string }[] = [
-    { id: 'focus', label: 'Фокус' },
-    { id: 'short', label: `${cat.shortMinutes} мин` },
-    { id: 'long', label: `${cat.longMinutes} мин` },
-  ];
 
   useEffect(() => {
     if (reduced || session) return;
@@ -203,28 +189,9 @@ export function FocusScreen(props: FocusScreenProps) {
   return (
     <section className="lg:grid lg:grid-cols-[minmax(0,1fr)_17rem] lg:items-start">
       <div className="mx-auto w-full max-w-[760px] px-4 py-4 sm:px-6">
-        <h2 className="sr-only">Фокус</h2>
         <p className="sr-only" aria-live="polite">{live}</p>
-        <div className="flex items-start justify-between gap-3">
-          <div role="tablist" aria-label="Фаза таймера" className="flex min-w-0 flex-1">
-            {phases.map((item) => {
-              const selected = phase === item.id;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={selected}
-                  disabled={locked && !selected}
-                  onClick={() => { if (!locked) setChoice(item.id); }}
-                  className={`min-h-11 min-w-0 flex-1 border-b-2 px-1 text-xs leading-tight font-semibold sm:px-3 sm:text-sm ${selected ? 'border-current text-ink' : 'border-transparent text-muted'}`}
-                  style={selected ? { color: item.id === 'focus' ? 'var(--color-focus)' : 'var(--color-break)', borderColor: 'currentColor' } : undefined}
-                >
-                  {item.label}
-                </button>
-              );
-            })}
-          </div>
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="border-b-2 text-sm leading-tight font-semibold" style={{ color: 'var(--color-focus)', borderColor: 'currentColor' }}>Фокус</h2>
           <button
             type="button"
             aria-pressed={cat.sound}
@@ -299,11 +266,18 @@ export function FocusScreen(props: FocusScreenProps) {
             ))}
           </div>
         ) : null}
-        <p className="mt-4 text-center text-sm text-ink">Подход {approach} из {rounds}</p>
+        <p className="mt-4 text-center text-sm text-ink">{marks.label}</p>
         <div className="mt-1 flex justify-center gap-2" aria-hidden="true">
-          {Array.from({ length: rounds }, (_, index) => (
-            <span key={index} className={`h-2.5 w-2.5 rounded-full border ${index < filled ? 'border-ink bg-ink' : 'border-line bg-transparent'}`} />
-          ))}
+          {Array.from({ length: rounds }, (_, index) => {
+            const filled = index < marks.filled;
+            return (
+              <span
+                key={index}
+                className="h-2.5 w-2.5 rounded-full border"
+                style={{ background: filled ? 'var(--color-ink)' : 'transparent', borderColor: 'var(--color-ink)' }}
+              />
+            );
+          })}
         </div>
         <p className="mt-2 text-center text-sm text-muted">
           Сегодня {cat.focusCompleted} {countWord(cat.focusCompleted, 'подход', 'подхода', 'подходов')} · {minutesLabel(todayMinutes)}

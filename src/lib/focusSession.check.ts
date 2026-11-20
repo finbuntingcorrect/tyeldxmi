@@ -7,6 +7,7 @@ import {
   formatClock,
   parseFocusMinutes,
   pauseSession,
+  cycleMarks,
   plannedBreakFor,
   remainingMs,
   reminderDue,
@@ -61,6 +62,13 @@ assert.equal(unappliedFocusMs(broke, start + 26 * 60_000), 0);
 assert.equal(settleSession(broke, start + 31 * 60_000).addMs, 0);
 assert.equal(plannedBreakFor(0, 4), 'short');
 assert.equal(plannedBreakFor(3, 4), 'long');
+assert.deepEqual(cycleMarks(0, 4, true), { label: 'Подход 1 из 4', filled: 0 });
+assert.deepEqual(cycleMarks(0, 4, false), { label: 'Подход 1 из 4', filled: 0 });
+assert.deepEqual(cycleMarks(1, 4, false), { label: 'Подход 1 из 4', filled: 1 });
+assert.deepEqual(cycleMarks(1, 4, true), { label: 'Подход 2 из 4', filled: 1 });
+assert.deepEqual(cycleMarks(3, 4, true), { label: 'Подход 4 из 4', filled: 3 });
+assert.deepEqual(cycleMarks(4, 4, false), { label: 'Цикл завершён', filled: 4 });
+assert.deepEqual(cycleMarks(2, 4, false), { label: 'Подход 2 из 4', filled: 2 });
 assert.equal(shouldAutoAdvance(start + 20 * 60_000, start + 20 * 60_000 + 1000, true), true);
 assert.equal(shouldAutoAdvance(start + 20 * 60_000, start + 20 * 60_000 + 60_000, true), false);
 assert.equal(shouldAutoAdvance(start + 20 * 60_000, start + 20 * 60_000 + 1000, false), false);

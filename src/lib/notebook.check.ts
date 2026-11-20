@@ -418,6 +418,23 @@ assert.equal(rounded.cat.focusCompleted, 1);
 assert.equal(rounded.cat.focusCycle, 1);
 const twice = applyFocus(rounded, rounded.focusSession, { taskId: timedId, focusMs: 60_000 }, 80);
 assert.equal(twice.cat.focusCompleted, 1);
+const earlyFocus = applyFocus(twice, { ...twice.focusSession!, signalId: 'early', settled: true, full: false }, { taskId: timedId, addMs: 0 }, 90);
+assert.equal(earlyFocus.cat.focusCompleted, 1);
+assert.equal(earlyFocus.cat.focusCycle, 1);
+let cycle = earlyFocus;
+for (let step = 2; step <= 4; step += 1) {
+  const signal = `round-${step}`;
+  const open = applyFocus(cycle, { ...cycle.focusSession!, signalId: signal, settled: false, full: false, phase: 'focus' }, undefined, 100 + step);
+  assert.equal(open.cat.focusCycle, step - 1);
+  cycle = applyFocus(open, { ...open.focusSession!, settled: true, full: true }, undefined, 110 + step);
+  assert.equal(cycle.cat.focusCycle, step);
+  assert.equal(cycle.cat.focusCompleted, step);
+  const again = applyFocus(cycle, cycle.focusSession, undefined, 120 + step);
+  assert.equal(again.cat.focusCompleted, step);
+}
+const keptToday = applyFocus(cycle, { ...cycle.focusSession!, signalId: 'next', settled: false, full: false, phase: 'focus' }, { taskId: timedId, resetCycle: true }, 200);
+assert.equal(keptToday.cat.focusCycle, 0);
+assert.equal(keptToday.cat.focusCompleted, 4);
 const restored = parseNotebook(JSON.parse(JSON.stringify(same)));
 assert.equal(restored?.focusSession?.paused, true);
 assert.equal(restored?.focusSession?.taskId, timedId);
