@@ -66,11 +66,14 @@ export function CatCompanion(props: CatCompanionProps) {
   });
 
   useLayoutEffect(() => {
+    const reserve = props.hidden || !frame.tight ? 0 : frame.size + bottom + 8;
     document.documentElement.style.setProperty('--cat-lane', props.hidden ? '0px' : `${frame.lane}px`);
+    document.documentElement.style.setProperty('--cat-bottom', `${reserve}px`);
     return () => {
       document.documentElement.style.removeProperty('--cat-lane');
+      document.documentElement.style.removeProperty('--cat-bottom');
     };
-  }, [frame.lane, props.hidden]);
+  }, [bottom, frame.lane, frame.size, frame.tight, props.hidden]);
 
   useEffect(() => {
     const previous = placedX.current;

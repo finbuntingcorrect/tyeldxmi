@@ -104,8 +104,12 @@ assert.equal(catPose({ greeting: false, openTasks: true, taskSuccess: false, rem
 assert.deepEqual(clampCatPosition(-20, 4000, 800, 600, 88, 72, 96), { x: 8, y: 416 });
 assert.deepEqual(clampCatPosition(0, 0, 1280, 800, 176, 76, 120, 1088), { x: 1088, y: 76 });
 assert.deepEqual(clampCatPosition(2000, 2000, 1280, 800, 176, 76, 120, 1088), { x: 1096, y: 504 });
-assert.equal(catFrame(390, 844, 24).lane, 0);
-assert.equal(catFrame(390, 844, 24).tight, true);
+const phoneFrame = catFrame(390, 844, 24);
+assert.equal(phoneFrame.lane, 0);
+assert.equal(phoneFrame.tight, true);
+assert.equal(phoneFrame.size, 72);
+assert.equal(phoneFrame.top, 844 - 72 - 24);
+assert.equal(catFrame(1280, 800, 24).top, 76);
 assert.ok(catFrame(1280, 800, 24).lane > 80);
 assert.equal(catFrame(1280, 800, 24).tight, false);
 

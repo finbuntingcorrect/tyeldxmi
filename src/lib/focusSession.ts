@@ -363,7 +363,7 @@ export function catFrame(width: number, height: number, bottom: number) {
   const available = Math.max(48, height - top - bottom - 12);
   if (width < 700) {
     const size = Math.min(72, available);
-    return { size, top, lane: 0, minX: 8, tight: true };
+    return { size, top: Math.max(top, height - size - bottom), lane: 0, minX: 8, tight: true };
   }
   const tight = height < 520;
   const widthRoom = Math.max(48, width - (tight ? 232 : 336) - 20);
