@@ -82,24 +82,32 @@ export function useNotebook() {
   }, []);
 
   function show(accountLogin: string, book: Notebook, error: string | null) {
-    applyTheme(book.theme ?? 'yellow');
+    const next = prepareNotebook(book);
+    bookRef.current = next;
+    applyTheme(next.theme ?? 'yellow');
     setLogin(accountLogin);
-    setState({ book: prepareNotebook(book), error });
+    setState({ book: next, error });
     setStatus('ready');
   }
 
-  async function adopt(accountLogin: string, raw: unknown, claim: boolean) {
+  async function adopt(accountLogin: string, raw: unknown, claim: boolean, displayName = '') {
     let book = named(parseNotebook(raw) ?? emptyNotebook(), accountLogin);
+    let claimed = false;
     if (notebookIsEmpty(book) && (claim || claimMatches(accountLogin))) {
       const local = peekLocalNotebook();
       if (local) {
         rememberClaim(accountLogin);
         book = named(local, accountLogin);
-        const message = await saveCabinet(book);
-        if (!message) clearClaim();
-        show(accountLogin, book, message);
-        return;
+        claimed = true;
       }
+    }
+    const beforeName = book.name;
+    if (displayName) book = setName(book, displayName);
+    if (claimed || book.name !== beforeName) {
+      const message = await saveCabinet(book);
+      if (claimed && !message) clearClaim();
+      show(accountLogin, book, message);
+      return;
     }
     show(accountLogin, book, null);
   }
@@ -164,11 +172,11 @@ export function useNotebook() {
     }
   }
 
-  async function register(nextLogin: string, password: string) {
+  async function register(nextLogin: string, password: string, displayName = '') {
     try {
       const result = await registerCabinet(nextLogin, password);
       generation.current += 1;
-      await adopt(result.login, result.notebook, true);
+      await adopt(result.login, result.notebook, true, displayName);
       return null;
     } catch (error) {
       return cabinetError(error);

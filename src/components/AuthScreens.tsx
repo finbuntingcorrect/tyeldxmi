@@ -12,6 +12,14 @@ function emailError(value: string) {
   return null;
 }
 
+function nameError(value: string) {
+  const name = value.trim();
+  if (!name) return 'Введи имя.';
+  if (name.includes('@')) return 'Напиши имя, не почту.';
+  if (name.length > 40) return 'Имя — до 40 символов.';
+  return null;
+}
+
 function passwordError(value: string) {
   if (!value) return 'Введи пароль.';
   if (value.length < 6 || value.length > 72) return 'Пароль — от 6 до 72 символов.';
@@ -139,27 +147,32 @@ export function LoginScreen({ onEnter }: { onEnter: (email: string, password: st
   );
 }
 
-export function SignupScreen({ onCreate }: { onCreate: (email: string, password: string) => Promise<string | null> }) {
+export function SignupScreen({ onCreate }: { onCreate: (email: string, password: string, name: string) => Promise<string | null> }) {
+  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [nameErrorText, setNameErrorText] = useState<string | null>(null);
   const [emailErrorText, setEmailErrorText] = useState<string | null>(null);
   const [passwordErrorText, setPasswordErrorText] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const nameId = useId();
   const emailId = useId();
   const passwordId = useId();
 
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (pending) return;
+    const nextNameError = nameError(name);
     const nextEmailError = emailError(email);
     const nextPasswordError = passwordError(password);
+    setNameErrorText(nextNameError);
     setEmailErrorText(nextEmailError);
     setPasswordErrorText(nextPasswordError);
     setFormError(null);
-    if (nextEmailError || nextPasswordError) return;
+    if (nextNameError || nextEmailError || nextPasswordError) return;
     setPending(true);
-    const message = signupNotice(await onCreate(email.trim(), password));
+    const message = signupNotice(await onCreate(email.trim(), password, name.trim()));
     setPending(false);
     if (message) setFormError(message);
   }
@@ -169,6 +182,21 @@ export function SignupScreen({ onCreate }: { onCreate: (email: string, password:
       <form className="auth-card" onSubmit={submit} noValidate>
         <h1>Создать аккаунт</h1>
         <p className="auth-lead">Начни с одного небольшого дела.</p>
+        <div className="auth-field">
+          <label htmlFor={nameId}>Имя</label>
+          <input
+            id={nameId}
+            type="text"
+            autoComplete="name"
+            autoCapitalize="words"
+            value={name}
+            onChange={(event) => { setName(event.target.value); setNameErrorText(null); setFormError(null); }}
+            aria-invalid={nameErrorText ? true : undefined}
+            aria-describedby={nameErrorText ? `${nameId}-error` : undefined}
+            className="public-field"
+          />
+          {nameErrorText ? <p id={`${nameId}-error`} className="auth-error">{nameErrorText}</p> : null}
+        </div>
         <div className="auth-field">
           <label htmlFor={emailId}>Почта</label>
           <input
