@@ -142,7 +142,6 @@ export function Home() {
     now: focus.now,
   });
   const session = book.focusSession;
-  const sessionTask = book.tasks.find((task) => task.id === session?.taskId) ?? null;
 
   function toggle(id: string) {
     const task = book.tasks.find((item) => item.id === id);
@@ -333,7 +332,6 @@ export function Home() {
       {session && !session.settled && page.name !== 'focus' ? (
         <FocusBar
           session={session}
-          title={sessionTask?.title ?? 'Свободная сессия'}
           remaining={focus.remaining}
           onOpen={() => go('/focus')}
           onPause={focus.pause}

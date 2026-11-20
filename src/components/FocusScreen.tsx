@@ -39,11 +39,6 @@ type FocusScreenProps = {
   onDismissRemind: () => void;
 };
 
-const PHASES: { id: PhaseChoice; label: string }[] = [
-  { id: 'focus', label: 'Фокус' },
-  { id: 'short', label: 'Короткий перерыв' },
-  { id: 'long', label: 'Длинный перерыв' },
-];
 
 function Ring({ progress, tone }: { progress: number; tone: 'focus' | 'break' }) {
   const radius = 46;
@@ -108,7 +103,11 @@ export function FocusScreen(props: FocusScreenProps) {
       ? Math.min(cat.focusCycle, rounds)
       : Math.min(cat.focusCycle, rounds);
   const todayMinutes = Math.floor(cat.focusMsToday / 60_000);
-  const breakLabel = session?.plannedBreak === 'long' ? `Перерыв ${cat.longMinutes} минут` : `Перерыв ${cat.shortMinutes} минут`;
+  const phases: { id: PhaseChoice; label: string }[] = [
+    { id: 'focus', label: 'Фокус' },
+    { id: 'short', label: `${cat.shortMinutes} мин` },
+    { id: 'long', label: `${cat.longMinutes} мин` },
+  ];
 
   useEffect(() => {
     if (reduced || session) return;
@@ -208,7 +207,7 @@ export function FocusScreen(props: FocusScreenProps) {
         <p className="sr-only" aria-live="polite">{live}</p>
         <div className="flex items-start justify-between gap-3">
           <div role="tablist" aria-label="Фаза таймера" className="flex min-w-0 flex-1">
-            {PHASES.map((item) => {
+            {phases.map((item) => {
               const selected = phase === item.id;
               return (
                 <button
@@ -237,16 +236,12 @@ export function FocusScreen(props: FocusScreenProps) {
           </button>
         </div>
         {cat.autoStart ? <p className="mt-2 text-sm font-semibold text-ink">Автозапуск включён</p> : null}
-        <p className="mt-3 min-h-11 break-words text-base text-ink">{linked ? linked.title : 'Свободная сессия'}</p>
-        <div className="mt-2 flex items-end justify-center gap-2 sm:gap-6">
-          <div className="relative h-36 w-36 shrink-0 sm:h-64 sm:w-64">
+        <div className="mt-3 flex items-end justify-center gap-2 sm:gap-4">
+          <div className="@container relative aspect-square w-[min(18rem,calc(100%-7.5rem))] shrink-0 sm:w-72">
             <Ring progress={progress} tone={tone} />
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <p aria-hidden="true" className="font-sans text-[3.5rem] leading-none font-semibold tabular-nums text-ink sm:text-[6.5rem]">{formatClock(left)}</p>
-              <p className="mt-1 text-xs font-semibold tracking-wide text-muted uppercase">{PHASES.find((item) => item.id === phase)?.label}</p>
-            </div>
+            <p aria-hidden="true" className="absolute inset-0 flex items-center justify-center font-sans text-[26cqw] leading-none font-semibold tabular-nums text-ink">{formatClock(left)}</p>
           </div>
-          <div className="relative h-36 w-36 shrink-0 sm:h-52 sm:w-52" aria-hidden="true">
+          <div className="relative h-28 w-28 shrink-0 sm:h-52 sm:w-52" aria-hidden="true">
             <div
               className="absolute inset-0"
               style={reduced ? undefined : { transform: session?.phase === 'break' && step ? 'translateX(8px)' : 'translateX(0)', transition: 'transform 1.6s ease' }}
@@ -313,7 +308,6 @@ export function FocusScreen(props: FocusScreenProps) {
         <p className="mt-2 text-center text-sm text-muted">
           Сегодня {cat.focusCompleted} {countWord(cat.focusCompleted, 'подход', 'подхода', 'подходов')} · {minutesLabel(todayMinutes)}
         </p>
-        {doneFocus ? <p className="sr-only">{breakLabel}</p> : null}
       </div>
       <aside className="px-4 pb-6 sm:px-6 lg:px-3 lg:py-4">
         <div className="flex items-center justify-between">
