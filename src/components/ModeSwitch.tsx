@@ -2,16 +2,16 @@ import { AppLink } from './AppLink';
 import type { AppPage } from '../lib/route';
 
 const LINKS: { id: 'calendar' | 'habits' | 'focus'; href: string; label: string }[] = [
-  { id: 'calendar', href: '/', label: 'Календарь' },
-  { id: 'habits', href: '/habits', label: 'Привычки' },
-  { id: 'focus', href: '/focus', label: 'Фокус' },
+  { id: 'calendar', href: '/app', label: 'Календарь' },
+  { id: 'habits', href: '/app/habits', label: 'Привычки' },
+  { id: 'focus', href: '/app/focus', label: 'Фокус' },
 ];
 
 function currentLink(page: AppPage) {
   if (page.name === 'habits') return 'habits';
   if (page.name === 'focus') return 'focus';
-  if (page.name === 'settings') return null;
-  return 'calendar';
+  if (page.name === 'calendar' || page.name === 'day') return 'calendar';
+  return null;
 }
 
 export function ModeSwitch({ page }: { page: AppPage }) {

@@ -13,6 +13,7 @@ import {
   setHabitArchived,
   createTask,
   emptyNotebook,
+  needsHello,
   fromLegacyTasks,
   addWeekItem,
   assignWeekItem,
@@ -581,5 +582,13 @@ assert.equal(legacyHabit?.habits[0].archived, false);
 managed = deleteHabit(managed, managedId);
 assert.equal(managed.habits.length, 0);
 assert.equal(managed.marks.length, 0);
+
+assert.equal(needsHello(emptyNotebook()), true);
+assert.equal(needsHello(chooseMode(emptyNotebook(), 'planner')), false);
+const withTask = createTask(emptyNotebook(), { title: 'Старая', date: '2026-11-20', dayPart: 'morning', priority: 'normal', repeatKind: 'none', weekdays: [] }, '2026-11-20T10:00:00.000Z');
+assert.equal(withTask.greeted, false);
+assert.equal(needsHello(withTask), false);
+const greetedWithTask = parseNotebook({ ...withTask, greeted: true, mode: 'planner' });
+assert.equal(needsHello(greetedWithTask ?? emptyNotebook()), false);
 
 console.log('notebook ok');

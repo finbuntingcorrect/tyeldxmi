@@ -4,6 +4,7 @@ import type { AppPage } from '../lib/route';
 export type RouteValue = {
   page: AppPage;
   go: (path: string, state?: unknown) => void;
+  replace: (path: string) => void;
 };
 
 export const RouteContext = createContext<RouteValue | null>(null);

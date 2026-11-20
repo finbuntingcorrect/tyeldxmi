@@ -204,15 +204,16 @@ export function useNotebook() {
     try {
       await logoutCabinet();
     } catch (error) {
-      if (!mounted.current) return;
+      if (!mounted.current) return false;
       setState((current) => ({ ...current, error: cabinetError(error) }));
-      return;
+      return false;
     }
-    if (!mounted.current) return;
+    if (!mounted.current) return false;
     setLogin('');
     setState({ book: emptyNotebook(), error: null });
     applyTheme('yellow');
     setStatus('anon');
+    return true;
   }
 
   function feedTreat(date: string, kind: TreatKind) {

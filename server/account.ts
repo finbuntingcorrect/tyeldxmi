@@ -140,7 +140,7 @@ export async function requestLink(emailValue: unknown, origin: string): Promise<
     `INSERT INTO magic_links (id, email, token_hash, expires_at) VALUES ($1, $2, $3, now() + interval '30 minutes')`,
     [randomUUID(), email, hashToken(raw)],
   );
-  const mail = await sendMagicLink(email, `${origin}/?magic=${encodeURIComponent(raw)}`);
+  const mail = await sendMagicLink(email, `${origin}/forgot-password?magic=${encodeURIComponent(raw)}`);
   if (mail !== 'sent') {
     await sql.query('DELETE FROM magic_links WHERE token_hash = $1', [hashToken(raw)]);
     return { status: 503, body: { error: mail === 'unconfigured' ? 'mail' : 'mail_failed' } };

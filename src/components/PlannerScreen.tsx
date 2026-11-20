@@ -165,7 +165,7 @@ export function DayBoard(props: PlannerScreenProps & { date: string }) {
       <header className="px-3 pt-3 pb-1 sm:px-5">
         <div className="flex min-w-0 items-start gap-1">
           <AppLink
-            href="/"
+            href="/app"
             state={{ month: date.slice(0, 7) }}
             aria-label="Вернуться к календарю"
             title="Вернуться к календарю"
@@ -268,7 +268,7 @@ export function MonthBoard(props: PlannerScreenProps) {
               return (
                 <AppLink
                   key={day}
-                  href={`/day/${day}`}
+                  href={`/app/day/${day}`}
                   state={{ month: monthKey }}
                   aria-current={day === today ? 'date' : undefined}
                   aria-label={name}

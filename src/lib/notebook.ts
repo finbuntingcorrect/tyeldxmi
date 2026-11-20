@@ -129,6 +129,10 @@ export function notebookIsEmpty(book: Notebook) {
     && book.dayNotes.length === 0;
 }
 
+export function needsHello(book: Notebook) {
+  return !book.greeted && notebookIsEmpty(book);
+}
+
 export function emptyNotebook(): Notebook {
   return {
     version: 1,

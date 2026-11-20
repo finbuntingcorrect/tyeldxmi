@@ -3,13 +3,16 @@ import { localDateKey, dateFromKey, formatLocalDate } from '../lib/date';
 import { claimTreat } from '../lib/treats';
 import type { TreatKind } from '../lib/focusSession';
 import { catPose } from '../lib/focusSession';
-import { dayHint, habitsForDate, personName, tasksForDate } from '../lib/notebook';
-import { modeForPage } from '../lib/route';
+import { dayHint, habitsForDate, needsHello, personName, tasksForDate } from '../lib/notebook';
+import { isPlannerPage, modeForPage, pagePath, safeNext } from '../lib/route';
 import { useRoute } from '../hooks/routeContext';
 import { unlockSound } from '../lib/focusSound';
 import { useFocusController } from '../hooks/useFocusController';
 import { useNotebook } from '../hooks/useNotebook';
-import { AccountGate, CabinetSplash } from './AccountGate';
+import { ForgotScreen, LoginScreen, ResetScreen, SignupScreen } from './AuthScreens';
+import { CabinetSplash } from './AccountGate';
+import { FirstHello } from './FirstHello';
+import { LandingPage } from './LandingPage';
 import { CatCompanion } from './CatCompanion';
 import { FocusBar } from './FocusBar';
 import { FocusScreen } from './FocusScreen';
@@ -18,19 +21,17 @@ import { ModeSwitch } from './ModeSwitch';
 import { DayBoard, MonthBoard } from './PlannerScreen';
 import { AppLink } from './AppLink';
 import { SettingsPanel } from './SettingsPanel';
-import { Welcome } from './Welcome';
 
 export function Home() {
   const notebook = useNotebook();
   const today = localDateKey();
-  const { page, go } = useRoute();
+  const { page, go, replace } = useRoute();
   const [burst, setBurst] = useState(0);
   const [greeting, setGreeting] = useState(false);
   const [conflict, setConflict] = useState<{ id: string | null } | null>(null);
   const [reduced, setReduced] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   const [soundNote, setSoundNote] = useState<string | null>(null);
   const book = notebook.book;
-  const mode = book.mode;
   const focus = useFocusController({
     login: notebook.login,
     session: book.focusSession,
@@ -70,7 +71,7 @@ export function Home() {
   }, [page, book.greeted, book.mode, book.name, notebook]);
 
   useEffect(() => {
-    if (notebook.status !== 'ready') {
+    if (notebook.status === 'loading') {
       document.title = 'Today Cat';
       return;
     }
@@ -79,8 +80,12 @@ export function Home() {
       : page.name === 'habits' ? 'Привычки'
         : page.name === 'focus' ? 'Фокус'
           : page.name === 'settings' ? 'Настройки'
-            : 'Календарь';
-    document.title = `${title} — Today Cat`;
+            : page.name === 'login' ? 'Вход'
+              : page.name === 'signup' ? 'Регистрация'
+                : page.name === 'forgot' ? 'Восстановление пароля'
+                  : page.name === 'calendar' ? 'Календарь'
+                    : '';
+    document.title = title ? `${title} — Today Cat` : 'Today Cat';
   }, [page, notebook.status]);
 
   useEffect(() => {
@@ -92,37 +97,52 @@ export function Home() {
     return () => window.removeEventListener('keydown', onKey);
   }, [conflict]);
 
+  const guestPlanner = notebook.status === 'anon' && !notebook.resetToken && isPlannerPage(page);
+  const authedGate = notebook.status === 'ready' && (page.name === 'login' || page.name === 'signup');
+  const redirectTo = guestPlanner
+    ? `/login?next=${encodeURIComponent(pagePath(page))}`
+    : authedGate
+      ? (safeNext(new URLSearchParams(window.location.search).get('next')) || '/app')
+      : null;
+
+  useEffect(() => {
+    if (!redirectTo) return;
+    const here = `${window.location.pathname}${window.location.search}`;
+    if (here === redirectTo) return;
+    replace(redirectTo);
+  }, [redirectTo, replace]);
+
   if (notebook.status === 'loading') return <CabinetSplash />;
+  if (notebook.resetToken && notebook.status === 'anon') {
+    return <ResetScreen token={notebook.resetToken} onReset={notebook.setPassword} />;
+  }
   if (notebook.status === 'anon') {
+    if (guestPlanner) return <CabinetSplash />;
+    if (page.name === 'login') return <LoginScreen onEnter={notebook.signIn} />;
+    if (page.name === 'signup') return <SignupScreen onCreate={notebook.register} />;
+    if (page.name === 'forgot') return <ForgotScreen onForgot={notebook.requestEmail} />;
+    return <LandingPage signedIn={false} />;
+  }
+  if (authedGate) return <CabinetSplash />;
+  if (page.name === 'landing') return <LandingPage signedIn />;
+  if (page.name === 'forgot') return <ForgotScreen onForgot={notebook.requestEmail} />;
+
+  if (needsHello(book) && isPlannerPage(page)) {
     return (
-      <AccountGate
-        notice={notebook.error}
-        browser={notebook.here}
-        resetToken={notebook.resetToken}
-        onEnter={notebook.signIn}
-        onCreate={notebook.register}
-        onForgot={notebook.requestEmail}
-        onReset={notebook.setPassword}
+      <FirstHello
+        onAdd={() => {
+          notebook.chooseMode('planner');
+          go(`/app/day/${today}`);
+        }}
+        onSkip={() => {
+          notebook.chooseMode('planner');
+          go('/app');
+        }}
       />
     );
   }
 
   const person = personName(book.name, notebook.login);
-  if (!person || !book.greeted || !mode) {
-    return (
-      <Welcome
-        name={person}
-        nameOnly={!person && Boolean(book.greeted && mode)}
-        theme={book.theme}
-        onName={notebook.setName}
-        onTheme={notebook.setTheme}
-        onChoose={(next) => {
-          notebook.chooseMode(next);
-          go(next === 'habits' ? '/habits' : next === 'focus' ? '/focus' : '/');
-        }}
-      />
-    );
-  }
 
   const todayTasks = tasksForDate(book, today);
   const todayHabits = habitsForDate(book, today);
@@ -160,7 +180,7 @@ export function Home() {
       return;
     }
     notebook.setFocus(taskId, today);
-    go('/focus');
+    go('/app/focus');
   }
 
   function selectTask(id: string | null) {
@@ -177,7 +197,7 @@ export function Home() {
     if (book.focusSession && !book.focusSession.settled) focus.finish();
     focus.clear();
     notebook.setFocus(conflict.id, today);
-    go('/focus');
+    go('/app/focus');
     setConflict(null);
   }
 
@@ -219,8 +239,8 @@ export function Home() {
             <p className="text-sm text-muted">{hint}</p>
           </div>
           <div className="flex shrink-0 items-center gap-4">
-            <AppLink href="/settings" aria-current={page.name === 'settings' ? 'page' : undefined} className={`min-h-11 px-1 text-sm font-semibold ${page.name === 'settings' ? 'text-ink' : 'text-muted'}`}>Настройки</AppLink>
-            <button type="button" onClick={() => void notebook.signOut()} className="min-h-11 px-1 text-sm font-semibold text-muted">Выйти</button>
+            <AppLink href="/app/settings" aria-current={page.name === 'settings' ? 'page' : undefined} className={`min-h-11 px-1 text-sm font-semibold ${page.name === 'settings' ? 'text-ink' : 'text-muted'}`}>Настройки</AppLink>
+            <button type="button" onClick={() => { void notebook.signOut().then((left) => { if (left) go('/'); }); }} className="min-h-11 px-1 text-sm font-semibold text-muted">Выйти</button>
           </div>
         </header>
         <ModeSwitch page={page} />
@@ -228,7 +248,7 @@ export function Home() {
         {page.name === 'settings' ? (
           <div>
             <div className="px-4 pt-4 sm:px-6">
-              <AppLink href="/" className="text-sm font-semibold text-muted">К календарю</AppLink>
+              <AppLink href="/app" className="text-sm font-semibold text-muted">К календарю</AppLink>
             </div>
             <SettingsPanel
               login={notebook.login}
@@ -350,7 +370,7 @@ export function Home() {
         <FocusBar
           session={session}
           remaining={focus.remaining}
-          onOpen={() => go('/focus')}
+          onOpen={() => go('/app/focus')}
           onPause={focus.pause}
           onResume={focus.resume}
         />
