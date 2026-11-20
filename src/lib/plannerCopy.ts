@@ -78,5 +78,6 @@ export function repeatLabel(kind: RepeatKind | null, weekdays: number[]) {
     const names = WEEKDAYS.filter((day) => weekdays.includes(day.id)).map((day) => day.label);
     return names.length ? names.join(', ') : 'По дням недели';
   }
+  if (kind === 'monthly') return 'Каждый месяц';
   return '';
 }

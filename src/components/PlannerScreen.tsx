@@ -24,6 +24,7 @@ type PlannerScreenProps = {
   onAssignWeekItem: (id: string, date: string) => void;
   onCarry: (from: string, to: string) => void;
   onSkip: (id: string) => void;
+  onDeleteFollowing: (id: string) => void;
   onFocus: (id: string) => void;
   onNote: (id: string, text: string) => void;
 };
@@ -145,6 +146,8 @@ function renderTask(props: PlannerScreenProps, task: NotebookTask, shelves = fal
       onPriority={props.onPriority}
       onUpdate={props.onUpdate}
       onSkip={props.onSkip}
+      onDeleteFollowing={props.onDeleteFollowing}
+      series={props.book.series.find((rule) => rule.id === task.seriesId) ?? null}
       onFocus={props.onFocus}
       onNote={props.onNote}
     />

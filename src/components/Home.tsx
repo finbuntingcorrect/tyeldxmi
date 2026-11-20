@@ -259,6 +259,7 @@ export function Home() {
             onAssignWeekItem={notebook.assignWeekItem}
             onCarry={notebook.carryOpen}
             onSkip={notebook.skipThis}
+            onDeleteFollowing={notebook.deleteFollowing}
             onNote={notebook.setTaskNote}
             onFocus={requestFocus}
           />
@@ -279,6 +280,7 @@ export function Home() {
             onAssignWeekItem={notebook.assignWeekItem}
             onCarry={notebook.carryOpen}
             onSkip={notebook.skipThis}
+            onDeleteFollowing={notebook.deleteFollowing}
             onNote={notebook.setTaskNote}
             onFocus={requestFocus}
           />

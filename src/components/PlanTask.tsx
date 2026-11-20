@@ -2,10 +2,11 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { Flag, Minus, MoreHorizontal, Repeat, X } from 'lucide-react';
 import { addDays } from '../../server/recurrence';
 import { dateFromKey, formatLocalDate } from '../lib/date';
-import { WEEKDAYS } from '../lib/plannerCopy';
-import type { NotebookTask, TaskDraft } from '../lib/notebook';
-import type { DayPart, Priority, RepeatKind } from '../types';
+import type { NotebookTask, SeriesRule, TaskDraft } from '../lib/notebook';
+import { noneSchedule, normalizeSchedule, sameSchedule, scheduleLabel, type RepeatSchedule } from '../lib/schedule';
+import type { DayPart, Priority } from '../types';
 import { PaperCheck } from './PaperCheck';
+import { RepeatField } from './RepeatField';
 
 type PlanTaskProps = {
   task: NotebookTask;
@@ -16,12 +17,12 @@ type PlanTaskProps = {
   onPriority: (id: string, priority: Priority) => void;
   onUpdate: (id: string, draft: TaskDraft, scope: 'one' | 'future') => void;
   onSkip: (id: string) => void;
+  onDeleteFollowing: (id: string) => void;
   onFocus: (id: string) => void;
   onNote: (id: string, text: string) => void;
+  series?: SeriesRule | null;
   shelves?: boolean;
 };
-
-type RepeatChoice = RepeatKind | 'none';
 
 const PART_OPTIONS: { id: DayPart; label: string }[] = [
   { id: 'anytime', label: 'Без времени' },
@@ -36,39 +37,10 @@ const PRIORITY_OPTIONS: { id: Priority; label: string }[] = [
   { id: 'low', label: 'Низкий' },
 ];
 
-const REPEAT_OPTIONS: { id: RepeatChoice; label: string }[] = [
-  { id: 'none', label: 'Не повторяется' },
-  { id: 'daily', label: 'Каждый день' },
-  { id: 'weekdays', label: 'По будням' },
-  { id: 'weekly', label: 'По дням' },
-];
-
-function weekdayOf(date: string) {
-  return dateFromKey(date).getDay();
-}
-
-function sortedDays(days: number[]) {
-  return [...days].sort((a, b) => a - b);
-}
-
-function sameDays(left: number[], right: number[]) {
-  const a = sortedDays(left);
-  const b = sortedDays(right);
-  return a.length === b.length && a.every((day, index) => day === b[index]);
-}
-
-function repeatLabel(kind: NotebookTask['repeatKind']) {
-  return REPEAT_OPTIONS.find((option) => option.id === kind)?.label ?? '';
-}
-
-function saveScope(task: NotebookTask, draft: TaskDraft): 'one' | 'future' {
-  if (!task.seriesId) return 'one';
-  const same = draft.title.trim() === task.title
-    && draft.dayPart === task.dayPart
-    && draft.priority === task.priority
-    && draft.repeatKind === (task.repeatKind ?? 'none')
-    && (draft.repeatKind !== 'weekly' || sameDays(draft.weekdays, task.weekdays));
-  return same ? 'one' : 'future';
+function taskSchedule(task: NotebookTask, series?: SeriesRule | null): RepeatSchedule {
+  if (series) return normalizeSchedule(series, series.start);
+  if (!task.repeatKind) return noneSchedule();
+  return normalizeSchedule({ repeatKind: task.repeatKind, weekdays: task.weekdays }, task.date);
 }
 
 function Choice({ id, label, value, onChange, options }: {
@@ -85,18 +57,6 @@ function Choice({ id, label, value, onChange, options }: {
         {options.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
       </select>
     </>
-  );
-}
-
-function WeekdayChoices({ days, onToggle }: { days: number[]; onToggle: (day: number) => void }) {
-  return (
-    <div className="mt-2 flex flex-wrap gap-1">
-      {WEEKDAYS.map((day) => (
-        <button key={day.id} type="button" aria-pressed={days.includes(day.id)} onClick={() => onToggle(day.id)} className="paper-choice min-w-11">
-          {day.label}
-        </button>
-      ))}
-    </div>
   );
 }
 
@@ -127,7 +87,6 @@ export function AddTask({ date, part, onCreate }: {
   const dateId = useId();
   const partId = useId();
   const priorityId = useId();
-  const repeatId = useId();
   const noteId = useId();
   const [open, setOpen] = useState(false);
   const [details, setDetails] = useState(false);
@@ -137,17 +96,10 @@ export function AddTask({ date, part, onCreate }: {
   const when = dateEdit?.from === date ? dateEdit.value : date;
   const dayPart = partEdit?.from === part ? partEdit.value : part;
   const [priority, setPriority] = useState<Priority>('normal');
-  const [repeatKind, setRepeatKind] = useState<RepeatChoice>('none');
-  const [weekdays, setWeekdays] = useState<number[]>([]);
+  const [schedule, setSchedule] = useState<RepeatSchedule>(noneSchedule);
   const [noteOpen, setNoteOpen] = useState(false);
   const [note, setNote] = useState('');
   const [error, setError] = useState<string | null>(null);
-
-  function chooseRepeat(next: string) {
-    const kind = next as RepeatChoice;
-    setRepeatKind(kind);
-    if (kind === 'weekly' && weekdays.length === 0) setWeekdays([weekdayOf(when)]);
-  }
 
   function submit() {
     const next = title.trim();
@@ -160,22 +112,20 @@ export function AddTask({ date, part, onCreate }: {
       return;
     }
     setError(null);
-    const days = repeatKind === 'weekly' ? (weekdays.length > 0 ? sortedDays(weekdays) : [weekdayOf(when)]) : [];
+    const repeat = normalizeSchedule(schedule, when);
     onCreate({
       title: next,
       date: when,
       dayPart,
       priority,
-      repeatKind,
-      weekdays: days,
+      ...repeat,
       note: note.trim() || null,
     });
     setTitle('');
     setDateEdit(null);
     setPartEdit(null);
     setPriority('normal');
-    setRepeatKind('none');
-    setWeekdays([]);
+    setSchedule(noneSchedule());
     setNote('');
     setNoteOpen(false);
     setDetails(false);
@@ -216,13 +166,7 @@ export function AddTask({ date, part, onCreate }: {
         <>
           <Choice id={partId} label="Время дня" value={dayPart} onChange={(value) => setPartEdit({ from: part, value: value as DayPart })} options={PART_OPTIONS} />
           <Choice id={priorityId} label="Приоритет" value={priority} onChange={(value) => setPriority(value as Priority)} options={PRIORITY_OPTIONS} />
-          <Choice id={repeatId} label="Повтор" value={repeatKind} onChange={chooseRepeat} options={REPEAT_OPTIONS} />
-          {repeatKind === 'weekly' ? (
-            <WeekdayChoices
-              days={weekdays}
-              onToggle={(day) => setWeekdays((current) => current.includes(day) ? current.filter((item) => item !== day) : [...current, day])}
-            />
-          ) : null}
+          <RepeatField date={when} value={schedule} onChange={setSchedule} />
           <NoteField id={noteId} open={noteOpen} note={note} onOpen={() => setNoteOpen(true)} onChange={setNote} />
         </>
       ) : null}
@@ -234,76 +178,87 @@ export function AddTask({ date, part, onCreate }: {
   );
 }
 
-export function PlanTask({ task, today, onToggle, onMove, onUpdate, onSkip, onFocus, onNote }: PlanTaskProps) {
+export function PlanTask({ task, today, series = null, onToggle, onMove, onUpdate, onSkip, onDeleteFollowing, onFocus, onNote }: PlanTaskProps) {
   const dialogTitleId = useId();
   const titleId = useId();
   const dateId = useId();
   const partId = useId();
   const priorityId = useId();
-  const repeatId = useId();
   const noteId = useId();
   const titleButtonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [menu, setMenu] = useState(false);
+  const [removing, setRemoving] = useState(false);
+  const [askScope, setAskScope] = useState(false);
   const [title, setTitle] = useState(task.title);
   const [date, setDate] = useState(task.date);
   const [dayPart, setDayPart] = useState<DayPart>(task.dayPart);
   const [priority, setPriority] = useState<Priority>(task.priority);
-  const [repeatKind, setRepeatKind] = useState<RepeatChoice>(task.repeatKind ?? 'none');
-  const [weekdays, setWeekdays] = useState<number[]>(task.weekdays);
+  const [schedule, setSchedule] = useState<RepeatSchedule>(() => taskSchedule(task, series));
   const [note, setNote] = useState(task.note ?? '');
   const [noteOpen, setNoteOpen] = useState(Boolean(task.note?.trim()));
+  const repeat = normalizeSchedule(schedule, date || task.date);
+  const savedRepeat = taskSchedule(task, series);
 
   function closeEditor() {
+    setAskScope(false);
     setOpen(false);
     titleButtonRef.current?.focus();
   }
 
   function openEditor() {
     setMenu(false);
+    setRemoving(false);
+    setAskScope(false);
     setTitle(task.title);
     setDate(task.date);
     setDayPart(task.dayPart);
     setPriority(task.priority);
-    setRepeatKind(task.repeatKind ?? 'none');
-    setWeekdays(task.weekdays);
+    setSchedule(taskSchedule(task, series));
     setNote(task.note ?? '');
     setNoteOpen(Boolean(task.note?.trim()));
     setOpen(true);
   }
 
-  function chooseRepeat(next: string) {
-    const kind = next as RepeatChoice;
-    setRepeatKind(kind);
-    if (kind === 'weekly' && weekdays.length === 0) setWeekdays([weekdayOf(date)]);
+  function draft(): TaskDraft {
+    return { title: title.trim(), date, dayPart, priority, ...repeat };
+  }
+
+  function commit(scope: 'one' | 'future') {
+    const next = draft();
+    const sameFields = next.title === task.title
+      && date === task.date
+      && dayPart === task.dayPart
+      && priority === task.priority
+      && sameSchedule(repeat, savedRepeat);
+    const sameNote = note.trim() === (task.note ?? '');
+    if (!sameFields) {
+      if (date !== task.date) onMove(task.id, date);
+      onUpdate(task.id, next, scope);
+    }
+    if (!sameNote) onNote(task.id, note);
+    closeEditor();
   }
 
   function save() {
     const nextTitle = title.trim();
     if (!nextTitle || !date) return;
-    const days = repeatKind === 'weekly' ? (weekdays.length > 0 ? sortedDays(weekdays) : [weekdayOf(date)]) : [];
-    const draft: TaskDraft = {
-      title: nextTitle,
-      date,
-      dayPart,
-      priority,
-      repeatKind,
-      weekdays: days,
-    };
     const sameFields = nextTitle === task.title
       && date === task.date
       && dayPart === task.dayPart
       && priority === task.priority
-      && repeatKind === (task.repeatKind ?? 'none')
-      && (repeatKind !== 'weekly' || sameDays(days, task.weekdays));
+      && sameSchedule(repeat, savedRepeat);
     const sameNote = note.trim() === (task.note ?? '');
-    if (!sameFields) {
-      if (date !== task.date) onMove(task.id, date);
-      onUpdate(task.id, draft, saveScope(task, draft));
+    if (sameFields && sameNote) {
+      closeEditor();
+      return;
     }
-    if (!sameNote) onNote(task.id, note);
-    setOpen(false);
+    if (task.seriesId && !sameFields) {
+      setAskScope(true);
+      return;
+    }
+    commit('one');
   }
 
   useEffect(() => {
@@ -349,8 +304,8 @@ export function PlanTask({ task, today, onToggle, onMove, onUpdate, onSkip, onFo
         >
           {task.title}
         </button>
-        {task.repeatKind ? (
-          <span role="img" aria-label={repeatLabel(task.repeatKind)} className="grid h-11 w-7 shrink-0 place-items-center text-muted">
+        {savedRepeat.repeatKind !== 'none' ? (
+          <span role="img" aria-label={scheduleLabel(savedRepeat)} className="grid h-11 w-7 shrink-0 place-items-center text-muted">
             <Repeat aria-hidden="true" size={15} />
           </span>
         ) : null}
@@ -389,10 +344,10 @@ export function PlanTask({ task, today, onToggle, onMove, onUpdate, onSkip, onFo
                 <button
                   type="button"
                   role="menuitem"
-                  onClick={() => { setMenu(false); onSkip(task.id); }}
+                  onClick={() => { setMenu(false); if (task.seriesId) setRemoving(true); else onSkip(task.id); }}
                   className="block min-h-11 w-full px-3 text-left text-sm font-semibold text-danger"
                 >
-                  {task.seriesId ? 'Пропустить только этот день' : 'Удалить'}
+                  Удалить
                 </button>
               </div>
             </div>
@@ -417,25 +372,41 @@ export function PlanTask({ task, today, onToggle, onMove, onUpdate, onSkip, onFo
               </div>
               <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pt-2 pb-4">
                 <label htmlFor={titleId} className="block text-sm font-semibold">Название задачи</label>
-                <input id={titleId} autoFocus required value={title} onChange={(event) => setTitle(event.target.value)} maxLength={160} autoComplete="off" className="paper-field mt-1 text-base" />
+                <input id={titleId} autoFocus required value={title} onChange={(event) => { setTitle(event.target.value); setAskScope(false); }} maxLength={160} autoComplete="off" className="paper-field mt-1 text-base" />
                 <label htmlFor={dateId} className="mt-4 block text-sm font-semibold">Дата</label>
-                <input id={dateId} type="date" required value={date} onChange={(event) => setDate(event.target.value)} className="paper-field mt-1 text-base" />
-                <Choice id={partId} label="Время дня" value={dayPart} onChange={(value) => setDayPart(value as DayPart)} options={PART_OPTIONS} />
-                <Choice id={priorityId} label="Приоритет" value={priority} onChange={(value) => setPriority(value as Priority)} options={PRIORITY_OPTIONS} />
-                <Choice id={repeatId} label="Повтор" value={repeatKind} onChange={chooseRepeat} options={REPEAT_OPTIONS} />
-                {repeatKind === 'weekly' ? (
-                  <WeekdayChoices
-                    days={weekdays}
-                    onToggle={(day) => setWeekdays((current) => current.includes(day) ? current.filter((item) => item !== day) : [...current, day])}
-                  />
-                ) : null}
-                <NoteField id={noteId} open={noteOpen} note={note} onOpen={() => setNoteOpen(true)} onChange={setNote} />
+                <input id={dateId} type="date" required value={date} onChange={(event) => { setDate(event.target.value); setAskScope(false); }} className="paper-field mt-1 text-base" />
+                <Choice id={partId} label="Время дня" value={dayPart} onChange={(value) => { setDayPart(value as DayPart); setAskScope(false); }} options={PART_OPTIONS} />
+                <Choice id={priorityId} label="Приоритет" value={priority} onChange={(value) => { setPriority(value as Priority); setAskScope(false); }} options={PRIORITY_OPTIONS} />
+                <RepeatField date={date} value={repeat} onChange={(next) => { setSchedule(next); setAskScope(false); }} />
+                <NoteField id={noteId} open={noteOpen} note={note} onOpen={() => setNoteOpen(true)} onChange={(value) => { setNote(value); setAskScope(false); }} />
               </div>
-              <div className="flex gap-2 border-t border-line px-5 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
-                <button type="submit" className="paper-submit min-h-11 flex-1">Сохранить</button>
-                <button type="button" onClick={closeEditor} className="paper-choice min-h-11 flex-1">Отмена</button>
+              <div className="flex flex-col gap-2 border-t border-line px-5 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+                {askScope ? (
+                  <>
+                    <button type="button" onClick={() => commit('one')} className="paper-submit min-h-11">Только это повторение</button>
+                    <button type="button" onClick={() => commit('future')} className="paper-submit min-h-11">Это и последующие</button>
+                    <button type="button" onClick={closeEditor} className="paper-choice min-h-11">Отмена</button>
+                  </>
+                ) : (
+                  <div className="flex gap-2">
+                    <button type="submit" className="paper-submit min-h-11 flex-1">Сохранить</button>
+                    <button type="button" onClick={closeEditor} className="paper-choice min-h-11 flex-1">Отмена</button>
+                  </div>
+                )}
               </div>
             </form>
+          </div>
+        </div>
+      ) : null}
+      {removing ? (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/35 sm:items-center sm:p-4" onClick={() => setRemoving(false)}>
+          <div role="dialog" aria-modal="true" aria-labelledby={`${dialogTitleId}-delete`} onClick={(event) => event.stopPropagation()} className="w-full max-w-[28rem] border border-line bg-card px-5 py-4 shadow-sm">
+            <h2 id={`${dialogTitleId}-delete`} className="font-serif text-2xl text-ink">Удалить повторение</h2>
+            <div className="mt-4 flex flex-col gap-2 pb-[max(0px,env(safe-area-inset-bottom))]">
+              <button type="button" onClick={() => { setRemoving(false); onSkip(task.id); }} className="paper-submit min-h-11">Только это повторение</button>
+              <button type="button" onClick={() => { setRemoving(false); onDeleteFollowing(task.id); }} className="paper-submit min-h-11">Это и последующие</button>
+              <button type="button" onClick={() => setRemoving(false)} className="paper-choice min-h-11">Отмена</button>
+            </div>
           </div>
         </div>
       ) : null}
