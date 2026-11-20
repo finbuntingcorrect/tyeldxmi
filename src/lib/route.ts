@@ -46,3 +46,10 @@ export function modeForPage(page: AppPage): 'habits' | 'planner' | 'focus' | nul
 export function isMonthKey(value: string) {
   return /^\d{4}-\d{2}$/.test(value) && isPageDate(`${value}-01`);
 }
+
+export function calendarMonth(state: unknown, stored: string | null, today: string) {
+  const fromState = state && typeof state === 'object' && 'month' in state && typeof state.month === 'string' ? state.month : '';
+  if (isMonthKey(fromState)) return fromState;
+  if (stored && isMonthKey(stored)) return stored;
+  return today.slice(0, 7);
+}

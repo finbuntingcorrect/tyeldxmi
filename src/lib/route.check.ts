@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { isMonthKey, modeForPage, pagePath, parseRoute } from './route';
+import { calendarMonth, isMonthKey, modeForPage, pagePath, parseRoute } from './route';
 
 assert.deepEqual(parseRoute('/'), { name: 'calendar' });
 assert.deepEqual(parseRoute('/habits/'), { name: 'habits' });
@@ -14,5 +14,8 @@ assert.equal(modeForPage({ name: 'day', date: '2026-11-20' }), 'planner');
 assert.equal(modeForPage({ name: 'settings' }), null);
 assert.equal(isMonthKey('2026-11'), true);
 assert.equal(isMonthKey('2026-13'), false);
+assert.equal(calendarMonth({ month: '2026-03' }, '2026-11', '2026-11-20'), '2026-03');
+assert.equal(calendarMonth({}, '2026-03', '2026-11-20'), '2026-03');
+assert.equal(calendarMonth({ month: '2026-13' }, null, '2026-11-20'), '2026-11');
 
 console.log('route ok');

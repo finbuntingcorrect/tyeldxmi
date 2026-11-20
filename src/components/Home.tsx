@@ -313,7 +313,7 @@ export function Home() {
       </div>
       <CatCompanion
         pose={pose}
-        hidden={book.cat.hidden || page.name === 'focus'}
+        hidden={book.cat.hidden || page.name === 'focus' || page.name === 'calendar'}
         pinned={book.cat.pinned}
         walks={book.cat.walks}
         sound={book.cat.sound}
