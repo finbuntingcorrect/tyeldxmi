@@ -149,6 +149,18 @@ html[data-theme='dark'] {
     outline-offset: 3px;
   }
 
+  button:not(:disabled),
+  input:is([type='button'], [type='reset'], [type='submit']):not(:disabled),
+  [role='button']:not([aria-disabled='true']) {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  button[aria-disabled='true'],
+  input:is([type='button'], [type='reset'], [type='submit']):disabled {
+    cursor: default;
+  }
+
   input,
   textarea,
   select {
