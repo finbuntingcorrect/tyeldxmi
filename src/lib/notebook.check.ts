@@ -6,6 +6,11 @@ import {
   personName,
   setName,
   createHabit,
+  dayHint,
+  deleteHabit,
+  goalWeekKey,
+  renameHabit,
+  setHabitArchived,
   createTask,
   emptyNotebook,
   fromLegacyTasks,
@@ -548,5 +553,33 @@ ranked = createTask(ranked, { title: 'Важная', date: '2026-11-20', dayPart
 ranked = createTask(ranked, { title: 'Раньше обычная', date: '2026-11-20', dayPart: 'morning', priority: 'normal', repeatKind: 'none', weekdays: [] }, '2026-11-20T07:00:00.000Z');
 const morningOrder = tasksForDate(ranked, '2026-11-20').filter((task) => task.dayPart === 'morning').map((task) => task.title);
 assert.deepEqual(morningOrder, ['Важная', 'Раньше обычная', 'Позже обычная', 'Низкая']);
+
+assert.equal(dayHint(1, 2, 0, 1, false), 'Есть незакрытые дела');
+assert.equal(dayHint(0, 2, 1, 1, false), 'Есть незакрытые дела');
+assert.equal(dayHint(0, 2, 0, 1, false), 'Можно отдохнуть');
+assert.equal(dayHint(0, 0, 0, 0, false), 'На сегодня тихо');
+assert.equal(dayHint(1, 2, 1, 1, true), 'Задача выполнена');
+assert.equal(goalWeekKey('2026-12', '2026-11-20', '2026-12-20'), '2026-12-14');
+assert.equal(goalWeekKey('2026-12', '2026-11-20', null), '2026-11-30');
+assert.equal(goalWeekKey('2026-11', '2026-11-20', '2026-12-20'), '2026-11-16');
+
+let managed = createHabit(emptyNotebook(), 'Вода', 'daily', [], '2026-11-01');
+const managedId = managed.habits[0].id;
+managed = setHabitMark(managed, managedId, '2026-11-20', 'done');
+assert.equal(habitsForDate(managed, '2026-11-20')[0].status, 'done');
+managed = renameHabit(managed, managedId, 'Вода с лимоном');
+assert.equal(managed.habits[0].title, 'Вода с лимоном');
+assert.equal(managed.marks.length, 1);
+managed = setHabitArchived(managed, managedId, true);
+assert.equal(habitsForDate(managed, '2026-11-20').length, 0);
+assert.equal(managed.marks.length, 1);
+const keptHabit = parseNotebook(managed);
+assert.equal(keptHabit?.habits[0].archived, true);
+assert.equal(keptHabit?.habits[0].title, 'Вода с лимоном');
+const legacyHabit = parseNotebook({ habits: [{ id: 'h1', title: 'Чтение', repeatKind: 'daily', weekdays: [], start: '2026-11-01' }] });
+assert.equal(legacyHabit?.habits[0].archived, false);
+managed = deleteHabit(managed, managedId);
+assert.equal(managed.habits.length, 0);
+assert.equal(managed.marks.length, 0);
 
 console.log('notebook ok');

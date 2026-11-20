@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { Volume2, VolumeX } from 'lucide-react';
+import { Minus, Volume2, VolumeX } from 'lucide-react';
 import { CatSprite, type CatClip } from './CatSprite';
 import { PaperCheck } from './PaperCheck';
 import { TreatSprite } from './TreatSprite';
@@ -17,7 +17,7 @@ import {
   type PhaseChoice,
   type TreatKind,
 } from '../lib/focusSession';
-import { tasksForDate, type Notebook } from '../lib/notebook';
+import { tasksForDate, type Notebook, type NotebookTask } from '../lib/notebook';
 
 type FocusScreenProps = {
   book: Notebook;
@@ -46,6 +46,35 @@ type FocusScreenProps = {
   onFeed: (kind: TreatKind) => Promise<boolean>;
 };
 
+
+function FocusTaskRow({ task, selected, onToggle, onSelect }: {
+  task: NotebookTask;
+  selected: boolean;
+  onToggle: (id: string) => void;
+  onSelect: (id: string) => void;
+}) {
+  return (
+    <div className={`flex items-start ${selected ? 'bg-field' : ''}`}>
+      <PaperCheck checked={task.completed} label={task.completed ? `Вернуть «${task.title}»` : `Выполнить «${task.title}»`} onClick={() => onToggle(task.id)} />
+      <button type="button" onClick={() => onSelect(task.id)} className="min-h-11 min-w-0 flex-1 py-2 text-left">
+        {task.priority === 'high' && !task.completed ? (
+          <span className="task-title-important"><span aria-hidden="true">! </span>{task.title}</span>
+        ) : (
+          <span className={`block break-words text-base ${task.completed ? 'text-muted line-through' : task.priority === 'low' ? 'text-low' : 'text-ink'}`}>
+            {task.priority === 'high' ? <span aria-hidden="true">! </span> : null}
+            {task.title}
+          </span>
+        )}
+        {task.priority === 'high' ? <span className="sr-only"> Важный.</span> : null}
+      </button>
+      {task.priority === 'low' ? (
+        <span role="img" aria-label="Низкий" className="grid h-11 w-7 shrink-0 place-items-center text-low">
+          <Minus aria-hidden="true" size={15} />
+        </span>
+      ) : null}
+    </div>
+  );
+}
 
 function Ring({ progress, tone }: { progress: number; tone: 'focus' | 'break' }) {
   const radius = 46;
@@ -77,13 +106,16 @@ export function FocusScreen(props: FocusScreenProps) {
   const [menu, setMenu] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
   const [groom, setGroom] = useState(false);
-  const [hello, setHello] = useState(false);
   const [step, setStep] = useState(false);
   const [face, setFace] = useState<1 | -1>(1);
   const [feeding, setFeeding] = useState<TreatKind | null>(null);
-  const seen = useRef<string | null>(null);
+  const [doneChoice, setDoneChoice] = useState<boolean | null>(null);
   const feedLock = useRef(false);
   const tasks = tasksForDate(book, props.today);
+  const openTasks = tasks.filter((task) => !task.completed);
+  const doneTasks = tasks.filter((task) => task.completed);
+  const linkedCompleted = tasks.some((task) => task.id === book.focusId && task.completed);
+  const doneVisible = doneChoice ?? linkedCompleted;
   const running = Boolean(session && !session.paused && !session.settled);
   const paused = Boolean(session && session.paused && !session.settled);
   const doneFocus = Boolean(session?.settled && session.phase === 'focus' && session.full);
@@ -109,18 +141,6 @@ export function FocusScreen(props: FocusScreenProps) {
     const id = window.setInterval(() => setGroom(true), 14_000);
     return () => window.clearInterval(id);
   }, [reduced, session]);
-
-  useEffect(() => {
-    if (!session || session.settled || session.paused || session.phase !== 'focus') return;
-    if (seen.current === session.signalId) return;
-    seen.current = session.signalId;
-    const start = window.setTimeout(() => setHello(true), 0);
-    const stop = window.setTimeout(() => setHello(false), 2000);
-    return () => {
-      window.clearTimeout(start);
-      window.clearTimeout(stop);
-    };
-  }, [session]);
 
   useEffect(() => {
     if (reduced || session?.phase !== 'break' || session.settled || session.paused) return;
@@ -163,17 +183,13 @@ export function FocusScreen(props: FocusScreenProps) {
     ? 'groom'
     : !session
       ? (tasks.some((task) => !task.completed) ? 'blink' : 'sleep')
-      : hello && session.phase === 'focus'
-        ? 'stretch'
-        : doneFocus
+      : doneFocus
           ? 'stretch'
           : paused || early
             ? 'sleep'
             : session.phase === 'break'
               ? (!reduced && step ? 'walk' : 'stretch')
-              : running && session.phase === 'focus'
-                ? 'think'
-                : 'blink';
+              : 'blink';
 
   const primaryLabel = running
     ? 'Пауза'
@@ -334,7 +350,16 @@ export function FocusScreen(props: FocusScreenProps) {
           <button type="button" aria-expanded={adding} onClick={() => setAdding((value) => !value)} className="min-h-11 px-2 text-sm font-semibold text-ink">+ Задача</button>
         </div>
         {adding ? (
-          <form className="mt-1 flex flex-col gap-2 sm:flex-row sm:items-end" onSubmit={(event) => { event.preventDefault(); addTask(); }}>
+          <form
+            className="mt-1 flex flex-col gap-2 sm:flex-row sm:items-end"
+            onSubmit={(event) => { event.preventDefault(); addTask(); }}
+            onKeyDown={(event) => {
+              if (event.key !== 'Escape') return;
+              event.preventDefault();
+              setDraft('');
+              setAdding(false);
+            }}
+          >
             <input
               autoFocus
               aria-label="Новая задача"
@@ -346,6 +371,7 @@ export function FocusScreen(props: FocusScreenProps) {
               id={titleId}
             />
             <button type="submit" className="paper-choice sm:shrink-0">Ок</button>
+            <button type="button" onClick={() => { setDraft(''); setAdding(false); }} className="paper-choice sm:shrink-0">Отмена</button>
           </form>
         ) : null}
         <button
@@ -357,14 +383,19 @@ export function FocusScreen(props: FocusScreenProps) {
           Без задачи
         </button>
         <div className="lg:max-h-[32rem] lg:overflow-y-auto">
-          {tasks.map((task) => (
-            <div key={task.id} className={`flex items-start ${task.id === linked?.id ? 'bg-field' : ''}`}>
-              <PaperCheck checked={task.completed} label={task.completed ? `Вернуть «${task.title}»` : `Выполнить «${task.title}»`} onClick={() => props.onToggle(task.id)} />
-              <button type="button" onClick={() => props.onSelectTask(task.id)} className="min-h-11 min-w-0 flex-1 py-2 text-left">
-                <span className={`block break-words text-base ${task.completed ? 'text-muted line-through' : 'text-ink'}`}>{task.title}</span>
-              </button>
-            </div>
+          {openTasks.map((task) => (
+            <FocusTaskRow key={task.id} task={task} selected={task.id === linked?.id} onToggle={props.onToggle} onSelect={props.onSelectTask} />
           ))}
+          {doneTasks.length > 0 ? (
+            <div className="mt-2">
+              <button type="button" aria-expanded={doneVisible} onClick={() => setDoneChoice(!doneVisible)} className="min-h-11 px-1 text-sm font-semibold text-muted">
+                Выполненные · {doneTasks.length}
+              </button>
+              {doneVisible ? doneTasks.map((task) => (
+                <FocusTaskRow key={task.id} task={task} selected={task.id === linked?.id} onToggle={props.onToggle} onSelect={props.onSelectTask} />
+              )) : null}
+            </div>
+          ) : null}
         </div>
       </aside>
     </section>

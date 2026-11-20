@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { addDays } from '../../server/recurrence';
 import { DAY_PARTS, WEEKDAYS, priorityRank } from '../lib/plannerCopy';
-import { monthGrid, tasksForDate, weekDates, type Notebook, type NotebookTask, type TaskDraft, type WeekItem } from '../lib/notebook';
+import { goalWeekKey, monthGrid, tasksForDate, weekDates, type Notebook, type NotebookTask, type TaskDraft, type WeekItem } from '../lib/notebook';
 import { isMonthKey, isPageDate } from '../lib/route';
 import { dateFromKey, formatLocalDate } from '../lib/date';
 import type { DayPart, Priority } from '../types';
@@ -105,10 +105,26 @@ function AddGoal({ onAdd }: { onAdd: (title: string) => void }) {
     return <button type="button" onClick={() => setOpen(true)} className="mt-1 min-h-11 px-1 text-sm font-semibold text-ink">+ Добавить цель</button>;
   }
 
+  function close() {
+    setTitle('');
+    setOpen(false);
+  }
+
   return (
-    <form className="mt-2 flex min-w-0 flex-col items-stretch gap-2" onSubmit={(event) => { event.preventDefault(); submit(); }}>
+    <form
+      className="mt-2 flex min-w-0 flex-col items-stretch gap-2"
+      onSubmit={(event) => { event.preventDefault(); submit(); }}
+      onKeyDown={(event) => {
+        if (event.key !== 'Escape') return;
+        event.preventDefault();
+        close();
+      }}
+    >
       <input autoFocus aria-label="Новая цель недели" value={title} onChange={(event) => setTitle(event.target.value)} maxLength={160} className="paper-field min-w-0" />
-      <button type="submit" className="paper-submit">Добавить</button>
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <button type="submit" className="paper-submit sm:min-w-36">Добавить</button>
+        <button type="button" onClick={close} className="paper-choice">Отмена</button>
+      </div>
     </form>
   );
 }
@@ -197,7 +213,9 @@ export function MonthBoard(props: PlannerScreenProps) {
   const grid = monthGrid(anchor);
   const monthKey = anchor.slice(0, 7);
   const selectedDay = readSelectedDay();
-  const weekKey = weekDates(today.slice(0, 7) === monthKey ? today : `${monthKey}-01`)[0];
+  const [pickedWeek, setPickedWeek] = useState<{ month: string; week: string } | null>(null);
+  const baseWeek = goalWeekKey(monthKey, today, selectedDay);
+  const weekKey = pickedWeek?.month === monthKey ? pickedWeek.week : baseWeek;
   const goals = book.weekItems.filter((item) => item.week === weekKey && item.kind === 'goal');
 
   function showMonth(next: string) {
@@ -279,8 +297,20 @@ export function MonthBoard(props: PlannerScreenProps) {
           </div>
         </div>
         <aside className="week-goals mx-3 mb-4 p-5 lg:mx-0 lg:mt-1">
-          <h3 className="font-serif text-[1.375rem] leading-tight text-ink">Цели недели</h3>
-          <p className="mt-1 text-sm text-muted">{weekSpan(weekKey)}</p>
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <h3 className="font-serif text-[1.375rem] leading-tight text-ink">Цели недели</h3>
+              <p className="mt-1 text-sm text-muted">{weekSpan(weekKey)}</p>
+            </div>
+            <div className="flex shrink-0">
+              <button type="button" aria-label="Предыдущая неделя" onClick={() => setPickedWeek({ month: monthKey, week: addDays(weekKey, -7) })} className="grid h-11 w-11 place-items-center text-ink">
+                <ChevronLeft aria-hidden="true" size={18} />
+              </button>
+              <button type="button" aria-label="Следующая неделя" onClick={() => setPickedWeek({ month: monthKey, week: addDays(weekKey, 7) })} className="grid h-11 w-11 place-items-center text-ink">
+                <ChevronRight aria-hidden="true" size={18} />
+              </button>
+            </div>
+          </div>
           <div className="mt-2">
             {goals.map((item) => (
               <div key={item.id} className="flex items-start">

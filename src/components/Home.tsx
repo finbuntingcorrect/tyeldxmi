@@ -3,7 +3,7 @@ import { localDateKey, dateFromKey, formatLocalDate } from '../lib/date';
 import { claimTreat } from '../lib/treats';
 import type { TreatKind } from '../lib/focusSession';
 import { catPose } from '../lib/focusSession';
-import { habitsForDate, personName, tasksForDate } from '../lib/notebook';
+import { dayHint, habitsForDate, personName, tasksForDate } from '../lib/notebook';
 import { modeForPage } from '../lib/route';
 import { useRoute } from '../hooks/routeContext';
 import { unlockSound } from '../lib/focusSound';
@@ -126,14 +126,13 @@ export function Home() {
 
   const todayTasks = tasksForDate(book, today);
   const todayHabits = habitsForDate(book, today);
-  const open = page.name === 'habits'
-    ? todayHabits.some((row) => row.status !== 'done')
-    : todayTasks.some((task) => !task.completed);
-  const hint = burst > 0
-    ? 'Задача выполнена'
-    : open
-      ? 'Есть незакрытые дела'
-      : todayTasks.length === 0 && todayHabits.length === 0 ? 'На сегодня тихо' : 'Можно отдохнуть';
+  const hint = dayHint(
+    todayTasks.filter((task) => !task.completed).length,
+    todayTasks.length,
+    todayHabits.filter((row) => row.status !== 'done').length,
+    todayHabits.length,
+    burst > 0,
+  );
   const showingGreeting = greeting && (page.name === 'calendar' || page.name === 'day');
   const pose = catPose({
     greeting: showingGreeting,
@@ -244,7 +243,15 @@ export function Home() {
           </div>
         ) : null}
         {page.name === 'habits' ? (
-          <HabitsScreen book={book} today={today} onCreate={notebook.createHabit} onMark={notebook.setHabitMark} />
+          <HabitsScreen
+            book={book}
+            today={today}
+            onCreate={notebook.createHabit}
+            onRename={notebook.renameHabit}
+            onArchive={notebook.setHabitArchived}
+            onDelete={notebook.deleteHabit}
+            onMark={notebook.setHabitMark}
+          />
         ) : null}
         {page.name === 'calendar' ? (
           <MonthBoard

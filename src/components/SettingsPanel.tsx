@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { parseFocusMinutes, type CatPrefs } from '../lib/focusSession';
 import { playMeow, unlockSound } from '../lib/focusSound';
 import type { AppTheme } from '../lib/notebook';
@@ -26,7 +26,17 @@ export function SettingsPanel({ login, name, theme, cat, onName, onTheme, onCat,
   const [hint, setHint] = useState<string | null>(null);
   const [draftVolume, setDraftVolume] = useState<number | null>(null);
   const [soundNote, setSoundNote] = useState<string | null>(null);
+  const [saved, setSaved] = useState<string | null>(null);
+  const savedTimer = useRef(0);
   const volume = draftVolume ?? cat.volume;
+
+  useEffect(() => () => window.clearTimeout(savedTimer.current), []);
+
+  function markSaved(field: string) {
+    setSaved(field);
+    window.clearTimeout(savedTimer.current);
+    savedTimer.current = window.setTimeout(() => setSaved(null), 1600);
+  }
 
   function saveName() {
     const next = draft.trim();
@@ -37,12 +47,20 @@ export function SettingsPanel({ login, name, theme, cat, onName, onTheme, onCat,
     onName(next);
     setDraft(next);
     setHint(null);
+    markSaved('name');
   }
 
   function commitVolume(value: number) {
     const next = Math.min(1, Math.max(0, value));
+    const changed = draftVolume != null && next !== cat.volume;
     setDraftVolume(null);
+    if (!changed) return;
     onCat({ ...cat, volume: next });
+    markSaved('volume');
+  }
+
+  function savedNote(field: string) {
+    return saved === field ? <p role="status" className="mt-1 text-sm text-ink">Сохранено</p> : null;
   }
 
   async function testSound() {
@@ -66,7 +84,7 @@ export function SettingsPanel({ login, name, theme, cat, onName, onTheme, onCat,
           <input id="settings-name" value={draft} onChange={(event) => { setDraft(event.target.value); setHint(null); }} maxLength={40} autoComplete="nickname" className="paper-field" />
           <button type="submit" className="paper-submit">Сохранить</button>
         </div>
-        {hint ? <p role="alert" className="mt-2 text-sm font-semibold text-danger">{hint}</p> : null}
+        {hint ? <p role="alert" className="mt-2 text-sm font-semibold text-danger">{hint}</p> : savedNote('name')}
       </form>
       <h3 className="mt-6 text-2xl text-ink">Звук</h3>
       <label className="mt-3 flex min-h-11 items-center gap-3 text-sm font-semibold text-ink">
@@ -76,50 +94,64 @@ export function SettingsPanel({ login, name, theme, cat, onName, onTheme, onCat,
             if (!ready) setSoundNote('Звук не включился.');
           }
           onCat({ ...cat, sound: event.target.checked });
+          markSaved('sound');
         }} />
         Звуковые сигналы
       </label>
+      {savedNote('sound')}
       <label className="mt-2 block text-sm font-semibold text-ink" htmlFor="sound-volume">Громкость</label>
       <input id="sound-volume" type="range" min={0} max={100} value={Math.round(volume * 100)} onChange={(event) => setDraftVolume(Number(event.target.value) / 100)} onPointerUp={(event) => commitVolume(Number(event.currentTarget.value) / 100)} onKeyUp={(event) => commitVolume(Number(event.currentTarget.value) / 100)} onBlur={(event) => commitVolume(Number(event.currentTarget.value) / 100)} className="mt-2 w-full max-w-xs" />
+      {savedNote('volume')}
       <button type="button" onClick={() => void testSound()} className="paper-choice mt-2 px-0">Проверить звук</button>
       {soundNote ? <p role="status" className="mt-2 text-sm text-ink">{soundNote}</p> : null}
-      <h3 className="mt-6 text-2xl text-ink">Помидор</h3>
+      <h3 className="mt-6 text-2xl text-ink">Фокус и перерывы</h3>
       <div className="mt-3 grid max-w-sm gap-3">
         <label className="text-sm font-semibold text-ink" htmlFor="pomodoro-focus">Фокус, минуты
           <input id="pomodoro-focus" inputMode="numeric" defaultValue={cat.pomodoroMinutes} key={`focus-${cat.pomodoroMinutes}`} onBlur={(event) => {
             const next = parseFocusMinutes(event.target.value);
             if (next == null) event.target.value = String(cat.pomodoroMinutes);
-            else onCat({ ...cat, pomodoroMinutes: next });
+            else if (next !== cat.pomodoroMinutes) {
+              onCat({ ...cat, pomodoroMinutes: next });
+              markSaved('focus');
+            }
           }} className="paper-field mt-1" />
+          {savedNote('focus')}
         </label>
         <label className="text-sm font-semibold text-ink" htmlFor="pomodoro-short">Короткий перерыв, минуты
-          <input id="pomodoro-short" inputMode="numeric" defaultValue={cat.shortMinutes} key={`short-${cat.shortMinutes}`} onBlur={(event) => saveMinute(event.target, cat.shortMinutes, 60, (value) => onCat({ ...cat, shortMinutes: value }))} className="paper-field mt-1" />
+          <input id="pomodoro-short" inputMode="numeric" defaultValue={cat.shortMinutes} key={`short-${cat.shortMinutes}`} onBlur={(event) => saveMinute(event.target, cat.shortMinutes, 60, (value) => { if (value === cat.shortMinutes) return; onCat({ ...cat, shortMinutes: value }); markSaved('short'); })} className="paper-field mt-1" />
+          {savedNote('short')}
         </label>
         <label className="text-sm font-semibold text-ink" htmlFor="pomodoro-long">Длинный перерыв, минуты
-          <input id="pomodoro-long" inputMode="numeric" defaultValue={cat.longMinutes} key={`long-${cat.longMinutes}`} onBlur={(event) => saveMinute(event.target, cat.longMinutes, 60, (value) => onCat({ ...cat, longMinutes: value }))} className="paper-field mt-1" />
+          <input id="pomodoro-long" inputMode="numeric" defaultValue={cat.longMinutes} key={`long-${cat.longMinutes}`} onBlur={(event) => saveMinute(event.target, cat.longMinutes, 60, (value) => { if (value === cat.longMinutes) return; onCat({ ...cat, longMinutes: value }); markSaved('long'); })} className="paper-field mt-1" />
+          {savedNote('long')}
         </label>
         <label className="text-sm font-semibold text-ink" htmlFor="pomodoro-rounds">Подходов до длинного перерыва
-          <input id="pomodoro-rounds" inputMode="numeric" defaultValue={cat.rounds} key={`rounds-${cat.rounds}`} onBlur={(event) => saveMinute(event.target, cat.rounds, 8, (value) => onCat({ ...cat, rounds: value }))} className="paper-field mt-1" />
+          <input id="pomodoro-rounds" inputMode="numeric" defaultValue={cat.rounds} key={`rounds-${cat.rounds}`} onBlur={(event) => saveMinute(event.target, cat.rounds, 8, (value) => { if (value === cat.rounds) return; onCat({ ...cat, rounds: value }); markSaved('rounds'); })} className="paper-field mt-1" />
+          {savedNote('rounds')}
         </label>
       </div>
       <label className="mt-3 flex min-h-11 items-center gap-3 text-sm font-semibold text-ink">
-        <input type="checkbox" checked={cat.autoStart} onChange={(event) => onCat({ ...cat, autoStart: event.target.checked })} />
+        <input type="checkbox" checked={cat.autoStart} onChange={(event) => { onCat({ ...cat, autoStart: event.target.checked }); markSaved('auto'); }} />
         Автозапуск следующей фазы
       </label>
+      {savedNote('auto')}
       <h3 className="mt-6 text-2xl text-ink">Котёнок</h3>
       <label className="mt-3 flex min-h-11 items-center gap-3 text-sm font-semibold text-ink">
-        <input type="checkbox" checked={cat.reminders} onChange={(event) => onCat({ ...cat, reminders: event.target.checked })} />
+        <input type="checkbox" checked={cat.reminders} onChange={(event) => { onCat({ ...cat, reminders: event.target.checked }); markSaved('remind'); }} />
         Кот напоминает о фокусе
       </label>
+      {savedNote('remind')}
       <p className="text-sm text-muted">Один раз в середине сессии.</p>
-      {cat.hidden ? <button type="button" onClick={() => onCat({ ...cat, hidden: false })} className="paper-submit mt-3">Вернуть котёнка</button> : null}
+      {cat.hidden ? <button type="button" onClick={() => { onCat({ ...cat, hidden: false }); markSaved('cat'); }} className="paper-submit mt-3">Вернуть котёнка</button> : null}
+      {savedNote('cat')}
       <details className="mt-3 text-sm text-ink">
         <summary className="cursor-pointer font-semibold">Как двигать котёнка</summary>
         <p className="mt-2 text-muted">Потяни, чтобы переставить. Нажми, чтобы открыть меню.</p>
       </details>
       <h3 className="mt-6 text-2xl text-ink">Цвет приложения</h3>
       <div className="mt-3">
-        <ThemePicker theme={theme ?? 'yellow'} onChange={onTheme} />
+        <ThemePicker theme={theme ?? 'yellow'} onChange={(next) => { onTheme(next); markSaved('theme'); }} />
+        {savedNote('theme')}
       </div>
     </section>
   );

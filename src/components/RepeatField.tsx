@@ -63,8 +63,19 @@ export function RepeatField({ date, value, onChange }: RepeatFieldProps) {
       setMenu(false);
       setCustom(false);
     }
+    function onKey(event: KeyboardEvent) {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      setMenu(false);
+      setCustom(false);
+    }
     document.addEventListener('pointerdown', onPointer);
-    return () => document.removeEventListener('pointerdown', onPointer);
+    window.addEventListener('keydown', onKey, true);
+    return () => {
+      document.removeEventListener('pointerdown', onPointer);
+      window.removeEventListener('keydown', onKey, true);
+    };
   }, [menu, custom]);
 
   useLayoutEffect(() => {

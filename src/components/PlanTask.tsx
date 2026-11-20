@@ -132,6 +132,24 @@ export function AddTask({ date, part, onCreate }: {
     setOpen(false);
   }
 
+  function close() {
+    setError(null);
+    setDetails(false);
+    setOpen(false);
+  }
+
+  useEffect(() => {
+    if (!open) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      if (document.querySelector('[role="dialog"]')) return;
+      event.preventDefault();
+      close();
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open]);
+
   if (!open) {
     return <button type="button" onClick={() => setOpen(true)} className="min-h-11 px-1 text-sm font-semibold text-muted">+ Добавить</button>;
   }
@@ -173,6 +191,7 @@ export function AddTask({ date, part, onCreate }: {
       <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
         <button type="submit" className="paper-submit sm:min-w-36">Добавить</button>
         <button type="button" aria-expanded={details} onClick={() => setDetails((value) => !value)} className="paper-choice">Подробнее</button>
+        <button type="button" onClick={close} className="paper-choice">Отмена</button>
       </div>
     </form>
   );
@@ -273,7 +292,8 @@ export function PlanTask({ task, today, series = null, onToggle, onMove, onUpdat
   useEffect(() => {
     if (!open) return;
     function onKey(event: KeyboardEvent) {
-      if (event.key !== 'Escape') return;
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      event.preventDefault();
       setOpen(false);
       titleButtonRef.current?.focus();
     }
@@ -284,15 +304,18 @@ export function PlanTask({ task, today, series = null, onToggle, onMove, onUpdat
   useEffect(() => {
     if (!menu) return;
     function onKey(event: KeyboardEvent) {
-      if (event.key === 'Escape') setMenu(false);
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      setMenu(false);
     }
     function onPointer(event: PointerEvent) {
       if (!menuRef.current?.contains(event.target as Node)) setMenu(false);
     }
-    window.addEventListener('keydown', onKey);
+    window.addEventListener('keydown', onKey, true);
     document.addEventListener('pointerdown', onPointer);
     return () => {
-      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('keydown', onKey, true);
       document.removeEventListener('pointerdown', onPointer);
     };
   }, [menu]);

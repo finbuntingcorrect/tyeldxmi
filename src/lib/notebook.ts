@@ -54,6 +54,7 @@ export type Habit = {
   repeatKind: RepeatKind;
   weekdays: number[];
   start: string;
+  archived: boolean;
 };
 
 export type HabitMark = {
@@ -159,6 +160,12 @@ export function weekDates(selected: string): string[] {
   const day = weekday(selected);
   const monday = addDays(selected, day === 0 ? -6 : 1 - day);
   return Array.from({ length: 7 }, (_, index) => addDays(monday, index));
+}
+
+export function goalWeekKey(monthKey: string, today: string, selected: string | null) {
+  if (selected && selected.slice(0, 7) === monthKey) return weekDates(selected)[0];
+  if (today.slice(0, 7) === monthKey) return weekDates(today)[0];
+  return weekDates(`${monthKey}-01`)[0];
 }
 
 export function monthGrid(anchor: string): string[] {
@@ -312,11 +319,18 @@ export function habitProgressLabel(done: number, total: number) {
 
 export function habitsForDate(book: Notebook, date: string) {
   return book.habits
-    .filter((habit) => occurs(habit.repeatKind, habit.weekdays, habit.start, null, date))
+    .filter((habit) => !habit.archived && occurs(habit.repeatKind, habit.weekdays, habit.start, null, date))
     .map((habit) => ({
       habit,
       status: book.marks.find((mark) => mark.habitId === habit.id && mark.date === date)?.status ?? null,
     }));
+}
+
+export function dayHint(openTasks: number, taskCount: number, openHabits: number, habitCount: number, celebrated: boolean) {
+  if (celebrated) return 'Задача выполнена';
+  if (openTasks > 0 || openHabits > 0) return 'Есть незакрытые дела';
+  if (taskCount === 0 && habitCount === 0) return 'На сегодня тихо';
+  return 'Можно отдохнуть';
 }
 
 export function personName(name: string, login = ''): string {
@@ -661,7 +675,27 @@ export function createHabit(book: Notebook, title: string, repeatKind: RepeatKin
   if (repeatKind === 'weekly' && days.length === 0) return book;
   return {
     ...book,
-    habits: [...book.habits, { id: createId(), title: name, repeatKind, weekdays: days, start }],
+    habits: [...book.habits, { id: createId(), title: name, repeatKind, weekdays: days, start, archived: false }],
+  };
+}
+
+export function renameHabit(book: Notebook, id: string, title: string): Notebook {
+  const name = title.trim().slice(0, 160);
+  if (!name || !book.habits.some((habit) => habit.id === id)) return book;
+  return { ...book, habits: book.habits.map((habit) => (habit.id === id ? { ...habit, title: name } : habit)) };
+}
+
+export function setHabitArchived(book: Notebook, id: string, archived: boolean): Notebook {
+  if (!book.habits.some((habit) => habit.id === id)) return book;
+  return { ...book, habits: book.habits.map((habit) => (habit.id === id ? { ...habit, archived } : habit)) };
+}
+
+export function deleteHabit(book: Notebook, id: string): Notebook {
+  if (!book.habits.some((habit) => habit.id === id)) return book;
+  return {
+    ...book,
+    habits: book.habits.filter((habit) => habit.id !== id),
+    marks: book.marks.filter((mark) => mark.habitId !== id),
   };
 }
 
@@ -860,6 +894,7 @@ export function parseNotebook(value: unknown): Notebook | null {
         repeatKind: repeat,
         weekdays: Array.isArray(habit.weekdays) ? cleanWeekdays(habit.weekdays.map(Number)) : [],
         start: habit.start,
+        archived: habit.archived === true,
       });
     }
   }
