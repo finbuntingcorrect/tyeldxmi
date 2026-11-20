@@ -3,6 +3,7 @@ import { addDays } from '../../server/recurrence.ts';
 import {
   chooseMode,
   parseNotebook,
+  personName,
   setName,
   createHabit,
   createTask,
@@ -328,6 +329,10 @@ assert.equal(legacy.tasks[0].completed, true);
 assert.equal(legacy.tasks[0].date, '2026-11-01');
 assert.equal(chooseMode(legacy, 'planner').greeted, true);
 assert.equal(setName(emptyNotebook(), '  Аня  ').name, 'Аня');
+assert.equal(setName(emptyNotebook(), 'anya@example.com').name, '');
+assert.equal(personName('Аня', 'anya@example.com'), 'Аня');
+assert.equal(personName('anya@example.com', 'anya@example.com'), '');
+assert.equal(personName('other@example.com', 'anya@example.com'), '');
 const named = parseNotebook({ greeted: true, mode: 'focus', name: '  Катя ', theme: 'pink', tasks: [] });
 assert.equal(named?.name, 'Катя');
 assert.equal(named?.theme, 'pink');

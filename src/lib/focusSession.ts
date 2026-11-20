@@ -275,6 +275,21 @@ export function catPose(input: {
   return 'idle';
 }
 
+/** A phone keeps the kitten on top of the page. A reserved column squeezes the month. */
+export function catFrame(width: number, height: number, bottom: number) {
+  const top = 76;
+  const available = Math.max(48, height - top - bottom - 12);
+  if (width < 700) {
+    const size = Math.min(72, available);
+    return { size, top, lane: 0, minX: 8, tight: true };
+  }
+  const tight = height < 520;
+  const widthRoom = Math.max(48, width - (tight ? 232 : 336) - 20);
+  const size = Math.min(tight ? 95 : 176, available, widthRoom);
+  const lane = size + (tight ? 12 : 16);
+  return { size, top, lane, minX: Math.max(8, width - lane + 4), tight };
+}
+
 export function clampCatPosition(x: number, y: number, width: number, height: number, size: number, top: number, bottom: number, minX = 8) {
   const maxX = Math.max(minX, width - size - 8);
   const maxY = Math.max(top, height - size - bottom);

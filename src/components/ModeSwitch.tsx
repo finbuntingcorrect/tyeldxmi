@@ -1,29 +1,32 @@
-import type { AppMode } from '../lib/notebook';
+import { AppLink } from './AppLink';
+import type { AppPage } from '../lib/route';
 
-const MODES: { id: AppMode; label: string }[] = [
-  { id: 'habits', label: 'Привычки' },
-  { id: 'planner', label: 'Планер' },
-  { id: 'focus', label: 'Фокус' },
+const LINKS: { id: 'calendar' | 'habits' | 'focus'; href: string; label: string }[] = [
+  { id: 'calendar', href: '/', label: 'Календарь' },
+  { id: 'habits', href: '/habits', label: 'Привычки' },
+  { id: 'focus', href: '/focus', label: 'Фокус' },
 ];
 
-type ModeSwitchProps = {
-  mode: AppMode;
-  onChange: (mode: AppMode) => void;
-};
+function currentLink(page: AppPage) {
+  if (page.name === 'habits') return 'habits';
+  if (page.name === 'focus') return 'focus';
+  if (page.name === 'settings') return null;
+  return 'calendar';
+}
 
-export function ModeSwitch({ mode, onChange }: ModeSwitchProps) {
+export function ModeSwitch({ page }: { page: AppPage }) {
+  const current = currentLink(page);
   return (
-    <nav aria-label="Режим" className="grid grid-cols-3 border-y border-line">
-      {MODES.map((item) => (
-        <button
+    <nav aria-label="Страницы" className="grid grid-cols-3 border-y border-line">
+      {LINKS.map((item) => (
+        <AppLink
           key={item.id}
-          type="button"
-          aria-pressed={mode === item.id}
-          onClick={() => onChange(item.id)}
-          className={`min-h-11 text-sm font-semibold ${mode === item.id ? 'text-ink shadow-[inset_0_-2px_0_var(--color-primary)]' : 'text-muted'}`}
+          href={item.href}
+          aria-current={current === item.id ? 'page' : undefined}
+          className={`grid min-h-11 place-items-center text-sm font-semibold ${current === item.id ? 'text-ink shadow-[inset_0_-2px_0_var(--color-primary)]' : 'text-muted'}`}
         >
           {item.label}
-        </button>
+        </AppLink>
       ))}
     </nav>
   );

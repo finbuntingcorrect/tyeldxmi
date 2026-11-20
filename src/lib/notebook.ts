@@ -284,12 +284,23 @@ export function habitsForDate(book: Notebook, date: string) {
     }));
 }
 
+export function personName(name: string, login = ''): string {
+  const value = name.trim();
+  if (!value) return '';
+  const mail = login.trim().toLowerCase();
+  if (mail && value.toLowerCase() === mail) return '';
+  if (value.includes('@')) return '';
+  return value;
+}
+
 export function chooseMode(book: Notebook, mode: AppMode): Notebook {
   return { ...book, greeted: true, mode };
 }
 
 export function setName(book: Notebook, name: string): Notebook {
-  return { ...book, name: name.trim().slice(0, 40) };
+  const next = name.trim().slice(0, 40);
+  if (!next || next.includes('@')) return book;
+  return { ...book, name: next };
 }
 
 export function setTheme(book: Notebook, theme: AppTheme): Notebook {

@@ -150,6 +150,11 @@ html[data-theme='dark'] {
     max-width: 100%;
   }
 
+  input[type='date'],
+  input[type='time'] {
+    min-width: 0;
+  }
+
   /*
     Mascot files are anti-aliased illustrations in a pixel style, not a hard
     integer grid. Nearest-neighbor scaling softens the outlines into jagged
@@ -168,6 +173,18 @@ html[data-theme='dark'] {
 .paper-dots {
   background-image: radial-gradient(var(--dot) 0.8px, transparent 0.8px);
   background-size: 18px 18px;
+}
+
+.day-load-1 {
+  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
+}
+
+.day-load-2 {
+  background: color-mix(in srgb, var(--color-primary) 22%, transparent);
+}
+
+.day-load-3 {
+  background: color-mix(in srgb, var(--color-primary) 34%, transparent);
 }
 
 .paper-field {
