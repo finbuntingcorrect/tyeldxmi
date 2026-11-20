@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { localDateKey, dateFromKey, formatLocalDate } from '../lib/date';
 import { DEFAULT_FOCUS_MINUTES, catPose } from '../lib/focusSession';
 import { habitsForDate, personName, tasksForDate } from '../lib/notebook';
+import { modeForPage } from '../lib/route';
+import { useRoute } from '../hooks/routeContext';
 import { unlockSound } from '../lib/focusSound';
 import { useFocusController } from '../hooks/useFocusController';
 import { useNotebook } from '../hooks/useNotebook';
@@ -12,15 +14,16 @@ import { FocusBar } from './FocusBar';
 import { FocusScreen } from './FocusScreen';
 import { HabitsScreen } from './HabitsScreen';
 import { ModeSwitch } from './ModeSwitch';
-import { PlannerScreen } from './PlannerScreen';
+import { DayBoard, MonthBoard } from './PlannerScreen';
+import { AppLink } from './AppLink';
 import { SettingsPanel } from './SettingsPanel';
 import { Welcome } from './Welcome';
 
 export function Home() {
   const notebook = useNotebook();
   const today = localDateKey();
+  const { page, go } = useRoute();
   const [burst, setBurst] = useState(0);
-  const [settings, setSettings] = useState(false);
   const [greeting, setGreeting] = useState(false);
   const [pickedMinutes, setPickedMinutes] = useState<number | null>(null);
   const [conflict, setConflict] = useState<string | null>(null);
@@ -46,14 +49,34 @@ export function Home() {
   }, []);
 
   useEffect(() => {
-    if (mode !== 'planner') return;
+    if (page.name !== 'calendar' && page.name !== 'day') return;
     const start = window.setTimeout(() => setGreeting(true), 0);
     const stop = window.setTimeout(() => setGreeting(false), 2800);
     return () => {
       window.clearTimeout(start);
       window.clearTimeout(stop);
     };
-  }, [mode]);
+  }, [page]);
+
+  useEffect(() => {
+    const next = modeForPage(page);
+    if (!next || !book.greeted || !personName(book.name, notebook.login) || next === book.mode) return;
+    notebook.chooseMode(next);
+  }, [page, book.greeted, book.mode, book.name, notebook]);
+
+  useEffect(() => {
+    if (notebook.status !== 'ready') {
+      document.title = 'Today Cat';
+      return;
+    }
+    const title = page.name === 'day'
+      ? formatLocalDate(dateFromKey(page.date))
+      : page.name === 'habits' ? 'Привычки'
+        : page.name === 'focus' ? 'Фокус'
+          : page.name === 'settings' ? 'Настройки'
+            : 'Календарь';
+    document.title = `${title} — Today Cat`;
+  }, [page, notebook.status]);
 
   useEffect(() => {
     if (!conflict) return;
@@ -88,14 +111,17 @@ export function Home() {
         theme={book.theme}
         onName={notebook.setName}
         onTheme={notebook.setTheme}
-        onChoose={notebook.chooseMode}
+        onChoose={(next) => {
+          notebook.chooseMode(next);
+          go(next === 'habits' ? '/habits' : next === 'focus' ? '/focus' : '/');
+        }}
       />
     );
   }
 
   const todayTasks = tasksForDate(book, today);
   const todayHabits = habitsForDate(book, today);
-  const open = mode === 'habits'
+  const open = page.name === 'habits'
     ? todayHabits.some((row) => row.status !== 'done')
     : todayTasks.some((task) => !task.completed);
   const hint = burst > 0
@@ -104,7 +130,7 @@ export function Home() {
       ? 'Есть незакрытые дела'
       : todayTasks.length === 0 && todayHabits.length === 0 ? 'На сегодня тихо' : 'Можно отдохнуть';
   const minutes = pickedMinutes ?? book.focusSession?.focusMinutes ?? DEFAULT_FOCUS_MINUTES;
-  const showingGreeting = greeting && mode === 'planner';
+  const showingGreeting = greeting && (page.name === 'calendar' || page.name === 'day');
   const pose = catPose({
     greeting: showingGreeting,
     openTasks: todayTasks.some((task) => !task.completed),
@@ -132,7 +158,7 @@ export function Home() {
       return;
     }
     notebook.setFocus(taskId, today);
-    notebook.chooseMode('focus');
+    go('/focus');
   }
 
   function confirmConflict() {
@@ -140,7 +166,7 @@ export function Home() {
     if (book.focusSession && !book.focusSession.settled) focus.finish();
     focus.clear();
     notebook.setFocus(conflict, today);
-    notebook.chooseMode('focus');
+    go('/focus');
     setConflict(null);
   }
 
@@ -185,29 +211,34 @@ export function Home() {
             <p className="text-sm text-muted">{hint}</p>
           </div>
           <div className="flex shrink-0 items-center gap-4">
-            <button type="button" aria-expanded={settings} onClick={() => setSettings((value) => !value)} className={`min-h-11 px-1 text-sm font-semibold underline underline-offset-4 ${settings ? 'decoration-primary' : 'decoration-line'}`}>Настройки</button>
+            <AppLink href="/settings" aria-current={page.name === 'settings' ? 'page' : undefined} className={`min-h-11 px-1 text-sm font-semibold underline underline-offset-4 ${page.name === 'settings' ? 'decoration-primary' : 'decoration-line'}`}>Настройки</AppLink>
             <button type="button" onClick={() => void notebook.signOut()} className="min-h-11 px-1 text-sm font-semibold underline underline-offset-4 decoration-line">Выйти</button>
           </div>
         </header>
-        <ModeSwitch mode={mode} onChange={notebook.chooseMode} />
-        {settings ? (
-          <SettingsPanel
-            login={notebook.login}
-            name={person}
-            theme={book.theme}
-            cat={book.cat}
-            onName={notebook.setName}
-            onTheme={notebook.setTheme}
-            onCat={notebook.setCat}
-            here={notebook.here}
-          />
-        ) : null}
+        <ModeSwitch page={page} />
         {notebook.error ? <p role="alert" className="border-b border-line px-4 py-3 text-sm font-semibold text-danger sm:px-6">{notebook.error}</p> : null}
-        {mode === 'habits' ? (
+        {page.name === 'settings' ? (
+          <div>
+            <div className="px-4 pt-4 sm:px-6">
+              <AppLink href="/" className="text-sm font-semibold text-muted">К календарю</AppLink>
+            </div>
+            <SettingsPanel
+              login={notebook.login}
+              name={person}
+              theme={book.theme}
+              cat={book.cat}
+              onName={notebook.setName}
+              onTheme={notebook.setTheme}
+              onCat={notebook.setCat}
+              here={notebook.here}
+            />
+          </div>
+        ) : null}
+        {page.name === 'habits' ? (
           <HabitsScreen book={book} today={today} onCreate={notebook.createHabit} onMark={notebook.setHabitMark} />
         ) : null}
-        {mode === 'planner' ? (
-          <PlannerScreen
+        {page.name === 'calendar' ? (
+          <MonthBoard
             book={book}
             today={today}
             onCreate={notebook.createTask}
@@ -225,7 +256,27 @@ export function Home() {
             onFocus={requestFocus}
           />
         ) : null}
-        {mode === 'focus' ? (
+        {page.name === 'day' ? (
+          <DayBoard
+            date={page.date}
+            book={book}
+            today={today}
+            onCreate={notebook.createTask}
+            onToggle={toggle}
+            onMove={notebook.moveTask}
+            onPart={notebook.setPart}
+            onPriority={notebook.setPriority}
+            onUpdate={notebook.updateTask}
+            onAddWeekItem={notebook.addWeekItem}
+            onToggleWeekItem={notebook.toggleWeekItem}
+            onAssignWeekItem={notebook.assignWeekItem}
+            onCarry={notebook.carryOpen}
+            onSkip={notebook.skipThis}
+            onNote={notebook.setTaskNote}
+            onFocus={requestFocus}
+          />
+        ) : null}
+        {page.name === 'focus' ? (
           <FocusScreen
             book={book}
             today={today}

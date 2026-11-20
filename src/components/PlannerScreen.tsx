@@ -3,8 +3,10 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { addDays } from '../../server/recurrence';
 import { DAY_PARTS, WEEKDAYS } from '../lib/plannerCopy';
 import { monthGrid, tasksForDate, weekDates, type Notebook, type NotebookTask, type TaskDraft, type WeekItem } from '../lib/notebook';
+import { isMonthKey } from '../lib/route';
 import { dateFromKey, formatLocalDate } from '../lib/date';
 import type { DayPart, Priority } from '../types';
+import { AppLink } from './AppLink';
 import { PaperCheck } from './PaperCheck';
 import { PlanTask } from './PlanTask';
 
@@ -42,6 +44,21 @@ function shiftMonth(key: string, delta: number) {
 
 function openCount(tasks: { completed: boolean }[]) {
   return tasks.filter((task) => !task.completed).length;
+}
+
+function loadClass(open: number) {
+  if (open >= 4) return 'day-load-3';
+  if (open === 3) return 'day-load-2';
+  if (open >= 1) return 'day-load-1';
+  return '';
+}
+
+function loadWidth(open: number) {
+  if (open >= 4) return '100%';
+  if (open === 3) return '75%';
+  if (open === 2) return '50%';
+  if (open === 1) return '25%';
+  return '0%';
 }
 
 function openLabel(count: number) {
@@ -115,10 +132,67 @@ function AddRow({ label, onAdd }: { label: string; onAdd: (title: string) => voi
   );
 }
 
-export function PlannerScreen(props: PlannerScreenProps) {
+function createOn(props: PlannerScreenProps, date: string, dayPart: DayPart, title: string) {
+  props.onCreate({ title, date, dayPart, priority: 'normal', repeatKind: 'none', weekdays: [] });
+}
+
+function renderTask(props: PlannerScreenProps, task: NotebookTask, shelves = false) {
+  return (
+    <PlanTask
+      key={task.id}
+      task={task}
+      today={props.today}
+      shelves={shelves}
+      onToggle={props.onToggle}
+      onMove={props.onMove}
+      onPart={props.onPart}
+      onPriority={props.onPriority}
+      onUpdate={props.onUpdate}
+      onSkip={props.onSkip}
+      onFocus={props.onFocus}
+      onNote={props.onNote}
+    />
+  );
+}
+
+export function DayBoard(props: PlannerScreenProps & { date: string }) {
+  const { book, today, date } = props;
+  const tasks = tasksForDate(book, date);
+  return (
+    <section>
+      <header className="px-4 py-4 sm:px-6">
+        <AppLink href="/" className="text-sm font-semibold text-muted">К месяцу</AppLink>
+        <h2 className="mt-2 font-serif text-3xl leading-tight break-words sm:text-5xl">{formatLocalDate(dateFromKey(date))}</h2>
+        <ShortRule />
+        <CarryLine
+          count={date > today ? 0 : openCount(tasks)}
+          label={date < today ? 'Перенести на сегодня' : 'Перенести на завтра'}
+          onCarry={() => props.onCarry(date, date < today ? today : addDays(date, 1))}
+        />
+      </header>
+      <div className="paper-dots px-3 pb-4 sm:px-6">
+        {DAY_PARTS.map((part) => {
+          const rows = tasks.filter((task) => task.dayPart === part.id);
+          return (
+            <div key={part.id} className="pt-3">
+              <p className="px-1 text-sm text-muted">{part.label}</p>
+              <ShortRule />
+              {rows.map((task) => renderTask(props, task, part.id === 'anytime'))}
+              <AddRow label={`Новая задача, ${part.label}`} onAdd={(title) => createOn(props, date, part.id, title)} />
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+export function MonthBoard(props: PlannerScreenProps) {
   const { book, today } = props;
-  const [anchor, setAnchor] = useState(today);
-  const [detail, setDetail] = useState<string | null>(null);
+  const [anchor, setAnchor] = useState(() => {
+    const month = (window.history.state as { month?: string } | null)?.month;
+    return month && isMonthKey(month) ? `${month}-01` : today;
+  });
   const grid = monthGrid(anchor);
   const monthKey = anchor.slice(0, 7);
   const todayWeek = weekDates(today);
@@ -127,82 +201,25 @@ export function PlannerScreen(props: PlannerScreenProps) {
   const goals = book.weekItems.filter((item) => item.week === weekKey && item.kind === 'goal');
   const inbox = book.weekItems.filter((item) => item.week === inboxWeek && item.kind === 'inbox');
 
-  function shift(delta: number) {
-    setDetail(null);
-    setAnchor(shiftMonth(anchor, delta));
-  }
-
-  function createOn(date: string, dayPart: DayPart, title: string) {
-    props.onCreate({ title, date, dayPart, priority: 'normal', repeatKind: 'none', weekdays: [] });
-  }
-
-  function renderTask(task: NotebookTask, shelves = false) {
-    return (
-      <PlanTask
-        key={task.id}
-        task={task}
-        today={props.today}
-        shelves={shelves}
-        onToggle={props.onToggle}
-        onMove={props.onMove}
-        onPart={props.onPart}
-        onPriority={props.onPriority}
-        onUpdate={props.onUpdate}
-        onSkip={props.onSkip}
-        onFocus={props.onFocus}
-        onNote={props.onNote}
-      />
-    );
-  }
-
-  function renderShelves(date: string, tasks: NotebookTask[]) {
-    return DAY_PARTS.map((part) => {
-      const rows = tasks.filter((task) => task.dayPart === part.id);
-      return (
-        <div key={part.id} className="pt-3">
-          <p className="px-1 text-sm text-muted">{part.label}</p>
-          <ShortRule />
-          {rows.map((task) => renderTask(task, part.id === 'anytime'))}
-          <AddRow label={`Новая задача, ${part.label}`} onAdd={(title) => createOn(date, part.id, title)} />
-        </div>
-      );
-    });
-  }
-
-  if (detail) {
-    const tasks = tasksForDate(book, detail);
-    return (
-      <section>
-        <header className="px-4 py-4 sm:px-6">
-          <button type="button" onClick={() => setDetail(null)} className="text-sm font-semibold text-muted">К месяцу</button>
-          <h2 className="mt-2 font-serif text-3xl leading-tight break-words sm:text-5xl">{formatLocalDate(dateFromKey(detail))}</h2>
-          <ShortRule />
-          <CarryLine
-            count={detail > today ? 0 : openCount(tasks)}
-            label={detail < today ? 'Перенести на сегодня' : 'Перенести на завтра'}
-            onCarry={() => props.onCarry(detail, detail < today ? today : addDays(detail, 1))}
-          />
-        </header>
-        <div className="paper-dots px-3 pb-4 sm:px-6">
-          {renderShelves(detail, tasks)}
-        </div>
-      </section>
-    );
+  function showMonth(next: string) {
+    setAnchor(next);
+    window.history.replaceState({ month: next.slice(0, 7) }, '', window.location.pathname);
   }
 
   return (
     <section>
       <header className="flex items-center justify-between gap-2 px-2 py-4 sm:px-4">
-        <button type="button" aria-label="Предыдущий месяц" onClick={() => shift(-1)} className="grid h-11 w-11 shrink-0 place-items-center text-ink">
+        <button type="button" aria-label="Предыдущий месяц" onClick={() => showMonth(shiftMonth(anchor, -1))} className="grid h-11 w-11 shrink-0 place-items-center text-ink">
           <ChevronLeft aria-hidden="true" size={22} />
         </button>
         <div className="min-w-0 text-center">
           <h2 className="font-serif text-3xl leading-tight break-words sm:text-5xl">{monthTitle(anchor)}</h2>
+          <p className="mt-1 text-sm text-muted">Гуще клетка — больше открытых дел.</p>
           {today.slice(0, 7) !== monthKey ? (
-            <button type="button" onClick={() => { setDetail(null); setAnchor(today); }} className="mt-1 min-h-11 text-sm font-semibold text-ink underline decoration-line underline-offset-4">К сегодня</button>
+            <button type="button" onClick={() => showMonth(today)} className="mt-1 min-h-11 text-sm font-semibold text-ink underline decoration-line underline-offset-4">К сегодня</button>
           ) : null}
         </div>
-        <button type="button" aria-label="Следующий месяц" onClick={() => shift(1)} className="grid h-11 w-11 shrink-0 place-items-center text-ink">
+        <button type="button" aria-label="Следующий месяц" onClick={() => showMonth(shiftMonth(anchor, 1))} className="grid h-11 w-11 shrink-0 place-items-center text-ink">
           <ChevronRight aria-hidden="true" size={22} />
         </button>
       </header>
@@ -239,21 +256,25 @@ export function PlannerScreen(props: PlannerScreenProps) {
               const outside = day.slice(0, 7) !== monthKey;
               const shown = tasks.slice(0, 2);
               const rest = tasks.length - shown.length;
+              const open = openCount(tasks);
               const number = Number(day.slice(8));
+              const name = open === 0 ? `${number}, свободно` : `${number}, ${openLabel(open)}`;
               return (
-                <button
+                <AppLink
                   key={day}
-                  type="button"
+                  href={`/day/${day}`}
+                  state={{ month: monthKey }}
                   aria-current={day === today ? 'date' : undefined}
-                  onClick={() => setDetail(day)}
-                  className="min-h-20 min-w-0 border-r border-b border-line px-1 py-1 text-left sm:min-h-28"
+                  aria-label={name}
+                  className={`flex min-h-20 min-w-0 flex-col border-r border-b border-line px-1 py-1 text-left sm:min-h-28 ${loadClass(open)} ${day === today ? 'shadow-[inset_0_-2px_0_var(--color-primary)]' : ''}`}
                 >
                   <span className={`block text-sm ${day === today ? 'text-primary' : outside ? 'text-muted' : 'text-ink'}`}>{number}</span>
                   {shown.map((task) => (
                     <p key={task.id} className={`truncate text-xs ${task.completed || outside ? 'text-muted' : 'text-ink'} ${task.completed ? 'line-through' : ''}`}>{task.title}</p>
                   ))}
                   {rest > 0 ? <p className="truncate text-xs text-muted">ещё {rest}</p> : null}
-                </button>
+                  {open > 0 ? <span aria-hidden="true" className="mt-auto block h-1" style={{ width: loadWidth(open), background: 'var(--color-primary)' }} /> : null}
+                </AppLink>
               );
             })}
           </div>
