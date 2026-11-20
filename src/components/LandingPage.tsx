@@ -13,6 +13,12 @@ export function LandingPage({ signedIn }: { signedIn: boolean }) {
       <div className="home">
         <header className="home-bar">
           <AppLink href="/" className="home-logo">Today Cat</AppLink>
+          {signedIn ? null : (
+            <div className="home-nav">
+              <AppLink href="/login?next=/app" className="home-login">Войти</AppLink>
+              <AppLink href="/signup" className="home-signup">Регистрация</AppLink>
+            </div>
+          )}
         </header>
         <section className="home-hero">
           <div className="home-copy">
