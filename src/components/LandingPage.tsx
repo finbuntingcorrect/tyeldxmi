@@ -84,7 +84,7 @@ export function LandingPage({
             <AppLink href={enter} className="home-enter">Зайти в свой планер</AppLink>
           </div>
           <div className="home-art">
-            <img src="/cover/today-cat-hero.png" alt="" width={970} height={875} />
+            <img src="/cover/today-cat-hero.png" alt="" width={926} height={831} />
           </div>
         </section>
         <section className="home-day" aria-labelledby="home-day-title">
