@@ -390,57 +390,80 @@ html[data-theme='dark'] {
   min-height: 76px;
 }
 
-.home-nav {
+.home-nav,
+.home-account {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 16px;
   margin-left: auto;
 }
 
-.home-login,
-.home-signup {
+.home-nav a,
+.home-account-toggle {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  min-height: 40px;
-  padding: 0 16px;
-  border-radius: 10px;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #2e211b;
+  font-size: 0.95rem;
   font-weight: 700;
+  line-height: 1.2;
+  text-decoration: underline;
+  text-underline-offset: 0.2rem;
   white-space: nowrap;
+}
+
+.home-nav a:hover,
+.home-account-toggle:hover {
+  color: #8a4e12;
+}
+
+.home-account {
+  position: relative;
+}
+
+.home-account-toggle {
+  max-width: 9rem;
+}
+
+.home-account-toggle span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.home-account-menu {
+  position: absolute;
+  top: calc(100% - 4px);
+  right: 0;
+  z-index: 2;
+  display: grid;
+  min-width: 9.5rem;
+  border: 1px solid #eadccb;
+  background: #fff8ee;
+  padding: 4px 0;
+}
+
+.home-account-menu a,
+.home-account-menu button {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 0;
+  background: none;
+  color: #2e211b;
+  font-size: 0.95rem;
+  font-weight: 700;
+  text-align: left;
   text-decoration: none;
 }
 
-.home-login {
-  border: 2px solid #2e211b;
-  background: transparent;
-  color: #2e211b;
-}
-
-.home-login:hover {
+.home-account-menu a:hover,
+.home-account-menu button:hover {
   background: #f3e2cc;
-}
-
-.home-signup {
-  background: #e08a3c;
-  color: #2e211b;
-}
-
-.home-signup:hover {
-  background: #c87424;
-}
-
-.home-login:active {
-  background: #e7d3bc;
-}
-
-.home-signup:active {
-  background: #b5671c;
-}
-
-.home-login:focus-visible,
-.home-signup:focus-visible {
-  outline: 2px solid #8a4e12;
-  outline-offset: 3px;
 }
 
 .home-logo {
@@ -723,17 +746,9 @@ html[data-theme='dark'] {
 }
 
 @media (max-width: 400px) {
-  .home-bar {
-    gap: 8px;
-  }
-
+  .home-bar,
   .home-nav {
-    gap: 6px;
-  }
-
-  .home-login,
-  .home-signup {
-    padding: 0 10px;
+    gap: 12px;
   }
 }
 

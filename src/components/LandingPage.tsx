@@ -1,3 +1,4 @@
+import { useEffect, useId, useRef, useState } from 'react';
 import { AppLink } from './AppLink';
 
 const POINTS = [
@@ -6,18 +7,71 @@ const POINTS = [
   { title: 'Создавай привычки', text: 'Отмечай то, что хочешь делать регулярно.' },
 ];
 
-export function LandingPage({ signedIn }: { signedIn: boolean }) {
+function AccountMenu({ label, onSignOut }: { label: string; onSignOut: () => void }) {
+  const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  const menuId = useId();
+
+  useEffect(() => {
+    if (!open) return;
+    function onPointer(event: PointerEvent) {
+      if (!root.current?.contains(event.target as Node)) setOpen(false);
+    }
+    function onKey(event: KeyboardEvent) {
+      if (event.key === 'Escape') setOpen(false);
+    }
+    document.addEventListener('pointerdown', onPointer);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', onPointer);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  return (
+    <div className="home-account" ref={root}>
+      <button
+        type="button"
+        className="home-account-toggle"
+        aria-expanded={open}
+        aria-haspopup="menu"
+        aria-controls={menuId}
+        onClick={() => setOpen((value) => !value)}
+      >
+        <span>{label}</span>
+      </button>
+      {open ? (
+        <div id={menuId} className="home-account-menu" role="menu">
+          <AppLink href="/app/settings" role="menuitem" onClick={() => setOpen(false)}>Настройки</AppLink>
+          <button type="button" role="menuitem" onClick={onSignOut}>Выйти</button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+export function LandingPage({
+  signedIn,
+  accountLabel = 'Аккаунт',
+  onSignOut,
+}: {
+  signedIn: boolean;
+  accountLabel?: string;
+  onSignOut?: () => void;
+}) {
   const enter = signedIn ? '/app' : '/login?next=/app';
   return (
     <div className="public">
       <div className="home">
         <header className="home-bar">
           <AppLink href="/" className="home-logo">Today Cat</AppLink>
-          {signedIn ? null : (
-            <div className="home-nav">
-              <AppLink href="/login?next=/app" className="home-login">Войти</AppLink>
-              <AppLink href="/signup" className="home-signup">Регистрация</AppLink>
-            </div>
+          {signedIn && onSignOut ? (
+            <AccountMenu label={accountLabel} onSignOut={onSignOut} />
+          ) : (
+            <nav className="home-nav" aria-label="Вход и регистрация">
+              <AppLink href="/login">Войти</AppLink>
+              <AppLink href="/signup">Регистрация</AppLink>
+            </nav>
           )}
         </header>
         <section className="home-hero">

@@ -124,7 +124,15 @@ export function Home() {
     return <LandingPage signedIn={false} />;
   }
   if (authedGate) return <CabinetSplash />;
-  if (page.name === 'landing') return <LandingPage signedIn />;
+  if (page.name === 'landing') {
+    return (
+      <LandingPage
+        signedIn
+        accountLabel={personName(book.name, notebook.login) || 'Аккаунт'}
+        onSignOut={() => { void notebook.signOut().then((left) => { if (left) go('/'); }); }}
+      />
+    );
+  }
   if (page.name === 'forgot') return <ForgotScreen onForgot={notebook.requestEmail} />;
 
   if (needsHello(book) && isPlannerPage(page)) {
