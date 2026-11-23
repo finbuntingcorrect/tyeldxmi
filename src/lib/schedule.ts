@@ -11,14 +11,14 @@ export type RepeatSchedule = {
   monthDay: number | null;
 };
 
-const WEEKDAY_PHRASE: Record<number, string> = {
-  0: 'Каждое воскресенье',
-  1: 'Каждый понедельник',
-  2: 'Каждый вторник',
-  3: 'Каждую среду',
-  4: 'Каждый четверг',
-  5: 'Каждую пятницу',
-  6: 'Каждую субботу',
+const WEEK_IN: Record<number, string> = {
+  0: 'воскресенье',
+  1: 'понедельник',
+  2: 'вторник',
+  3: 'среду',
+  4: 'четверг',
+  5: 'пятницу',
+  6: 'субботу',
 };
 
 export function cleanInterval(value: number | null | undefined) {
@@ -109,7 +109,7 @@ export function scheduleLabel(schedule: RepeatSchedule) {
 }
 
 function baseLabel(schedule: RepeatSchedule) {
-  if (schedule.repeatKind === 'none') return 'Не повторяется';
+  if (schedule.repeatKind === 'none') return 'Не повторять';
   if (schedule.repeatKind === 'weekdays') return 'По будням';
   if (schedule.repeatKind === 'daily') {
     if (schedule.interval === 1) return 'Каждый день';
@@ -121,7 +121,10 @@ function baseLabel(schedule: RepeatSchedule) {
     return `Каждые ${schedule.interval} ${ruNoun(schedule.interval, 'месяц', 'месяца', 'месяцев')}, ${day}-го числа`;
   }
   const names = weekdayNames(schedule.weekdays);
-  if (schedule.interval === 1 && schedule.weekdays.length === 1) return WEEKDAY_PHRASE[schedule.weekdays[0]] ?? 'Каждую неделю';
+  if (schedule.interval === 1 && schedule.weekdays.length === 1) {
+    const day = WEEK_IN[schedule.weekdays[0]];
+    return day ? `Каждую неделю в ${day}` : 'Каждую неделю';
+  }
   if (schedule.interval === 1) return names ? `Каждую неделю: ${names}` : 'Каждую неделю';
   return `Каждые ${schedule.interval} ${ruNoun(schedule.interval, 'неделю', 'недели', 'недель')}${names ? `: ${names}` : ''}`;
 }
@@ -131,13 +134,11 @@ export function monthEndHint(day: number | null) {
   return 'Если в месяце нет этого числа, задача будет в последний день.';
 }
 
-export function menuChoices(date: string) {
-  const monthlyDay = monthDay(date);
+export function menuChoices() {
   return [
-    { id: 'none' as const, label: 'Не повторяется', hint: null },
+    { id: 'none' as const, label: 'Не повторять', hint: null },
     { id: 'daily' as const, label: 'Каждый день', hint: null },
     { id: 'weekdays' as const, label: 'По будням', hint: null },
-    { id: 'weekly' as const, label: WEEKDAY_PHRASE[weekday(date)] ?? 'Каждую неделю', hint: null },
-    { id: 'monthly' as const, label: `Каждый месяц ${monthlyDay}-го числа`, hint: monthEndHint(monthlyDay) },
+    { id: 'weekly' as const, label: 'Каждую неделю в выбранный день', hint: null },
   ];
 }

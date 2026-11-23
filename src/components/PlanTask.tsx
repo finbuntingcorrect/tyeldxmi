@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Minus, MoreHorizontal, Repeat, X } from 'lucide-react';
 import { addDays } from '../../server/recurrence';
-import { dateFromKey, formatLocalDate } from '../lib/date';
+import { dateFromKey } from '../lib/date';
 import type { NotebookTask, SeriesRule, TaskDraft } from '../lib/notebook';
 import { noneSchedule, normalizeSchedule, sameSchedule, scheduleLabel, type RepeatSchedule } from '../lib/schedule';
 import type { DayPart, Priority } from '../types';
@@ -51,12 +51,12 @@ function Choice({ id, label, value, onChange, options }: {
   options: { id: string; label: string }[];
 }) {
   return (
-    <>
-      <label htmlFor={id} className="mt-4 block text-sm font-semibold">{label}</label>
+    <div>
+      <label htmlFor={id} className="block text-sm font-semibold">{label}</label>
       <select id={id} value={value} onChange={(event) => onChange(event.target.value)} className="paper-field mt-1 text-base">
         {options.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
       </select>
-    </>
+    </div>
   );
 }
 
@@ -89,7 +89,6 @@ export function AddTask({ date, part, onCreate }: {
   const priorityId = useId();
   const noteId = useId();
   const [open, setOpen] = useState(false);
-  const [details, setDetails] = useState(false);
   const [title, setTitle] = useState('');
   const [dateEdit, setDateEdit] = useState<{ from: string; value: string } | null>(null);
   const [partEdit, setPartEdit] = useState<{ from: DayPart; value: DayPart } | null>(null);
@@ -128,13 +127,11 @@ export function AddTask({ date, part, onCreate }: {
     setSchedule(noneSchedule());
     setNote('');
     setNoteOpen(false);
-    setDetails(false);
     setOpen(false);
   }
 
   function close() {
     setError(null);
-    setDetails(false);
     setOpen(false);
   }
 
@@ -168,31 +165,21 @@ export function AddTask({ date, part, onCreate }: {
         aria-invalid={error === 'Напиши название.'}
         className="paper-field mt-1 text-base"
       />
+      <label htmlFor={dateId} className="mt-4 block text-sm font-semibold">Дата</label>
+      <input id={dateId} type="date" value={when} onChange={(event) => { setDateEdit({ from: date, value: event.target.value }); setError(null); }} className="paper-field mt-1 text-base" />
       {error ? <p role="alert" className="mt-2 text-sm font-semibold text-danger">{error}</p> : null}
-      {details ? (
-        <>
-          <label htmlFor={dateId} className="mt-4 block text-sm font-semibold">Дата</label>
-          <input id={dateId} type="date" value={when} onChange={(event) => { setDateEdit({ from: date, value: event.target.value }); setError(null); }} className="paper-field mt-1 text-base" />
-        </>
-      ) : (
-        <>
-          <p className="mt-4 text-sm font-semibold">Дата</p>
-          <p className="mt-1 text-base text-ink">{formatLocalDate(dateFromKey(when))}</p>
-        </>
-      )}
-      {details ? (
-        <>
-          <Choice id={partId} label="Время дня" value={dayPart} onChange={(value) => setPartEdit({ from: part, value: value as DayPart })} options={PART_OPTIONS} />
-          <Choice id={priorityId} label="Приоритет" value={priority} onChange={(value) => setPriority(value as Priority)} options={PRIORITY_OPTIONS} />
-          <RepeatField date={when} value={schedule} onChange={setSchedule} />
-          <NoteField id={noteId} open={noteOpen} note={note} onOpen={() => setNoteOpen(true)} onChange={setNote} />
-        </>
-      ) : null}
       <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
-        <button type="submit" className="paper-submit sm:min-w-36">Добавить</button>
-        <button type="button" aria-expanded={details} onClick={() => setDetails((value) => !value)} className="paper-choice">Подробнее</button>
+        <button type="submit" className="paper-submit sm:min-w-36">Сохранить</button>
         <button type="button" onClick={close} className="paper-choice">Отмена</button>
       </div>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <Choice id={partId} label="Время дня" value={dayPart} onChange={(value) => setPartEdit({ from: part, value: value as DayPart })} options={PART_OPTIONS} />
+        <Choice id={priorityId} label="Приоритет" value={priority} onChange={(value) => setPriority(value as Priority)} options={PRIORITY_OPTIONS} />
+      </div>
+      <div className="mt-3">
+        <RepeatField date={when} value={schedule} onChange={setSchedule} />
+      </div>
+      <NoteField id={noteId} open={noteOpen} note={note} onOpen={() => setNoteOpen(true)} onChange={setNote} />
     </form>
   );
 }
@@ -294,12 +281,27 @@ export function PlanTask({ task, today, series = null, onToggle, onMove, onUpdat
     function onKey(event: KeyboardEvent) {
       if (event.key !== 'Escape' || event.defaultPrevented) return;
       event.preventDefault();
-      setOpen(false);
-      titleButtonRef.current?.focus();
+      if (askScope) {
+        setAskScope(false);
+        return;
+      }
+      closeEditor();
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [open]);
+  }, [open, askScope]);
+
+  useEffect(() => {
+    if (!removing) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      setRemoving(false);
+    }
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [removing]);
 
   useEffect(() => {
     if (!menu) return;
@@ -415,9 +417,13 @@ export function PlanTask({ task, today, series = null, onToggle, onMove, onUpdat
                 <input id={titleId} autoFocus required value={title} onChange={(event) => { setTitle(event.target.value); setAskScope(false); }} maxLength={160} autoComplete="off" className="paper-field mt-1 text-base" />
                 <label htmlFor={dateId} className="mt-4 block text-sm font-semibold">Дата</label>
                 <input id={dateId} type="date" required value={date} onChange={(event) => { setDate(event.target.value); setAskScope(false); }} className="paper-field mt-1 text-base" />
-                <Choice id={partId} label="Время дня" value={dayPart} onChange={(value) => { setDayPart(value as DayPart); setAskScope(false); }} options={PART_OPTIONS} />
-                <Choice id={priorityId} label="Приоритет" value={priority} onChange={(value) => { setPriority(value as Priority); setAskScope(false); }} options={PRIORITY_OPTIONS} />
-                <RepeatField date={date} value={repeat} onChange={(next) => { setSchedule(next); setAskScope(false); }} />
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <Choice id={partId} label="Время дня" value={dayPart} onChange={(value) => { setDayPart(value as DayPart); setAskScope(false); }} options={PART_OPTIONS} />
+                  <Choice id={priorityId} label="Приоритет" value={priority} onChange={(value) => { setPriority(value as Priority); setAskScope(false); }} options={PRIORITY_OPTIONS} />
+                </div>
+                <div className="mt-3">
+                  <RepeatField date={date} value={repeat} onChange={(next) => { setSchedule(next); setAskScope(false); }} />
+                </div>
                 <NoteField id={noteId} open={noteOpen} note={note} onOpen={() => setNoteOpen(true)} onChange={(value) => { setNote(value); setAskScope(false); }} />
               </div>
               <div data-dialog-footer="" className="flex flex-col gap-2 border-t border-line px-5 py-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
@@ -425,7 +431,7 @@ export function PlanTask({ task, today, series = null, onToggle, onMove, onUpdat
                   <>
                     <button type="button" onClick={() => commit('one')} className="paper-submit min-h-11">Только это повторение</button>
                     <button type="button" onClick={() => commit('future')} className="paper-submit min-h-11">Это и последующие</button>
-                    <button type="button" onClick={closeEditor} className="paper-choice min-h-11">Отмена</button>
+                    <button type="button" onClick={() => setAskScope(false)} className="paper-choice min-h-11">Отмена</button>
                   </>
                 ) : (
                   <div className="flex gap-2">

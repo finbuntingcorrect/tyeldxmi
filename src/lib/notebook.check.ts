@@ -591,4 +591,40 @@ assert.equal(needsHello(withTask), false);
 const greetedWithTask = parseNotebook({ ...withTask, greeted: true, mode: 'planner' });
 assert.equal(needsHello(greetedWithTask ?? emptyNotebook()), false);
 
+let keptDaily = createTask(emptyNotebook(), {
+  title: 'Страница',
+  date: '2026-11-01',
+  dayPart: 'morning',
+  priority: 'normal',
+  repeatKind: 'daily',
+  weekdays: [],
+}, '2026-11-01T08:00:00.000Z');
+keptDaily = materialize(keptDaily, '2026-11-01', '2026-12-15');
+const novemberDay = tasksForDate(keptDaily, '2026-11-20')[0];
+keptDaily = toggleTask(keptDaily, novemberDay.id, '2026-11-20T12:00:00.000Z');
+const seriesRule = JSON.parse(JSON.stringify(keptDaily.series[0])) as typeof keptDaily.series[0];
+const beforeMonth = keptDaily.tasks.filter((task) => task.seriesId === novemberDay.seriesId).length;
+const decemberDay = tasksForDate(keptDaily, '2026-12-01')[0];
+keptDaily = moveTask(keptDaily, decemberDay.id, '2026-12-02');
+keptDaily = materialize(keptDaily, '2026-11-01', '2026-12-15');
+assert.equal(keptDaily.tasks.filter((task) => task.seriesId === novemberDay.seriesId).length, beforeMonth);
+assert.equal(tasksForDate(keptDaily, '2026-11-20')[0].completed, true);
+assert.equal(tasksForDate(keptDaily, '2026-11-20')[0].completedAt, '2026-11-20T12:00:00.000Z');
+assert.equal(tasksForDate(keptDaily, '2026-12-01').length, 0);
+assert.equal(tasksForDate(keptDaily, '2026-12-02')[0].originalDate, '2026-12-01');
+assert.equal(tasksForDate(keptDaily, '2026-12-03')[0].date, '2026-12-03');
+assert.deepEqual(keptDaily.series[0], seriesRule);
+const shifted = tasksForDate(keptDaily, '2026-12-02')[0];
+const savedAgain = updateTask(keptDaily, shifted.id, {
+  title: shifted.title,
+  date: shifted.date,
+  dayPart: shifted.dayPart,
+  priority: shifted.priority,
+  repeatKind: 'daily',
+  weekdays: [],
+}, 'one', '2026-12-02T08:00:00.000Z');
+assert.equal(savedAgain.tasks.length, keptDaily.tasks.length);
+assert.equal(tasksForDate(savedAgain, '2026-11-20')[0].completed, true);
+assert.deepEqual(savedAgain.series[0], seriesRule);
+
 console.log('notebook ok');
