@@ -848,7 +848,8 @@ html[data-theme='dark'] {
 }
 
 .diary-arrow:disabled,
-.diary-today-button:disabled {
+.diary-today-button:disabled,
+.diary-range-button:disabled {
   opacity: 0.45;
 }
 
@@ -913,6 +914,7 @@ html[data-theme='dark'] {
 .diary-page {
   min-width: 0;
   padding: 0.85rem 0.45rem 1rem;
+  background: #fbf6ec;
 }
 
 .diary-day + .diary-day {
@@ -1262,24 +1264,191 @@ html[data-theme='dark'] {
   text-decoration: line-through;
 }
 
-@keyframes diary-next {
-  0% { transform: perspective(1100px) rotateY(0deg); }
-  45% { transform: perspective(1100px) rotateY(-7deg); filter: drop-shadow(-12px 8px 10px rgb(60 40 20 / 0.16)); }
-  100% { transform: perspective(1100px) rotateY(0deg); }
+.diary-stage {
+  min-width: 0;
+  margin: 0 -1.25rem -2rem;
+  padding: 0 1.25rem 2rem;
+  overflow: hidden;
 }
 
-@keyframes diary-prev {
-  0% { transform: perspective(1100px) rotateY(0deg); }
-  45% { transform: perspective(1100px) rotateY(7deg); filter: drop-shadow(12px 8px 10px rgb(60 40 20 / 0.16)); }
-  100% { transform: perspective(1100px) rotateY(0deg); }
+.diary-spread {
+  position: relative;
 }
 
-.diary-spread.is-turning {
+.diary-spread.is-releasing {
+  transition: min-height 280ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.diary-live {
+  min-width: 0;
+  width: 100%;
+}
+
+.diary-underlay,
+.diary-leaf,
+.diary-cast {
+  position: absolute;
   pointer-events: none;
 }
 
-.diary-spread.turn-next.is-turning { animation: diary-next 420ms ease-in-out; }
-.diary-spread.turn-prev.is-turning { animation: diary-prev 420ms ease-in-out; }
+.diary-underlay {
+  top: 0;
+  z-index: 1;
+  width: 50%;
+  height: auto;
+}
+
+.turn-next .diary-underlay {
+  right: 0;
+  left: auto;
+}
+
+.turn-prev .diary-underlay {
+  right: auto;
+  left: 0;
+}
+
+.diary-live {
+  position: relative;
+  z-index: 2;
+  isolation: isolate;
+}
+
+.diary-spread.is-turning .diary-live {
+  pointer-events: none;
+}
+
+.diary-leaf {
+  z-index: 3;
+  top: 0;
+  bottom: 0;
+  width: 50%;
+  animation-duration: 360ms;
+  animation-fill-mode: both;
+}
+
+.diary-leaf.is-next.is-lift {
+  left: 50%;
+  transform: rotateY(0deg);
+  transform-origin: left center;
+  animation-name: diary-lift-next;
+}
+
+.diary-leaf.is-next.is-lay {
+  left: 0;
+  transform: rotateY(90deg);
+  transform-origin: right center;
+  animation-name: diary-lay-next;
+}
+
+.diary-leaf.is-prev.is-lift {
+  left: 0;
+  transform: rotateY(0deg);
+  transform-origin: right center;
+  animation-name: diary-lift-prev;
+}
+
+.diary-leaf.is-prev.is-lay {
+  left: 50%;
+  transform: rotateY(-90deg);
+  transform-origin: left center;
+  animation-name: diary-lay-prev;
+}
+
+.diary-leaf-sheet {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: #fbf6ec;
+  backface-visibility: hidden;
+}
+
+.diary-leaf .diary-page {
+  width: 100%;
+  min-height: 100%;
+}
+
+.diary-fold {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 24%;
+}
+
+.diary-leaf.is-next.is-lift .diary-fold,
+.diary-leaf.is-prev.is-lay .diary-fold {
+  left: 0;
+  background: linear-gradient(to right, rgb(70 45 20 / 0.16), transparent);
+}
+
+.diary-leaf.is-next.is-lay .diary-fold,
+.diary-leaf.is-prev.is-lift .diary-fold {
+  right: 0;
+  background: linear-gradient(to left, rgb(70 45 20 / 0.16), transparent);
+}
+
+.diary-cast {
+  z-index: 4;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 22%;
+  animation-duration: 720ms;
+  animation-timing-function: linear;
+  animation-fill-mode: both;
+}
+
+.turn-next .diary-cast {
+  background: linear-gradient(to left, rgb(70 45 20 / 0.2), transparent 80%);
+  animation-name: diary-cast-next;
+}
+
+.turn-prev .diary-cast {
+  background: linear-gradient(to right, rgb(70 45 20 / 0.2), transparent 80%);
+  animation-name: diary-cast-prev;
+}
+
+@keyframes diary-lift-next {
+  from { transform: rotateY(0deg); animation-timing-function: cubic-bezier(0.42, 0, 1, 1); }
+  to { transform: rotateY(-90deg); }
+}
+
+@keyframes diary-lay-next {
+  from { transform: rotateY(90deg); animation-timing-function: cubic-bezier(0, 0, 0.58, 1); }
+  to { transform: rotateY(0deg); }
+}
+
+@keyframes diary-lift-prev {
+  from { transform: rotateY(0deg); animation-timing-function: cubic-bezier(0.42, 0, 1, 1); }
+  to { transform: rotateY(90deg); }
+}
+
+@keyframes diary-lay-prev {
+  from { transform: rotateY(-90deg); animation-timing-function: cubic-bezier(0, 0, 0.58, 1); }
+  to { transform: rotateY(0deg); }
+}
+
+@keyframes diary-cast-next {
+  0% { opacity: 0; transform: translateX(8%); }
+  45% { opacity: 0.85; transform: translateX(-18%); }
+  100% { opacity: 0; transform: translateX(-108%); }
+}
+
+@keyframes diary-cast-prev {
+  0% { opacity: 0; transform: translateX(-108%); }
+  45% { opacity: 0.85; transform: translateX(-18%); }
+  100% { opacity: 0; transform: translateX(8%); }
+}
+
+@keyframes diary-out {
+  from { opacity: 1; animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
+  to { opacity: 0; }
+}
+
+@keyframes diary-in {
+  from { opacity: 0; animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1); }
+  to { opacity: 1; }
+}
 
 @keyframes stamp-pop {
   0% { opacity: 0.15; transform: scale(1.16); }
@@ -1292,8 +1461,20 @@ html[data-theme='dark'] {
 
 @media (min-width: 900px) {
   .diary-spread {
+    perspective: 5200px;
+  }
+
+  .diary-live,
+  .diary-underlay {
     display: flex;
     align-items: stretch;
+  }
+
+  .diary-spread.turn-next.is-turning .diary-live .diary-page-right,
+  .diary-spread.turn-prev.is-turning .diary-live .diary-page-left,
+  .diary-spread.turn-next.is-turning:has(.is-lay) .diary-live .diary-page-left,
+  .diary-spread.turn-prev.is-turning:has(.is-lay) .diary-live .diary-page-right {
+    visibility: hidden;
   }
 
   .diary-page {
@@ -1326,10 +1507,28 @@ html[data-theme='dark'] {
   .diary-weekend {
     display: contents;
   }
+
+  .diary-leaf,
+  .diary-cast,
+  .diary-underlay {
+    display: none;
+  }
+
+  .diary-spread.is-turning .diary-live {
+    animation: diary-out 360ms cubic-bezier(0.4, 0, 0.2, 1) both;
+  }
+
+  .diary-spread.is-settling .diary-live {
+    animation: diary-in 360ms cubic-bezier(0.4, 0, 0.2, 1) both;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .diary-stamp-pop {
+  .diary-stamp-pop,
+  .diary-leaf,
+  .diary-cast,
+  .diary-underlay,
+  .diary-live {
     animation: none;
   }
 }
