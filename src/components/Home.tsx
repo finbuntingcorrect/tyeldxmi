@@ -276,7 +276,6 @@ export function Home() {
             onCreate={notebook.createHabit}
             onRename={notebook.renameHabit}
             onArchive={notebook.setHabitArchived}
-            onDelete={notebook.deleteHabit}
             onMark={notebook.setHabitMark}
           />
         ) : null}
