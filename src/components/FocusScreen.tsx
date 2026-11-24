@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { Minus, Volume2, VolumeX } from 'lucide-react';
 import { CatSprite, type CatClip } from './CatSprite';
 import { PaperCheck } from './PaperCheck';
@@ -103,19 +103,13 @@ export function FocusScreen(props: FocusScreenProps) {
   const titleId = useId();
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState('');
-  const [menu, setMenu] = useState(false);
-  const [confirmReset, setConfirmReset] = useState(false);
-  const [groom, setGroom] = useState(false);
-  const [step, setStep] = useState(false);
-  const [face, setFace] = useState<1 | -1>(1);
   const [feeding, setFeeding] = useState<TreatKind | null>(null);
-  const [doneChoice, setDoneChoice] = useState<boolean | null>(null);
+  const [doneChoice, setDoneChoice] = useState(false);
   const feedLock = useRef(false);
   const tasks = tasksForDate(book, props.today);
   const openTasks = tasks.filter((task) => !task.completed);
   const doneTasks = tasks.filter((task) => task.completed);
-  const linkedCompleted = tasks.some((task) => task.id === book.focusId && task.completed);
-  const doneVisible = doneChoice ?? linkedCompleted;
+  const doneVisible = doneChoice;
   const running = Boolean(session && !session.paused && !session.settled);
   const paused = Boolean(session && session.paused && !session.settled);
   const doneFocus = Boolean(session?.settled && session.phase === 'focus' && session.full);
@@ -131,25 +125,9 @@ export function FocusScreen(props: FocusScreenProps) {
   const progress = duration > 0 ? left / duration : 0;
   const linkedId = session?.taskId || book.focusId || '';
   const linked = book.tasks.find((task) => task.id === linkedId && !task.deleted) ?? null;
-  const rounds = cat.rounds;
-  const marks = cycleMarks(cat.focusCycle, rounds, Boolean(session?.phase === 'focus' && !session.full));
+  const marks = cycleMarks(Math.min(4, cat.focusCycle), 4, Boolean(session?.phase === 'focus' && !session.settled));
   const todayMinutes = Math.floor(cat.focusMsToday / 60_000);
   const offer = treatOffer(focusWorkedMs(cat, session, now, props.today), treatDay(cat, props.today));
-
-  useEffect(() => {
-    if (reduced || session) return;
-    const id = window.setInterval(() => setGroom(true), 14_000);
-    return () => window.clearInterval(id);
-  }, [reduced, session]);
-
-  useEffect(() => {
-    if (reduced || session?.phase !== 'break' || session.settled || session.paused) return;
-    const id = window.setInterval(() => {
-      setStep((value) => !value);
-      setFace((value) => (value === 1 ? -1 : 1));
-    }, 7000);
-    return () => window.clearInterval(id);
-  }, [reduced, session?.phase, session?.settled, session?.paused, session?.signalId]);
 
   const live = !session
     ? ''
@@ -179,29 +157,20 @@ export function FocusScreen(props: FocusScreenProps) {
     setAdding(false);
   }
 
-  const clip: CatClip = !session && groom && !reduced
-    ? 'groom'
-    : !session
-      ? (tasks.some((task) => !task.completed) ? 'blink' : 'sleep')
-      : doneFocus
-          ? 'stretch'
-          : paused || early
-            ? 'sleep'
-            : session.phase === 'break'
-              ? (!reduced && step ? 'walk' : 'stretch')
-              : 'blink';
+  const clip: CatClip = !session
+    ? 'think'
+    : doneFocus
+      ? 'stretch'
+      : paused || early || session.phase === 'break'
+        ? 'sleep'
+        : 'blink';
 
-  const primaryLabel = running
-    ? 'Пауза'
-    : paused
-      ? 'Продолжить'
-      : doneFocus
-        ? 'Начать перерыв'
-      : doneBreak
-        ? 'Начать следующий подход'
-        : phase === 'focus'
-          ? (cat.focusCycle > 0 ? 'Начать следующий подход' : 'Начать фокус')
-          : 'Начать перерыв';
+  const primaryLabel = running ? 'Пауза' : paused ? 'Продолжить' : 'Начать';
+  const secondary = locked
+    ? { label: 'Завершить', run: props.onFinish }
+    : session
+      ? { label: 'Сброс', run: props.onReset }
+      : null;
 
   async function feed(kind: TreatKind) {
     if (feedLock.current || feeding) return;
@@ -217,8 +186,7 @@ export function FocusScreen(props: FocusScreenProps) {
   function onPrimary() {
     if (running) props.onPause();
     else if (paused) props.onResume();
-    else if (doneFocus) props.onBreak();
-    else if (doneBreak) props.onAgain();
+    else if (doneFocus || doneBreak) props.onAgain();
     else begin();
   }
 
@@ -255,11 +223,8 @@ export function FocusScreen(props: FocusScreenProps) {
                 }}
               />
             ) : (
-              <div
-                className="absolute inset-0"
-                style={reduced ? undefined : { transform: session?.phase === 'break' && step ? 'translateX(8px)' : 'translateX(0)', transition: 'transform 1.6s ease' }}
-              >
-                <CatSprite clip={clip} face={face} reduced={reduced} onFinished={() => setGroom(false)} />
+              <div className="absolute inset-0 overflow-hidden">
+                <CatSprite clip={clip} face={1} reduced={reduced} />
               </div>
             )}
           </div>
@@ -278,8 +243,24 @@ export function FocusScreen(props: FocusScreenProps) {
             ))}
           </div>
         </div>
-        {doneFocus ? <p className="mt-3 text-center text-sm text-ink">Отличный подход. Время отдохнуть</p> : null}
-        {early ? <p className="mt-3 text-center text-sm text-muted">Время сохранено</p> : null}
+        <p className={`mt-3 text-center text-base break-words ${linked ? '' : 'text-muted'}`}>
+          {!linked ? 'Без задачи' : linked.priority === 'high' && !linked.completed ? (
+            <span className="task-title-important"><span aria-hidden="true">! </span>{linked.title}<span className="sr-only"> Важный.</span></span>
+          ) : (
+            <span className={linked.completed ? 'text-muted line-through' : linked.priority === 'low' ? 'text-low' : 'text-ink'}>
+              {linked.priority === 'high' ? <span aria-hidden="true">! </span> : null}
+              {linked.title}
+              {linked.priority === 'low' ? <span className="sr-only"> Низкий приоритет.</span> : null}
+            </span>
+          )}
+        </p>
+        {linked && !linked.completed && session?.settled ? (
+          <p className="text-center">
+            <button type="button" onClick={props.onCompleteTask} className="paper-choice">Завершить задачу</button>
+          </p>
+        ) : null}
+        {doneFocus ? <p className="mt-2 text-center text-sm text-ink">Подход завершён. Можно отдохнуть.</p> : null}
+        {early ? <p className="mt-2 text-center text-sm text-muted">Время сохранено. Подход не засчитан.</p> : null}
         {props.remind && running ? (
           <p className="mt-2 text-center text-sm text-muted">
             Середина подхода
@@ -292,44 +273,27 @@ export function FocusScreen(props: FocusScreenProps) {
             <button type="button" onClick={props.onDismissNotice} className="paper-choice">Скрыть</button>
           </p>
         ) : null}
-        <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-          <button
-            type="button"
-            onClick={onPrimary}
-            className="paper-submit min-w-44"
-            style={{ background: doneFocus || tone === 'break' && !doneBreak ? 'var(--color-break)' : 'var(--color-focus)', color: doneFocus || tone === 'break' && !doneBreak ? '#fffaf3' : 'var(--color-on-focus)' }}
-          >
+        <div className="mt-4 flex items-center justify-center gap-2">
+          <button type="button" onClick={onPrimary} className="paper-submit min-w-44">
             {primaryLabel}
           </button>
-          {locked ? <button type="button" onClick={props.onFinish} className="paper-choice">Завершить</button> : null}
-          {doneFocus ? <button type="button" onClick={props.onSkipBreak} className="paper-choice">Пропустить перерыв</button> : null}
-          {doneFocus && linked && !linked.completed ? <button type="button" onClick={props.onCompleteTask} className="paper-choice">Завершить задачу</button> : null}
-          {doneBreak && linked && !linked.completed ? <button type="button" onClick={props.onCompleteTask} className="paper-choice">Завершить задачу</button> : null}
-          <button type="button" aria-expanded={menu} onClick={() => { setMenu((value) => !value); setConfirmReset(false); }} className="paper-choice">Ещё</button>
+          {secondary ? <button type="button" onClick={secondary.run} className="paper-choice">{secondary.label}</button> : null}
         </div>
-        {menu ? (
-          <div className="mx-auto mt-2 max-w-sm text-center">
-            {confirmReset ? (
-              <div>
-                <p className="text-sm text-ink">Сбросить таймер? Уже отработанное время останется.</p>
-                <button type="button" onClick={() => { props.onReset(); setMenu(false); setConfirmReset(false); }} className="paper-choice">Сбросить</button>
-                <button type="button" onClick={() => setConfirmReset(false)} className="paper-choice">Отмена</button>
-              </div>
-            ) : (
-              <button type="button" onClick={() => setConfirmReset(true)} className="paper-choice">Сброс</button>
-            )}
-          </div>
+        {doneFocus ? (
+          <p className="mt-2 text-center">
+            <button type="button" onClick={props.onBreak} className="paper-choice">{session?.plannedBreak === 'long' ? 'Начать длинный перерыв' : 'Начать перерыв'}</button>
+          </p>
         ) : null}
-        {!locked && phase === 'focus' ? (
-          <div className="mt-3 flex flex-wrap justify-center">
+        {!locked ? (
+          <div className="mt-3 flex flex-wrap justify-center" role="group" aria-label="Длительность фокуса">
             {FOCUS_PRESETS.map((preset) => (
-              <button key={preset} type="button" aria-pressed={focusMinutes === preset} onClick={() => props.onMinutes(preset)} className="paper-choice">{preset}</button>
+              <button key={preset} type="button" aria-pressed={focusMinutes === preset} onClick={() => props.onMinutes(preset)} className="paper-choice">{preset} мин</button>
             ))}
           </div>
         ) : null}
         <p className="mt-4 text-center text-sm text-ink">{marks.label}</p>
-        <div className="mt-1 flex justify-center gap-2" aria-hidden="true">
-          {Array.from({ length: rounds }, (_, index) => {
+        <div className="mt-1 flex justify-center gap-2" role="img" aria-label={`${marks.filled} из 4 подходов завершено`}>
+          {Array.from({ length: 4 }, (_, index) => {
             const filled = index < marks.filled;
             return (
               <span

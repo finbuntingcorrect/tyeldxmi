@@ -15,7 +15,10 @@ export async function unlockSound(): Promise<boolean> {
   const audio = audioContext();
   if (!audio) return false;
   try {
-    await audio.resume();
+    await Promise.race([
+      audio.resume(),
+      new Promise((resolve) => window.setTimeout(resolve, 400)),
+    ]);
   } catch {
     return false;
   }

@@ -229,11 +229,10 @@ export function Home() {
 
   async function toggleSound() {
     const next = !book.cat.sound;
-    if (next) {
-      const ready = await unlockSound();
-      if (!ready) setSoundNote('Звук не включился. Сессия идёт.');
-    }
     notebook.setCat({ ...book.cat, sound: next });
+    if (!next) return;
+    const ready = await unlockSound();
+    if (!ready) setSoundNote('Звук не включился.');
   }
 
   return (

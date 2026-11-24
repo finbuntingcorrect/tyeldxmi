@@ -428,6 +428,11 @@ assert.equal(twice.cat.focusCompleted, 1);
 const earlyFocus = applyFocus(twice, { ...twice.focusSession!, signalId: 'early', settled: true, full: false }, { taskId: timedId, addMs: 0 }, 90);
 assert.equal(earlyFocus.cat.focusCompleted, 1);
 assert.equal(earlyFocus.cat.focusCycle, 1);
+const rested = applyFocus(earlyFocus, { ...earlyFocus.focusSession!, signalId: 'break-1', phase: 'break', settled: true, full: true }, undefined, 95);
+assert.equal(rested.cat.focusCompleted, 1);
+assert.equal(rested.cat.focusCycle, 1);
+const restedAgain = applyFocus(rested, rested.focusSession, undefined, 96);
+assert.equal(restedAgain.cat.focusCompleted, 1);
 let cycle = earlyFocus;
 for (let step = 2; step <= 4; step += 1) {
   const signal = `round-${step}`;
@@ -611,10 +616,12 @@ assert.equal(keptDaily.tasks.filter((task) => task.seriesId === novemberDay.seri
 assert.equal(tasksForDate(keptDaily, '2026-11-20')[0].completed, true);
 assert.equal(tasksForDate(keptDaily, '2026-11-20')[0].completedAt, '2026-11-20T12:00:00.000Z');
 assert.equal(tasksForDate(keptDaily, '2026-12-01').length, 0);
-assert.equal(tasksForDate(keptDaily, '2026-12-02')[0].originalDate, '2026-12-01');
+const decemberSecond = tasksForDate(keptDaily, '2026-12-02');
+const shifted = decemberSecond.find((task) => task.originalDate === '2026-12-01');
+assert.ok(shifted);
+assert.equal(decemberSecond.some((task) => task.originalDate === '2026-12-02'), true);
 assert.equal(tasksForDate(keptDaily, '2026-12-03')[0].date, '2026-12-03');
 assert.deepEqual(keptDaily.series[0], seriesRule);
-const shifted = tasksForDate(keptDaily, '2026-12-02')[0];
 const savedAgain = updateTask(keptDaily, shifted.id, {
   title: shifted.title,
   date: shifted.date,

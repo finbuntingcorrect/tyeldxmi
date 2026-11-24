@@ -25,7 +25,7 @@ import {
   TREAT_FRAMES,
   WHISKAS_MS,
   SHEBA_MS,
-} from './focusSession';
+} from './focusSession.ts';
 
 const start = 1_000_000;
 const session = startFocus('task-1', 20, start, 'sig-1');

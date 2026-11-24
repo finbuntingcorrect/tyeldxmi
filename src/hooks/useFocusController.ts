@@ -204,7 +204,7 @@ export function useFocusController({ login, session, focusAt, reminders, sound, 
     takeLead(loginRef.current, true);
     if (soundRef.current) {
       void unlockSound().then((ready) => {
-        if (!ready) setNotice('Звук не включился. Таймер идёт.');
+        if (!ready) setNotice('Звук не включился.');
       });
     }
     publish(startFocus(taskId, minutes, Date.now(), signal()), 0, openingNewCycle());
@@ -267,7 +267,7 @@ export function useFocusController({ login, session, focusAt, reminders, sound, 
     takeLead(loginRef.current, true);
     if (soundRef.current) {
       void unlockSound().then((ready) => {
-        if (!ready) setNotice('Звук не включился. Таймер идёт.');
+        if (!ready) setNotice('Звук не включился.');
       });
     }
     publish(startIdle(taskId, phase, focusMinutes, minutes, Date.now(), signal()), 0, phase === 'focus' && openingNewCycle());
