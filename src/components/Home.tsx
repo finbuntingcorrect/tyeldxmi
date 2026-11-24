@@ -250,7 +250,7 @@ export function Home() {
         {page.name === 'settings' ? (
           <div>
             <div className="px-4 pt-4 sm:px-6">
-              <AppLink href="/app" className="text-sm font-semibold text-muted">К календарю</AppLink>
+              <AppLink href="/app" className="inline-flex min-h-11 items-center text-sm font-semibold text-muted">К календарю</AppLink>
             </div>
             <SettingsPanel
               login={notebook.login}

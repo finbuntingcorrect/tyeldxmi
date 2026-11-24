@@ -148,7 +148,7 @@ export function SettingsPanel({ login, name, theme, cat, onName, onTheme, onCat,
       </label>
       {fieldNote('sound', () => void saveCat('sound', cat))}
       <label className="mt-2 block text-sm font-semibold text-ink" htmlFor="sound-volume">Громкость</label>
-      <input id="sound-volume" type="range" min={0} max={100} value={Math.round(volume * 100)} onChange={(event) => setDraftVolume(Number(event.target.value) / 100)} onPointerUp={(event) => commitVolume(Number(event.currentTarget.value) / 100)} onKeyUp={(event) => commitVolume(Number(event.currentTarget.value) / 100)} onBlur={(event) => commitVolume(Number(event.currentTarget.value) / 100)} className="mt-2 w-full max-w-xs" />
+      <input id="sound-volume" type="range" min={0} max={100} value={Math.round(volume * 100)} onChange={(event) => setDraftVolume(Number(event.target.value) / 100)} onPointerUp={(event) => commitVolume(Number(event.currentTarget.value) / 100)} onKeyUp={(event) => commitVolume(Number(event.currentTarget.value) / 100)} onBlur={(event) => commitVolume(Number(event.currentTarget.value) / 100)} className="mt-2 block h-11 w-full max-w-xs" />
       {fieldNote('volume', () => void saveCat('volume', cat))}
       <button type="button" onClick={() => void testSound()} className="paper-choice mt-2 px-0">Проверить звук</button>
       {soundNote ? <p role="status" className="mt-2 text-sm text-ink">{soundNote}</p> : null}

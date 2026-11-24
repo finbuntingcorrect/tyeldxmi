@@ -353,6 +353,9 @@ html[data-theme='dark'] {
 }
 
 .public-logo {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
   font-family: var(--font-serif);
   font-size: 1.35rem;
   font-weight: 600;
@@ -450,7 +453,7 @@ html[data-theme='dark'] {
   display: flex;
   align-items: center;
   width: 100%;
-  min-height: 40px;
+  min-height: 2.75rem;
   padding: 0 12px;
   border: 0;
   background: none;
@@ -467,6 +470,9 @@ html[data-theme='dark'] {
 }
 
 .home-logo {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
   font-family: var(--font-serif);
   font-size: 1.35rem;
   font-weight: 600;
@@ -719,6 +725,9 @@ html[data-theme='dark'] {
 }
 
 .auth-links a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
   color: #2e211b;
   font-weight: 700;
   text-decoration: underline;

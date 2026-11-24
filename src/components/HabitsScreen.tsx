@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { dateFromKey, formatLocalDate } from '../lib/date';
 import { monthGrid, type HabitStatus, type Notebook } from '../lib/notebook';
+import { isMonthKey } from '../lib/route';
 import { WEEKDAYS } from '../lib/plannerCopy';
 import type { RepeatKind } from '../types';
 
@@ -159,7 +160,7 @@ function HabitCard({
                 aria-pressed={doneDay}
                 aria-label={`${habit.title}, ${formatLocalDate(dateFromKey(date))}, ${state}`}
                 onClick={() => markDay(date, status)}
-                className={`grid h-9 w-9 place-items-center rounded-full border text-xs leading-none font-semibold ${doneDay ? 'border-solid border-ink bg-ink text-card' : future ? 'border-dashed border-line text-muted' : before ? 'border-transparent text-muted' : 'border-solid border-ink text-ink'} ${outside && !doneDay ? 'opacity-50' : ''} ${locked ? 'cursor-default' : ''}`}
+                className={`grid h-11 w-11 place-items-center rounded-full border text-sm leading-none font-semibold ${doneDay ? 'border-solid border-ink bg-ink text-card' : future ? 'border-dashed border-line text-muted' : before ? 'border-transparent text-muted' : 'border-solid border-ink text-ink'} ${outside && !doneDay ? 'opacity-50' : ''} ${locked ? 'cursor-default' : ''}`}
                 style={date === today ? { boxShadow: '0 0 0 2px var(--color-card), 0 0 0 4px var(--color-primary)' } : undefined}
               >
                 {Number(date.slice(8))}
@@ -175,14 +176,36 @@ function HabitCard({
 export function HabitsScreen({ book, today, onCreate, onRename, onArchive, onMark }: HabitsScreenProps) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
-  const [month, setMonth] = useState(() => today.slice(0, 7));
+  const saving = useRef(false);
+  const [month, setMonth] = useState(() => {
+    const stored = (window.history.state as { month?: string } | null)?.month;
+    return stored && isMonthKey(stored) ? stored : today.slice(0, 7);
+  });
   const active = book.habits.filter((habit) => !habit.archived);
   const archived = book.habits.filter((habit) => habit.archived);
   const empty = active.length === 0;
 
+  function showMonth(next: string) {
+    if (next === month) return;
+    window.history.pushState({ month: next }, '', window.location.pathname);
+    setMonth(next);
+  }
+
+  useEffect(() => {
+    function onPop() {
+      if (window.location.pathname !== '/app/habits') return;
+      const stored = (window.history.state as { month?: string } | null)?.month;
+      setMonth(stored && isMonthKey(stored) ? stored : today.slice(0, 7));
+    }
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, [today]);
+
   function add() {
+    if (saving.current) return;
     const next = title.trim();
     if (!next) return;
+    saving.current = true;
     onCreate(next, 'daily', [], today);
     setTitle('');
     setOpen(false);
@@ -208,16 +231,16 @@ export function HabitsScreen({ book, today, onCreate, onRename, onArchive, onMar
       ) : (
         <header className="px-4 py-4 sm:px-6">
           <div className="flex items-center justify-between gap-2">
-            <button type="button" aria-label="Предыдущий месяц" onClick={() => setMonth((value) => shiftMonth(value, -1))} className="grid h-11 w-11 shrink-0 place-items-center text-ink">
+            <button type="button" aria-label="Предыдущий месяц" onClick={() => showMonth(shiftMonth(month, -1))} className="grid h-11 w-11 shrink-0 place-items-center text-ink">
               <ChevronLeft aria-hidden="true" size={22} />
             </button>
             <div className="min-w-0 text-center">
               <h2 className="font-serif text-3xl leading-tight break-words sm:text-5xl">{monthTitle(month)}</h2>
               {month !== today.slice(0, 7) ? (
-                <button type="button" onClick={() => setMonth(today.slice(0, 7))} className="mt-1 min-h-11 text-sm font-semibold text-ink">К сегодня</button>
+                <button type="button" onClick={() => showMonth(today.slice(0, 7))} className="mt-1 min-h-11 text-sm font-semibold text-ink">К сегодня</button>
               ) : null}
             </div>
-            <button type="button" aria-label="Следующий месяц" onClick={() => setMonth((value) => shiftMonth(value, 1))} className="grid h-11 w-11 shrink-0 place-items-center text-ink">
+            <button type="button" aria-label="Следующий месяц" onClick={() => showMonth(shiftMonth(month, 1))} className="grid h-11 w-11 shrink-0 place-items-center text-ink">
               <ChevronRight aria-hidden="true" size={22} />
             </button>
           </div>
@@ -226,11 +249,11 @@ export function HabitsScreen({ book, today, onCreate, onRename, onArchive, onMar
       {empty && !open && archived.length === 0 ? (
         <div className="px-4 py-8 text-center sm:px-6">
           <p className="text-base text-ink">Пока нет привычек.</p>
-          <button type="button" onClick={() => setOpen(true)} className="paper-submit mt-4">Добавить привычку</button>
+          <button type="button" onClick={() => { saving.current = false; setOpen(true); }} className="paper-submit mt-4">Добавить привычку</button>
         </div>
       ) : (
         <div className="px-4 sm:px-6">
-          {form ?? <button type="button" onClick={() => setOpen(true)} className="paper-submit">Добавить привычку</button>}
+          {form ?? <button type="button" onClick={() => { saving.current = false; setOpen(true); }} className="paper-submit">Добавить привычку</button>}
           <div className="mt-2 divide-y divide-line">
             {active.map((habit) => (
               <HabitCard key={habit.id} habit={habit} month={month} today={today} marks={book.marks} onRename={onRename} onArchive={onArchive} onMark={onMark} />

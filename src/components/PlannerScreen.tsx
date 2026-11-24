@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { addDays } from '../../server/recurrence';
 import { DAY_PARTS, WEEKDAYS, priorityRank } from '../lib/plannerCopy';
@@ -92,17 +92,20 @@ function weekSpan(start: string) {
 function AddGoal({ onAdd }: { onAdd: (title: string) => void }) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
+  const saving = useRef(false);
 
   function submit() {
+    if (saving.current) return;
     const next = title.trim();
     if (!next) return;
+    saving.current = true;
     onAdd(next);
     setTitle('');
     setOpen(false);
   }
 
   if (!open) {
-    return <button type="button" onClick={() => setOpen(true)} className="mt-1 min-h-11 px-1 text-sm font-semibold text-ink">+ Добавить цель</button>;
+    return <button type="button" onClick={() => { saving.current = false; setOpen(true); }} className="mt-1 min-h-11 px-1 text-sm font-semibold text-ink">+ Добавить цель</button>;
   }
 
   function cancel() {
@@ -219,9 +222,21 @@ export function MonthBoard(props: PlannerScreenProps) {
   const goals = book.weekItems.filter((item) => item.week === weekKey && item.kind === 'goal');
 
   function showMonth(next: string) {
+    const month = next.slice(0, 7);
+    if (month === monthKey) return;
+    window.history.pushState({ month }, '', window.location.pathname);
     setAnchor(next);
-    window.history.replaceState({ month: next.slice(0, 7) }, '', window.location.pathname);
   }
+
+  useEffect(() => {
+    function onPop() {
+      if (window.location.pathname !== '/app') return;
+      const month = (window.history.state as { month?: string } | null)?.month;
+      setAnchor(month && isMonthKey(month) ? `${month}-01` : today);
+    }
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, [today]);
 
   return (
     <section>

@@ -106,6 +106,7 @@ export function FocusScreen(props: FocusScreenProps) {
   const [feeding, setFeeding] = useState<TreatKind | null>(null);
   const [doneChoice, setDoneChoice] = useState(false);
   const feedLock = useRef(false);
+  const addingLock = useRef(false);
   const tasks = tasksForDate(book, props.today);
   const openTasks = tasks.filter((task) => !task.completed);
   const doneTasks = tasks.filter((task) => task.completed);
@@ -150,8 +151,10 @@ export function FocusScreen(props: FocusScreenProps) {
   }
 
   function addTask() {
+    if (addingLock.current) return;
     const title = draft.trim();
     if (!title) return;
+    addingLock.current = true;
     props.onCreate(title);
     setDraft('');
     setAdding(false);
@@ -311,7 +314,7 @@ export function FocusScreen(props: FocusScreenProps) {
       <aside className="px-4 pb-6 sm:px-6 lg:px-3 lg:py-4">
         <div className="flex items-center justify-between">
           <p className="text-sm text-muted">Задачи</p>
-          <button type="button" aria-expanded={adding} onClick={() => setAdding((value) => !value)} className="min-h-11 px-2 text-sm font-semibold text-ink">+ Задача</button>
+          <button type="button" aria-expanded={adding} onClick={() => { addingLock.current = false; setAdding((value) => !value); }} className="min-h-11 px-2 text-sm font-semibold text-ink">+ Задача</button>
         </div>
         {adding ? (
           <form

@@ -90,6 +90,7 @@ export function AddTask({ date, part, onCreate }: {
   const priorityId = useId();
   const noteId = useId();
   const [open, setOpen] = useState(false);
+  const saving = useRef(false);
   const [title, setTitle] = useState('');
   const [dateEdit, setDateEdit] = useState<{ from: string; value: string } | null>(null);
   const [partEdit, setPartEdit] = useState<{ from: DayPart; value: DayPart } | null>(null);
@@ -102,6 +103,7 @@ export function AddTask({ date, part, onCreate }: {
   const [error, setError] = useState<string | null>(null);
 
   function submit() {
+    if (saving.current) return;
     const next = title.trim();
     if (!next) {
       setError('Напиши название.');
@@ -111,6 +113,7 @@ export function AddTask({ date, part, onCreate }: {
       setError('Выбери дату.');
       return;
     }
+    saving.current = true;
     setError(null);
     const repeat = normalizeSchedule(schedule, when);
     onCreate({
@@ -149,7 +152,7 @@ export function AddTask({ date, part, onCreate }: {
   }, [open]);
 
   if (!open) {
-    return <button type="button" onClick={() => setOpen(true)} className="min-h-11 px-1 text-sm font-semibold text-muted">+ Добавить</button>;
+    return <button type="button" onClick={() => { saving.current = false; setOpen(true); }} className="min-h-11 px-1 text-sm font-semibold text-muted">+ Добавить</button>;
   }
 
   return (
@@ -198,6 +201,7 @@ export function PlanTask({ task, today, series = null, onToggle, onMove, onUpdat
   const [open, setOpen] = useState(false);
   const [menu, setMenu] = useState(false);
   const [removing, setRemoving] = useState(false);
+  const saving = useRef(false);
   const [askScope, setAskScope] = useState(false);
   const [title, setTitle] = useState(task.title);
   const [date, setDate] = useState(task.date);
@@ -226,6 +230,7 @@ export function PlanTask({ task, today, series = null, onToggle, onMove, onUpdat
   }
 
   function openEditor() {
+    saving.current = false;
     setMenu(false);
     setRemoving(false);
     setAskScope(false);
@@ -246,6 +251,8 @@ export function PlanTask({ task, today, series = null, onToggle, onMove, onUpdat
   }
 
   function commit(scope: 'one' | 'future') {
+    if (saving.current) return;
+    saving.current = true;
     const next = draft();
     const sameFields = next.title === task.title
       && date === task.date
