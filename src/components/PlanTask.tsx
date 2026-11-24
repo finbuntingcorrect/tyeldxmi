@@ -28,40 +28,10 @@ type PlanTaskProps = {
   onEditing?: (editing: boolean) => void;
 };
 
-const PART_OPTIONS: { id: DayPart; label: string }[] = [
-  { id: 'anytime', label: 'Без времени' },
-  { id: 'morning', label: 'Утро' },
-  { id: 'afternoon', label: 'День' },
-  { id: 'evening', label: 'Вечер' },
-];
-
-const PRIORITY_OPTIONS: { id: Priority; label: string }[] = [
-  { id: 'normal', label: 'Обычный' },
-  { id: 'high', label: 'Важный' },
-  { id: 'low', label: 'Низкий' },
-];
-
 function taskSchedule(task: NotebookTask, series?: SeriesRule | null): RepeatSchedule {
   if (series) return normalizeSchedule(series, series.start);
   if (!task.repeatKind) return noneSchedule();
   return normalizeSchedule({ repeatKind: task.repeatKind, weekdays: task.weekdays }, task.date);
-}
-
-function Choice({ id, label, value, onChange, options }: {
-  id: string;
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  options: { id: string; label: string }[];
-}) {
-  return (
-    <div>
-      <label htmlFor={id} className="block text-sm font-semibold">{label}</label>
-      <select id={id} value={value} onChange={(event) => onChange(event.target.value)} className="paper-field mt-1 text-base">
-        {options.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
-      </select>
-    </div>
-  );
 }
 
 function NoteField({ id, open, note, onOpen, onChange }: {
@@ -89,17 +59,14 @@ export function AddTask({ date, part, onCreate }: {
 }) {
   const titleId = useId();
   const dateId = useId();
-  const partId = useId();
-  const priorityId = useId();
   const noteId = useId();
   const [open, setOpen] = useState(false);
   const saving = useRef(false);
   const [title, setTitle] = useState('');
   const [dateEdit, setDateEdit] = useState<{ from: string; value: string } | null>(null);
-  const [partEdit, setPartEdit] = useState<{ from: DayPart; value: DayPart } | null>(null);
   const when = dateEdit?.from === date ? dateEdit.value : date;
-  const dayPart = partEdit?.from === part ? partEdit.value : part;
-  const [priority, setPriority] = useState<Priority>('normal');
+  const [important, setImportant] = useState(false);
+  const priority: Priority = important ? 'high' : 'normal';
   const [schedule, setSchedule] = useState<RepeatSchedule>(noneSchedule);
   const [noteOpen, setNoteOpen] = useState(false);
   const [note, setNote] = useState('');
@@ -122,15 +89,14 @@ export function AddTask({ date, part, onCreate }: {
     onCreate({
       title: next,
       date: when,
-      dayPart,
+      dayPart: part,
       priority,
       ...repeat,
       note: note.trim() || null,
     });
     setTitle('');
     setDateEdit(null);
-    setPartEdit(null);
-    setPriority('normal');
+    setImportant(false);
     setSchedule(noneSchedule());
     setNote('');
     setNoteOpen(false);
@@ -179,9 +145,8 @@ export function AddTask({ date, part, onCreate }: {
         <button type="submit" className="paper-submit sm:min-w-36">Сохранить</button>
         <button type="button" onClick={close} className="paper-choice">Отмена</button>
       </div>
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        <Choice id={partId} label="Время дня" value={dayPart} onChange={(value) => setPartEdit({ from: part, value: value as DayPart })} options={PART_OPTIONS} />
-        <Choice id={priorityId} label="Приоритет" value={priority} onChange={(value) => setPriority(value as Priority)} options={PRIORITY_OPTIONS} />
+      <div className="mt-4">
+        <button type="button" className="paper-choice" aria-pressed={important} onClick={() => setImportant((value) => !value)}>Важная задача</button>
       </div>
       <div className="mt-3">
         <RepeatField date={when} value={schedule} onChange={setSchedule} />
@@ -195,8 +160,6 @@ export function PlanTask({ task, today, series = null, onToggle, onMove, onPrior
   const dialogTitleId = useId();
   const titleId = useId();
   const dateId = useId();
-  const partId = useId();
-  const priorityId = useId();
   const noteId = useId();
   const titleButtonRef = useRef<HTMLButtonElement>(null);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
@@ -210,8 +173,8 @@ export function PlanTask({ task, today, series = null, onToggle, onMove, onPrior
   const [askScope, setAskScope] = useState(false);
   const [title, setTitle] = useState(task.title);
   const [date, setDate] = useState(task.date);
-  const [dayPart, setDayPart] = useState<DayPart>(task.dayPart);
-  const [priority, setPriority] = useState<Priority>(task.priority);
+  const [important, setImportant] = useState(task.priority === 'high');
+  const priority: Priority = important ? 'high' : task.priority === 'high' ? 'normal' : task.priority;
   const [schedule, setSchedule] = useState<RepeatSchedule>(() => taskSchedule(task, series));
   const [note, setNote] = useState(task.note ?? '');
   const [noteOpen, setNoteOpen] = useState(Boolean(task.note?.trim()));
@@ -221,8 +184,7 @@ export function PlanTask({ task, today, series = null, onToggle, onMove, onPrior
   function resetDraft() {
     setTitle(task.title);
     setDate(task.date);
-    setDayPart(task.dayPart);
-    setPriority(task.priority);
+    setImportant(task.priority === 'high');
     setSchedule(taskSchedule(task, series));
     setNote(task.note ?? '');
     setNoteOpen(Boolean(task.note?.trim()));
@@ -259,7 +221,7 @@ export function PlanTask({ task, today, series = null, onToggle, onMove, onPrior
   const deleteDialog = useDialogLayer(removing, closeRemoving, menuButtonRef);
 
   function draft(): TaskDraft {
-    return { title: title.trim(), date, dayPart, priority, ...repeat };
+    return { title: title.trim(), date, dayPart: task.dayPart, priority, ...repeat };
   }
 
   function commit(scope: 'one' | 'future') {
@@ -268,7 +230,6 @@ export function PlanTask({ task, today, series = null, onToggle, onMove, onPrior
     const next = draft();
     const sameFields = next.title === task.title
       && date === task.date
-      && dayPart === task.dayPart
       && priority === task.priority
       && sameSchedule(repeat, savedRepeat);
     const sameNote = note.trim() === (task.note ?? '');
@@ -285,7 +246,6 @@ export function PlanTask({ task, today, series = null, onToggle, onMove, onPrior
     if (!nextTitle || !date) return;
     const sameFields = nextTitle === task.title
       && date === task.date
-      && dayPart === task.dayPart
       && priority === task.priority
       && sameSchedule(repeat, savedRepeat);
     const sameNote = note.trim() === (task.note ?? '');
@@ -358,7 +318,6 @@ export function PlanTask({ task, today, series = null, onToggle, onMove, onPrior
     else if (next === null && mark === 'done') onToggle(task.id);
   }
 
-  const timeLabel = task.dayPart === 'morning' ? 'Утро' : task.dayPart === 'afternoon' ? 'День' : task.dayPart === 'evening' ? 'Вечер' : '';
   const stampLabel = mark === 'done' ? 'Выполнено' : mark === 'missed' ? 'Не выполнено' : 'Без отметки';
 
   return (
@@ -384,15 +343,8 @@ export function PlanTask({ task, today, series = null, onToggle, onMove, onPrior
               </div>
             ) : null}
           </div>
-          <button ref={titleButtonRef} type="button" onClick={openEditor} className="diary-title">
+          <button ref={titleButtonRef} type="button" onClick={openEditor} className="diary-title" aria-label={task.priority === 'high' ? `${task.title}. Важная задача.` : undefined}>
             <span className={mark === 'done' ? 'diary-title-done' : undefined}>{task.title}</span>
-            {timeLabel || task.priority === 'high' || savedRepeat.repeatKind !== 'none' ? (
-              <span className="diary-notes">
-                {timeLabel ? <span className="diary-meta">{timeLabel}</span> : null}
-                {task.priority === 'high' ? <span className="diary-important">Важно</span> : null}
-                {savedRepeat.repeatKind !== 'none' ? <span className="diary-meta">{scheduleLabel(savedRepeat)}</span> : null}
-              </span>
-            ) : null}
           </button>
           {mark ? (
             <button
@@ -518,9 +470,8 @@ export function PlanTask({ task, today, series = null, onToggle, onMove, onPrior
                 <input id={titleId} autoFocus required value={title} onChange={(event) => { setTitle(event.target.value); setAskScope(false); }} maxLength={160} autoComplete="off" className="paper-field mt-1 text-base" />
                 <label htmlFor={dateId} className="mt-4 block text-sm font-semibold">Дата</label>
                 <input id={dateId} type="date" required value={date} onChange={(event) => { setDate(event.target.value); setAskScope(false); }} className="paper-field mt-1 text-base" />
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                  <Choice id={partId} label="Время дня" value={dayPart} onChange={(value) => { setDayPart(value as DayPart); setAskScope(false); }} options={PART_OPTIONS} />
-                  <Choice id={priorityId} label="Приоритет" value={priority} onChange={(value) => { setPriority(value as Priority); setAskScope(false); }} options={PRIORITY_OPTIONS} />
+                <div className="mt-4">
+                  <button type="button" className="paper-choice" aria-pressed={important} onClick={() => { setImportant((value) => !value); setAskScope(false); }}>Важная задача</button>
                 </div>
                 <div className="mt-3">
                   <RepeatField date={date} value={repeat} onChange={(next) => { setSchedule(next); setAskScope(false); }} />
