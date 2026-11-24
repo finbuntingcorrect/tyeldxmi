@@ -236,9 +236,9 @@ export function Home() {
             <p className="mt-1 text-sm text-muted">{formatLocalDate(dateFromKey(today))}</p>
             <p className="text-sm text-muted">{hint}</p>
           </div>
-          <div className="flex shrink-0 items-center gap-4">
-            <AppLink href="/app/settings" aria-current={page.name === 'settings' ? 'page' : undefined} className={`min-h-11 px-1 text-sm font-semibold ${page.name === 'settings' ? 'text-ink' : 'text-muted'}`}>Настройки</AppLink>
-            <button type="button" onClick={() => { void notebook.signOut().then((left) => { if (left) go('/'); }); }} className="min-h-11 px-1 text-sm font-semibold text-muted">Выйти</button>
+          <div className="account-actions">
+            <AppLink href="/app/settings" aria-current={page.name === 'settings' ? 'page' : undefined} className={page.name === 'settings' ? 'is-current' : undefined}>Настройки</AppLink>
+            <button type="button" onClick={() => { void notebook.signOut().then((left) => { if (left) go('/'); }); }}>Выйти</button>
           </div>
         </header>
         <ModeSwitch page={page} />

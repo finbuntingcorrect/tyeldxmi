@@ -1,7 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Minus, MoreHorizontal, Repeat, X } from 'lucide-react';
 import { addDays } from '../../server/recurrence';
-import { dateFromKey } from '../lib/date';
 import { taskMark, type NotebookTask, type SeriesRule, type TaskDraft, type TaskMark } from '../lib/notebook';
 import { noneSchedule, normalizeSchedule, sameSchedule, scheduleLabel, type RepeatSchedule } from '../lib/schedule';
 import type { DayPart, Priority } from '../types';
@@ -351,10 +350,6 @@ export function PlanTask({ task, today, series = null, onToggle, onMove, onPrior
   }, [stamps]);
 
   const mark = taskMark(task);
-  const overdue = mark === null && task.date < today;
-  const overdueDate = overdue
-    ? new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long' }).format(dateFromKey(task.date))
-    : '';
   function chooseMark(next: TaskMark | null) {
     setStamps(false);
     if (next === mark) return;
@@ -386,17 +381,15 @@ export function PlanTask({ task, today, series = null, onToggle, onMove, onPrior
               <div role="menu" data-stamp-control="" className="diary-stamp-menu">
                 <button type="button" role="menuitem" onClick={() => chooseMark('done')}>Выполнено</button>
                 <button type="button" role="menuitem" onClick={() => chooseMark('missed')}>Не выполнено</button>
-                <button type="button" role="menuitem" onClick={() => chooseMark(null)}>Убрать отметку</button>
               </div>
             ) : null}
           </div>
           <button ref={titleButtonRef} type="button" onClick={openEditor} className="diary-title">
             <span className={mark === 'done' ? 'diary-title-done' : undefined}>{task.title}</span>
-            {timeLabel || task.priority === 'high' || overdue || savedRepeat.repeatKind !== 'none' ? (
+            {timeLabel || task.priority === 'high' || savedRepeat.repeatKind !== 'none' ? (
               <span className="diary-notes">
                 {timeLabel ? <span className="diary-meta">{timeLabel}</span> : null}
                 {task.priority === 'high' ? <span className="diary-important">Важно</span> : null}
-                {overdue ? <span className="diary-overdue">Просрочено {overdueDate}</span> : null}
                 {savedRepeat.repeatKind !== 'none' ? <span className="diary-meta">{scheduleLabel(savedRepeat)}</span> : null}
               </span>
             ) : null}
@@ -455,7 +448,6 @@ export function PlanTask({ task, today, series = null, onToggle, onMove, onPrior
             </span>
           )}
           {task.priority === 'high' ? <span className="sr-only"> Важный.</span> : null}
-          {overdue ? <span className="ml-2 align-middle text-xs font-semibold text-overdue">Просрочено {overdueDate}</span> : null}
         </button>
         {savedRepeat.repeatKind !== 'none' ? (
           <span role="img" aria-label={scheduleLabel(savedRepeat)} className="grid h-11 w-7 shrink-0 place-items-center text-muted">

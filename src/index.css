@@ -1068,7 +1068,38 @@ html[data-theme='dark'] {
 }
 
 .diary-important { color: var(--color-important); }
-.diary-overdue { color: var(--color-overdue); }
+
+.account-actions {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 1.375rem;
+}
+
+.account-actions a,
+.account-actions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  min-height: 2.75rem;
+  margin: 0;
+  padding: 0.5rem 0.25rem;
+  border: 0;
+  background: transparent;
+  color: var(--color-muted);
+  font-family: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.25;
+  text-decoration: none;
+}
+
+.account-actions a:hover,
+.account-actions button:hover,
+.account-actions a.is-current {
+  color: var(--color-ink);
+}
 
 .diary-stamp-button img {
   display: block;
