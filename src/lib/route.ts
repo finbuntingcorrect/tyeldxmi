@@ -1,13 +1,20 @@
+import { addDays, weekday } from '../../server/recurrence';
+
 export type AppPage =
   | { name: 'landing' }
   | { name: 'login' }
   | { name: 'signup' }
   | { name: 'forgot' }
-  | { name: 'calendar' }
+  | { name: 'calendar'; week: string | null }
   | { name: 'day'; date: string }
   | { name: 'habits' }
   | { name: 'focus' }
   | { name: 'settings' };
+
+export function weekMonday(date: string) {
+  const day = weekday(date);
+  return addDays(date, day === 0 ? -6 : 1 - day);
+}
 
 const DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
@@ -31,7 +38,9 @@ export function parseRoute(pathname: string): AppPage {
   if (path === '/login') return { name: 'login' };
   if (path === '/signup') return { name: 'signup' };
   if (path === '/forgot-password') return { name: 'forgot' };
-  if (path === '/app' || path === '/calendar') return { name: 'calendar' };
+  if (path === '/app' || path === '/calendar') return { name: 'calendar', week: null };
+  const week = /^\/(?:app\/)?week\/(\d{4}-\d{2}-\d{2})$/.exec(path);
+  if (week && isPageDate(week[1])) return { name: 'calendar', week: weekMonday(week[1]) };
   if (path === '/app/habits' || path === '/habits') return { name: 'habits' };
   if (path === '/app/focus' || path === '/focus') return { name: 'focus' };
   if (path === '/app/settings' || path === '/settings') return { name: 'settings' };
@@ -49,7 +58,7 @@ export function pagePath(page: AppPage) {
   if (page.name === 'habits') return '/app/habits';
   if (page.name === 'focus') return '/app/focus';
   if (page.name === 'settings') return '/app/settings';
-  return '/app';
+  return page.week ? `/app/week/${page.week}` : '/app';
 }
 
 export function modeForPage(page: AppPage): 'habits' | 'planner' | 'focus' | null {

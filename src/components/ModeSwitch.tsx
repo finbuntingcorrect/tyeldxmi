@@ -2,7 +2,7 @@ import { AppLink } from './AppLink';
 import type { AppPage } from '../lib/route';
 
 const LINKS: { id: 'calendar' | 'habits' | 'focus'; href: string; label: string }[] = [
-  { id: 'calendar', href: '/app', label: 'Календарь' },
+  { id: 'calendar', href: '/app', label: 'Дневник' },
   { id: 'habits', href: '/app/habits', label: 'Привычки' },
   { id: 'focus', href: '/app/focus', label: 'Фокус' },
 ];

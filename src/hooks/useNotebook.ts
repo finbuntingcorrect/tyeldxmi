@@ -38,6 +38,9 @@ import {
   setTaskNote,
   setTaskPart,
   setTaskPriority,
+  setTaskMark,
+  taskMark,
+  materialize,
   setTheme,
   toggleTask,
   toggleWeekItem,
@@ -48,8 +51,10 @@ import {
   type Notebook,
   type TaskDraft,
   type TaskDuration,
+  type TaskMark,
   type WeekItem,
 } from '../lib/notebook';
+import { addDays } from '../../server/recurrence';
 import type { CatPrefs, FocusChange, FocusSession, TreatKind } from '../lib/focusSession';
 import { applyTheme } from '../lib/theme';
 import { localDateKey } from '../lib/date';
@@ -329,6 +334,45 @@ export function useNotebook() {
     },
     createTask: (draft: TaskDraft) => commit((book) => createTask(book, draft)),
     toggleTask: (id: string) => commit((book) => toggleTask(book, id)),
+    setTaskVerdict: (id: string, mark: TaskMark | null) => {
+      const generationAtSave = generation.current;
+      const current = bookRef.current.tasks.find((task) => task.id === id);
+      const previous = current ? taskMark(current) : null;
+      if (!current || previous === mark) return Promise.resolve(null);
+      const next = prepareNotebook(setTaskMark(bookRef.current, id, mark));
+      bookRef.current = next;
+      setState({ book: next, error: null });
+      const job = chain.current.then(async () => {
+        let message: string | null = null;
+        let saved = bookRef.current;
+        while (mounted.current && generation.current === generationAtSave) {
+          saved = bookRef.current;
+          message = await saveCabinet(saved);
+          if (!mounted.current || generation.current !== generationAtSave) return message;
+          if (bookRef.current !== saved) continue;
+          break;
+        }
+        if (!mounted.current || generation.current !== generationAtSave) return message;
+        if (message) {
+          const restored = prepareNotebook(setTaskMark(bookRef.current, id, previous));
+          bookRef.current = restored;
+          setState({ book: restored, error: message });
+          failedSave.current = saved;
+          setCanRetry(true);
+          return message;
+        }
+        rememberSuccess(saved, false);
+        return null;
+      });
+      chain.current = job.then((message) => message, () => 'Не получилось. Попробуй ещё раз.');
+      return job;
+    },
+    ensureWeek: (monday: string) => {
+      const current = bookRef.current;
+      const filled = materialize(current, monday, addDays(monday, 6));
+      if (filled.tasks.length === current.tasks.length) return;
+      commit((book) => materialize(book, monday, addDays(monday, 6)));
+    },
     moveTask: (id: string, date: string) => commit((book) => moveTask(book, id, date)),
     skipThis: (id: string) => commit((book) => skipThisOccurrence(book, id)),
     deleteFollowing: (id: string) => commit((book) => deleteFollowingOccurrences(book, id)),

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { addDays } from '../../server/recurrence';
 import { DAY_PARTS, WEEKDAYS, priorityRank } from '../lib/plannerCopy';
-import { goalWeekKey, monthGrid, tasksForDate, weekDates, type Notebook, type NotebookTask, type TaskDraft, type WeekItem } from '../lib/notebook';
+import { goalWeekKey, isOpenTask, monthGrid, tasksForDate, weekDates, type Notebook, type NotebookTask, type TaskDraft, type WeekItem } from '../lib/notebook';
 import { isMonthKey, isPageDate } from '../lib/route';
 import { dateFromKey, formatLocalDate } from '../lib/date';
 import type { DayPart, Priority } from '../types';
@@ -43,8 +43,8 @@ function shiftMonth(key: string, delta: number) {
   return `${year}-${month}-01`;
 }
 
-function openCount(tasks: { completed: boolean }[]) {
-  return tasks.filter((task) => !task.completed).length;
+function openCount(tasks: { deleted?: boolean; completed: boolean; mark?: 'done' | 'missed' | null }[]) {
+  return tasks.filter((task) => isOpenTask(task)).length;
 }
 
 const SELECTED_DAY_KEY = 'today-cat.selected-day';

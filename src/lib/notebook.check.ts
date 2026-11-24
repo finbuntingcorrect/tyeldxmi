@@ -40,6 +40,9 @@ import {
   markTreatFed,
   setHabitMark,
   returnRows,
+  setTaskMark,
+  taskMark,
+  isOpenTask,
   tasksForDate,
   toggleTask,
   trackerProgressLabel,
@@ -633,5 +636,64 @@ const savedAgain = updateTask(keptDaily, shifted.id, {
 assert.equal(savedAgain.tasks.length, keptDaily.tasks.length);
 assert.equal(tasksForDate(savedAgain, '2026-11-20')[0].completed, true);
 assert.deepEqual(savedAgain.series[0], seriesRule);
+
+const legacyDone = parseNotebook({ tasks: [{ id: 'done-old', title: 'Готово', date: '2026-11-23', completed: true, completedAt: '2026-11-23T09:00:00.000Z' }] });
+assert.equal(legacyDone?.tasks[0].mark, 'done');
+assert.equal(legacyDone?.tasks[0].completed, true);
+assert.equal(legacyDone?.tasks[0].completedAt, '2026-11-23T09:00:00.000Z');
+const legacyOpen = parseNotebook({ tasks: [{ id: 'open-old', title: 'Открыто', date: '2026-11-23', completed: false }] });
+assert.equal(legacyOpen?.tasks[0].mark, null);
+assert.equal(legacyOpen?.tasks[0].completed, false);
+assert.equal(isOpenTask(legacyOpen?.tasks[0] ?? { completed: true }), true);
+const explicitMiss = parseNotebook({ tasks: [{ id: 'miss-old', title: 'Мимо', date: '2026-11-23', completed: true, mark: 'missed' }] });
+assert.equal(explicitMiss?.tasks[0].mark, 'missed');
+assert.equal(explicitMiss?.tasks[0].completed, false);
+assert.equal(isOpenTask(explicitMiss?.tasks[0] ?? { completed: false }), false);
+assert.equal(dayHint(0, 2, true, 1), 'Сегодня');
+assert.equal(dayHint(1, 2, true, 1), 'Есть незакрытые дела');
+assert.equal(dayHint(0, 2, true, 0), 'Можно отдохнуть');
+
+let stamped = createTask(emptyNotebook(), {
+  title: 'Повтор',
+  date: '2026-11-23',
+  dayPart: 'anytime',
+  priority: 'normal',
+  repeatKind: 'daily',
+  weekdays: [],
+}, '2026-11-23T08:00:00.000Z');
+stamped = materialize(stamped, '2026-11-23', '2026-11-25');
+const stampMonday = tasksForDate(stamped, '2026-11-23')[0];
+const stampTuesday = tasksForDate(stamped, '2026-11-24')[0];
+const stampWednesday = tasksForDate(stamped, '2026-11-25')[0];
+stamped = setTaskMark(stamped, stampMonday.id, 'done', '2026-11-23T18:00:00.000Z');
+stamped = setTaskMark(stamped, stampTuesday.id, 'missed', '2026-11-24T18:00:00.000Z');
+assert.equal(taskMark(tasksForDate(stamped, '2026-11-23')[0]), 'done');
+assert.equal(tasksForDate(stamped, '2026-11-23')[0].completed, true);
+assert.equal(taskMark(tasksForDate(stamped, '2026-11-24')[0]), 'missed');
+assert.equal(tasksForDate(stamped, '2026-11-24')[0].completed, false);
+assert.equal(taskMark(tasksForDate(stamped, '2026-11-25')[0]), null);
+assert.equal(isOpenTask(tasksForDate(stamped, '2026-11-25')[0]), true);
+const renamed = updateTask(stamped, stampMonday.id, {
+  title: 'Новый повтор',
+  date: stampMonday.date,
+  dayPart: 'anytime',
+  priority: 'normal',
+  repeatKind: 'daily',
+  weekdays: [],
+}, 'future', '2026-11-23T19:00:00.000Z');
+assert.equal(tasksForDate(renamed, '2026-11-24')[0].title, 'Повтор');
+assert.equal(taskMark(tasksForDate(renamed, '2026-11-24')[0]), 'missed');
+assert.equal(tasksForDate(renamed, '2026-11-25')[0].title, 'Новый повтор');
+assert.equal(taskMark(tasksForDate(renamed, '2026-11-23')[0]), 'done');
+const keptMiss = deleteFollowingOccurrences(renamed, stampMonday.id);
+assert.equal(tasksForDate(keptMiss, '2026-11-23').length, 0);
+assert.equal(tasksForDate(keptMiss, '2026-11-24')[0].title, 'Повтор');
+assert.equal(taskMark(tasksForDate(keptMiss, '2026-11-24')[0]), 'missed');
+assert.equal(tasksForDate(keptMiss, '2026-11-25').length, 0);
+const parkedMiss = carryOpenTasks(stamped, '2026-11-24', '2026-11-26');
+assert.equal(tasksForDate(parkedMiss, '2026-11-24')[0].date, '2026-11-24');
+assert.equal(taskMark(tasksForDate(parkedMiss, '2026-11-25')[0]), null);
+const carriedOpen = carryOpenTasks(stamped, '2026-11-25', '2026-11-26');
+assert.equal(tasksForDate(carriedOpen, '2026-11-26').some((task) => task.id === stampWednesday.id), true);
 
 console.log('notebook ok');

@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { Minus, MoreHorizontal, Repeat, X } from 'lucide-react';
 import { addDays } from '../../server/recurrence';
 import { dateFromKey } from '../lib/date';
-import type { NotebookTask, SeriesRule, TaskDraft } from '../lib/notebook';
+import { taskMark, type NotebookTask, type SeriesRule, type TaskDraft, type TaskMark } from '../lib/notebook';
 import { noneSchedule, normalizeSchedule, sameSchedule, scheduleLabel, type RepeatSchedule } from '../lib/schedule';
 import type { DayPart, Priority } from '../types';
 import { useDialogLayer } from '../hooks/useDialogLayer';
@@ -23,6 +23,10 @@ type PlanTaskProps = {
   onNote: (id: string, text: string) => void;
   series?: SeriesRule | null;
   shelves?: boolean;
+  diary?: boolean;
+  stampFresh?: boolean;
+  onMark?: (id: string, mark: TaskMark | null) => void;
+  onEditing?: (editing: boolean) => void;
 };
 
 const PART_OPTIONS: { id: DayPart; label: string }[] = [
@@ -188,7 +192,13 @@ export function AddTask({ date, part, onCreate }: {
   );
 }
 
-export function PlanTask({ task, today, series = null, onToggle, onMove, onUpdate, onSkip, onDeleteFollowing, onFocus, onNote }: PlanTaskProps) {
+function stampTilt(id: string) {
+  let value = 0;
+  for (let index = 0; index < id.length; index += 1) value = (value + id.charCodeAt(index)) % 7;
+  return value - 3;
+}
+
+export function PlanTask({ task, today, series = null, onToggle, onMove, onUpdate, onSkip, onDeleteFollowing, onFocus, onNote, diary = false, stampFresh = false, onMark, onEditing }: PlanTaskProps) {
   const dialogTitleId = useId();
   const titleId = useId();
   const dateId = useId();
@@ -200,6 +210,8 @@ export function PlanTask({ task, today, series = null, onToggle, onMove, onUpdat
   const menuRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [menu, setMenu] = useState(false);
+  const [stamps, setStamps] = useState(false);
+  const stampRef = useRef<HTMLDivElement>(null);
   const [removing, setRemoving] = useState(false);
   const saving = useRef(false);
   const [askScope, setAskScope] = useState(false);
@@ -227,6 +239,7 @@ export function PlanTask({ task, today, series = null, onToggle, onMove, onUpdat
     setAskScope(false);
     if (discard) resetDraft();
     setOpen(false);
+    onEditing?.(false);
   }
 
   function openEditor() {
@@ -235,6 +248,12 @@ export function PlanTask({ task, today, series = null, onToggle, onMove, onUpdat
     setRemoving(false);
     setAskScope(false);
     setOpen(true);
+    onEditing?.(true);
+  }
+
+  function closeRemoving() {
+    setRemoving(false);
+    onEditing?.(false);
   }
 
   const editorDialog = useDialogLayer(open, () => {
@@ -244,7 +263,7 @@ export function PlanTask({ task, today, series = null, onToggle, onMove, onUpdat
     }
     closeEditor(false);
   }, titleButtonRef);
-  const deleteDialog = useDialogLayer(removing, () => setRemoving(false), menuButtonRef);
+  const deleteDialog = useDialogLayer(removing, closeRemoving, menuButtonRef);
 
   function draft(): TaskDraft {
     return { title: title.trim(), date, dayPart, priority, ...repeat };
@@ -316,12 +335,115 @@ export function PlanTask({ task, today, series = null, onToggle, onMove, onUpdat
     };
   }, [menu]);
 
-  const overdue = !task.completed && task.date < today;
+  useEffect(() => {
+    if (!stamps) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      setStamps(false);
+    }
+    function onPointer(event: PointerEvent) {
+      const target = event.target;
+      if (target instanceof Element && target.closest('[data-stamp-control]')) return;
+      setStamps(false);
+    }
+    window.addEventListener('keydown', onKey, true);
+    document.addEventListener('pointerdown', onPointer);
+    return () => {
+      window.removeEventListener('keydown', onKey, true);
+      document.removeEventListener('pointerdown', onPointer);
+    };
+  }, [stamps]);
+
+  const mark = taskMark(task);
+  const overdue = mark === null && task.date < today;
   const overdueDate = overdue
     ? new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long' }).format(dateFromKey(task.date))
     : '';
+  function chooseMark(next: TaskMark | null) {
+    setStamps(false);
+    if (next === mark) return;
+    if (diary && onMark) onMark(task.id, next);
+    else if (next === 'done' && mark !== 'done') onToggle(task.id);
+    else if (next === null && mark === 'done') onToggle(task.id);
+  }
+
+  const timeLabel = task.dayPart === 'morning' ? 'Утро' : task.dayPart === 'afternoon' ? 'День' : task.dayPart === 'evening' ? 'Вечер' : '';
+  const stampLabel = mark === 'done' ? 'Выполнено' : mark === 'missed' ? 'Не выполнено' : 'Без отметки';
+
   return (
     <div>
+      {diary ? (
+        <div className={`diary-task ${mark === 'done' ? 'is-done' : ''} ${mark === 'missed' ? 'is-missed' : ''} ${task.priority === 'high' && mark !== 'done' ? 'is-important' : ''}`}>
+          <div className="diary-task-main">
+            <div className="relative" ref={stampRef}>
+              <button
+                type="button"
+                aria-haspopup="menu"
+                aria-expanded={stamps}
+                data-stamp-control=""
+                aria-label={`${stampLabel}: ${task.title}`}
+                onClick={() => { setMenu(false); setStamps((value) => !value); }}
+                className="diary-state"
+              >
+                <span aria-hidden="true" className={`diary-state-box ${mark === 'done' ? 'is-done' : ''} ${mark === 'missed' ? 'is-missed' : ''}`} />
+              </button>
+              {stamps ? (
+                <div role="menu" data-stamp-control="" className="diary-stamp-menu">
+                  <button type="button" role="menuitem" onClick={() => chooseMark('done')}>Выполнено</button>
+                  <button type="button" role="menuitem" onClick={() => chooseMark('missed')}>Не выполнено</button>
+                  <button type="button" role="menuitem" onClick={() => chooseMark(null)}>Убрать отметку</button>
+                </div>
+              ) : null}
+            </div>
+            <button ref={titleButtonRef} type="button" onClick={openEditor} className="diary-title">
+              <span className={mark === 'done' ? 'diary-title-done' : undefined}>{task.title}</span>
+              {timeLabel ? <span className="diary-meta">{timeLabel}</span> : null}
+              {task.priority === 'high' ? <span className="diary-important">Важно</span> : null}
+              {overdue ? <span className="diary-overdue">Просрочено {overdueDate}</span> : null}
+              {savedRepeat.repeatKind !== 'none' ? <span className="diary-meta">{scheduleLabel(savedRepeat)}</span> : null}
+            </button>
+          </div>
+          <div className="diary-task-side">
+            <button
+              type="button"
+              aria-haspopup="menu"
+              aria-expanded={stamps}
+              data-stamp-control=""
+              aria-label={mark ? `${stampLabel}. Изменить печать: ${task.title}` : `Поставить печать: ${task.title}`}
+              onClick={() => { setMenu(false); setStamps((value) => !value); }}
+              className="diary-stamp-button"
+            >
+              {mark ? (
+                <span className="diary-stamp" style={{ transform: `rotate(${stampTilt(task.id)}deg)` }}>
+                  <span className={stampFresh ? 'diary-stamp-pop' : undefined}>
+                    <img src={mark === 'done' ? '/stamps/done.png' : '/stamps/missed.png'} alt="" />
+                  </span>
+                  <span className="diary-stamp-label">{stampLabel}</span>
+                </span>
+              ) : <span className="diary-stamp-empty" aria-hidden="true" />}
+            </button>
+            <div ref={menuRef} className={`relative shrink-0 ${menu ? 'z-30' : ''}`}>
+              <button type="button" aria-label={`Действия: ${task.title}`} ref={menuButtonRef} aria-haspopup="menu" aria-expanded={menu} onClick={() => { setStamps(false); setMenu((value) => !value); }} className="grid h-11 w-11 place-items-center text-ink">
+                <MoreHorizontal aria-hidden="true" size={18} />
+              </button>
+              {menu ? (
+                <div role="menu" className="absolute right-0 z-30 min-w-56 border border-line bg-card py-1 shadow-sm">
+                  <button type="button" role="menuitem" onClick={() => { setMenu(false); openEditor(); }} className="block min-h-11 w-full px-3 text-left text-sm font-semibold">Редактировать</button>
+                  <button type="button" role="menuitem" onClick={() => { setMenu(false); onMove(task.id, addDays(task.date, 1)); }} className="block min-h-11 w-full px-3 text-left text-sm font-semibold">На завтра</button>
+                  {task.date === today ? (
+                    <button type="button" role="menuitem" onClick={() => { setMenu(false); onFocus(task.id); }} className="block min-h-11 w-full px-3 text-left text-sm font-semibold">В фокус</button>
+                  ) : null}
+                  <div className="mt-1 border-t border-line pt-1">
+                    <button type="button" role="menuitem" onClick={() => { setMenu(false); if (task.seriesId) { setRemoving(true); onEditing?.(true); } else onSkip(task.id); }} className="block min-h-11 w-full px-3 text-left text-sm font-semibold text-danger">Удалить</button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : (
       <div className="flex items-start">
         <PaperCheck
           checked={task.completed}
@@ -381,7 +503,7 @@ export function PlanTask({ task, today, series = null, onToggle, onMove, onUpdat
                 <button
                   type="button"
                   role="menuitem"
-                  onClick={() => { setMenu(false); if (task.seriesId) setRemoving(true); else onSkip(task.id); }}
+                  onClick={() => { setMenu(false); if (task.seriesId) { setRemoving(true); onEditing?.(true); } else onSkip(task.id); }}
                   className="block min-h-11 w-full px-3 text-left text-sm font-semibold text-danger"
                 >
                   Удалить
@@ -391,6 +513,7 @@ export function PlanTask({ task, today, series = null, onToggle, onMove, onUpdat
           ) : null}
         </div>
       </div>
+      )}
       {open ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/35 sm:items-center sm:p-4" onClick={() => closeEditor(false)}>
           <div
@@ -441,13 +564,13 @@ export function PlanTask({ task, today, series = null, onToggle, onMove, onUpdat
         </div>
       ) : null}
       {removing ? (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/35 sm:items-center sm:p-4" onClick={() => setRemoving(false)}>
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/35 sm:items-center sm:p-4" onClick={closeRemoving}>
           <div ref={deleteDialog} role="dialog" aria-modal="true" aria-labelledby={`${dialogTitleId}-delete`} onClick={(event) => event.stopPropagation()} className="w-full max-w-[28rem] border border-line bg-card px-5 py-4 shadow-sm">
             <h2 id={`${dialogTitleId}-delete`} className="font-serif text-2xl text-ink">Удалить повторение</h2>
             <div className="mt-4 flex flex-col gap-2 pb-[max(0px,env(safe-area-inset-bottom))]">
-              <button type="button" onClick={() => { setRemoving(false); onSkip(task.id); }} className="paper-submit min-h-11">Только это повторение</button>
-              <button type="button" onClick={() => { setRemoving(false); onDeleteFollowing(task.id); }} className="paper-submit min-h-11">Это и последующие</button>
-              <button type="button" onClick={() => setRemoving(false)} className="paper-choice min-h-11">Отмена</button>
+              <button type="button" onClick={() => { closeRemoving(); onSkip(task.id); }} className="paper-submit min-h-11">Только это повторение</button>
+              <button type="button" onClick={() => { closeRemoving(); onDeleteFollowing(task.id); }} className="paper-submit min-h-11">Это и последующие</button>
+              <button type="button" onClick={closeRemoving} className="paper-choice min-h-11">Отмена</button>
             </div>
           </div>
         </div>

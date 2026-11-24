@@ -17,7 +17,7 @@ import {
   type PhaseChoice,
   type TreatKind,
 } from '../lib/focusSession';
-import { tasksForDate, type Notebook, type NotebookTask } from '../lib/notebook';
+import { isOpenTask, taskMark, tasksForDate, type Notebook, type NotebookTask } from '../lib/notebook';
 
 type FocusScreenProps = {
   book: Notebook;
@@ -108,8 +108,8 @@ export function FocusScreen(props: FocusScreenProps) {
   const feedLock = useRef(false);
   const addingLock = useRef(false);
   const tasks = tasksForDate(book, props.today);
-  const openTasks = tasks.filter((task) => !task.completed);
-  const doneTasks = tasks.filter((task) => task.completed);
+  const openTasks = tasks.filter((task) => isOpenTask(task));
+  const doneTasks = tasks.filter((task) => taskMark(task) === 'done');
   const doneVisible = doneChoice;
   const running = Boolean(session && !session.paused && !session.settled);
   const paused = Boolean(session && session.paused && !session.settled);

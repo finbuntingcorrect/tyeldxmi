@@ -3,8 +3,8 @@ import { localDateKey, dateFromKey, formatLocalDate } from '../lib/date';
 import { claimTreat } from '../lib/treats';
 import type { TreatKind } from '../lib/focusSession';
 import { catPose } from '../lib/focusSession';
-import { dayHint, needsHello, personName, tasksForDate } from '../lib/notebook';
-import { isPlannerPage, modeForPage, pagePath, safeNext } from '../lib/route';
+import { dayHint, isOpenTask, needsHello, personName, taskMark, tasksForDate } from '../lib/notebook';
+import { isPlannerPage, modeForPage, pagePath, safeNext, weekMonday } from '../lib/route';
 import { useRoute } from '../hooks/routeContext';
 import { unlockSound } from '../lib/focusSound';
 import { useFocusController } from '../hooks/useFocusController';
@@ -18,7 +18,7 @@ import { FocusBar } from './FocusBar';
 import { FocusScreen } from './FocusScreen';
 import { HabitsScreen } from './HabitsScreen';
 import { ModeSwitch } from './ModeSwitch';
-import { DayBoard, MonthBoard } from './PlannerScreen';
+import { DiaryScreen } from './DiaryScreen';
 import { AppLink } from './AppLink';
 import { SettingsPanel } from './SettingsPanel';
 import { useDialogLayer } from '../hooks/useDialogLayer';
@@ -86,7 +86,7 @@ export function Home() {
             : page.name === 'login' ? 'Вход'
               : page.name === 'signup' ? 'Регистрация'
                 : page.name === 'forgot' ? 'Восстановление пароля'
-                  : page.name === 'calendar' ? 'Календарь'
+                  : page.name === 'calendar' ? 'Дневник'
                     : '';
     document.title = title ? `${title} — Today Cat` : 'Today Cat';
   }, [page, notebook.status]);
@@ -147,12 +147,13 @@ export function Home() {
   const person = personName(book.name, notebook.login);
 
   const todayTasks = tasksForDate(book, today);
-  const openToday = todayTasks.filter((task) => !task.completed).length;
-  const hint = dayHint(openToday, todayTasks.length);
+  const openToday = todayTasks.filter((task) => isOpenTask(task)).length;
+  const missedToday = todayTasks.filter((task) => taskMark(task) === 'missed').length;
+  const hint = dayHint(openToday, todayTasks.length, true, missedToday);
   const showingGreeting = greeting && (page.name === 'calendar' || page.name === 'day');
   const pose = catPose({
     greeting: showingGreeting,
-    openTasks: todayTasks.some((task) => !task.completed),
+    openTasks: todayTasks.some((task) => isOpenTask(task)),
     taskSuccess: burst > 0,
     remindVisible: focus.remindOpen,
     session: book.focusSession,
@@ -250,7 +251,7 @@ export function Home() {
         {page.name === 'settings' ? (
           <div>
             <div className="px-4 pt-4 sm:px-6">
-              <AppLink href="/app" className="inline-flex min-h-11 items-center text-sm font-semibold text-muted">К календарю</AppLink>
+              <AppLink href="/app" className="inline-flex min-h-11 items-center text-sm font-semibold text-muted">К дневнику</AppLink>
             </div>
             <SettingsPanel
               login={notebook.login}
@@ -274,45 +275,28 @@ export function Home() {
             onMark={notebook.setHabitMark}
           />
         ) : null}
-        {page.name === 'calendar' ? (
-          <MonthBoard
+        {page.name === 'calendar' || page.name === 'day' ? (
+          <DiaryScreen
             book={book}
             today={today}
+            week={page.name === 'day' ? weekMonday(page.date) : page.week}
+            highlight={page.name === 'day' ? page.date : null}
+            reduced={reduced}
+            onOpenWeek={(monday) => go(monday === weekMonday(today) ? '/app' : `/app/week/${monday}`)}
+            onOpenDay={(date) => go(`/app/day/${date}`)}
             onCreate={notebook.createTask}
-            onToggle={toggle}
-            onMove={notebook.moveTask}
             onPart={notebook.setPart}
             onPriority={notebook.setPriority}
-            onUpdate={notebook.updateTask}
-            onAddWeekItem={notebook.addWeekItem}
-            onToggleWeekItem={notebook.toggleWeekItem}
-            onAssignWeekItem={notebook.assignWeekItem}
-            onCarry={notebook.carryOpen}
-            onSkip={notebook.skipThis}
-            onDeleteFollowing={notebook.deleteFollowing}
-            onNote={notebook.setTaskNote}
-            onFocus={requestFocus}
-          />
-        ) : null}
-        {page.name === 'day' ? (
-          <DayBoard
-            date={page.date}
-            book={book}
-            today={today}
-            onCreate={notebook.createTask}
-            onToggle={toggle}
             onMove={notebook.moveTask}
-            onPart={notebook.setPart}
-            onPriority={notebook.setPriority}
             onUpdate={notebook.updateTask}
-            onAddWeekItem={notebook.addWeekItem}
-            onToggleWeekItem={notebook.toggleWeekItem}
-            onAssignWeekItem={notebook.assignWeekItem}
-            onCarry={notebook.carryOpen}
             onSkip={notebook.skipThis}
             onDeleteFollowing={notebook.deleteFollowing}
-            onNote={notebook.setTaskNote}
             onFocus={requestFocus}
+            onNote={notebook.setTaskNote}
+            onMark={notebook.setTaskVerdict}
+            onAddWeekItem={notebook.addWeekItem}
+            onToggleWeekItem={notebook.toggleWeekItem}
+            ensureWeek={notebook.ensureWeek}
           />
         ) : null}
         {page.name === 'focus' ? (
@@ -351,7 +335,7 @@ export function Home() {
       </div>
       <CatCompanion
         pose={pose}
-        hidden={book.cat.hidden || page.name === 'focus' || page.name === 'calendar' || page.name === 'day'}
+        hidden={book.cat.hidden || page.name === 'focus'}
         pinned={book.cat.pinned}
         walks={book.cat.walks}
         sound={book.cat.sound}

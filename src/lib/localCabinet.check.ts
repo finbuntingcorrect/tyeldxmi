@@ -21,6 +21,7 @@ anya.notebook.tasks = [{
   id: 'task-anya',
   title: 'Только Аня',
   completed: false,
+  mark: null,
   createdAt: '2026-11-12T00:00:00.000Z',
   completedAt: null,
   date: '2026-11-12',

@@ -28,10 +28,13 @@ export type SeriesSkip = {
 
 export type TaskDuration = 'short' | 'usual' | 'long';
 
+export type TaskMark = 'done' | 'missed';
+
 export type NotebookTask = {
   id: string;
   title: string;
   completed: boolean;
+  mark: TaskMark | null;
   createdAt: string;
   completedAt: string | null;
   date: string;
@@ -154,6 +157,15 @@ export function emptyNotebook(): Notebook {
   };
 }
 
+export function taskMark(task: { completed: boolean; mark?: TaskMark | null }): TaskMark | null {
+  if (task.mark === 'done' || task.mark === 'missed') return task.mark;
+  return task.completed ? 'done' : null;
+}
+
+export function isOpenTask(task: { deleted?: boolean; completed: boolean; mark?: TaskMark | null }) {
+  return task.deleted !== true && taskMark(task) === null;
+}
+
 export function priorityRank(priority: Priority) {
   if (priority === 'high') return 0;
   if (priority === 'low') return 2;
@@ -234,6 +246,7 @@ export function materialize(book: Notebook, from: string, to: string, now = new 
         id: createId(),
         title: rule.title,
         completed: false,
+        mark: null,
         createdAt: now,
         completedAt: null,
         date: original,
@@ -264,7 +277,7 @@ export type ReturnRow = {
 export function returnRows(book: Notebook, today: string): ReturnRow[] {
   if (!isDateKey(today)) return [];
   const cutoff = addDays(today, -2);
-  const open = book.tasks.filter((task) => !task.deleted && !task.completed && task.date <= cutoff);
+  const open = book.tasks.filter((task) => isOpenTask(task) && task.date <= cutoff);
   const grouped = new Map<string, NotebookTask[]>();
   const singles: NotebookTask[] = [];
   for (const task of open) {
@@ -331,15 +344,18 @@ export function habitsForDate(book: Notebook, date: string) {
 }
 
 /** Status of today's tasks. The same counts must be used in every section header. */
-export function dayHint(openTasks: number, taskCount: number, known = true) {
+export function dayHint(openTasks: number, taskCount: number, known = true, missed = 0) {
   const reliable = known
     && Number.isInteger(openTasks)
     && Number.isInteger(taskCount)
+    && Number.isInteger(missed)
     && openTasks >= 0
-    && taskCount >= openTasks;
+    && missed >= 0
+    && taskCount >= openTasks + missed;
   if (!reliable) return 'Сегодня';
   if (openTasks > 0) return 'Есть незакрытые дела';
   if (taskCount === 0) return 'На сегодня тихо';
+  if (missed > 0) return 'Сегодня';
   return 'Можно отдохнуть';
 }
 
@@ -403,6 +419,7 @@ export function createTask(book: Notebook, draft: TaskDraft, now = new Date().to
         id: createId(),
         title,
         completed: false,
+        mark: null,
         createdAt: now,
         completedAt: null,
         date: draft.date,
@@ -432,13 +449,22 @@ export function createTask(book: Notebook, draft: TaskDraft, now = new Date().to
 }
 
 export function toggleTask(book: Notebook, id: string, now = new Date().toISOString()): Notebook {
+  return setTaskMark(book, id, taskMark(book.tasks.find((task) => task.id === id) ?? { completed: false }) === 'done' ? null : 'done', now);
+}
+
+export function setTaskMark(book: Notebook, id: string, mark: TaskMark | null, now = new Date().toISOString()): Notebook {
+  if (mark !== null && mark !== 'done' && mark !== 'missed') return book;
+  const task = book.tasks.find((item) => item.id === id && !item.deleted);
+  if (!task || taskMark(task) === mark) return book;
+  const completed = mark === 'done';
   return {
     ...book,
-    tasks: book.tasks.map((task) => {
-      if (task.id !== id || task.deleted) return task;
-      const completed = !task.completed;
-      return { ...task, completed, completedAt: completed ? now : null };
-    }),
+    tasks: book.tasks.map((item) => item.id === id ? {
+      ...item,
+      mark,
+      completed,
+      completedAt: completed ? item.completedAt || now : null,
+    } : item),
   };
 }
 
@@ -531,7 +557,7 @@ export function skipThisOccurrence(book: Notebook, id: string): Notebook {
 export function carryOpenTasks(book: Notebook, from: string, to: string): Notebook {
   if (!isDateKey(from) || !isDateKey(to) || from === to) return book;
   return tasksForDate(book, from)
-    .filter((task) => !task.completed)
+    .filter((task) => isOpenTask(task))
     .reduce((next, task) => moveTask(next, task.id, to), book);
 }
 
@@ -611,7 +637,7 @@ export function updateTask(book: Notebook, id: string, draft: TaskDraft, scope: 
       series: book.series.map((item) => item.id === task.seriesId ? { ...item, title, dayPart: draft.dayPart, priority: draft.priority } : item),
       tasks: book.tasks.map((item) => {
         if (item.id === id) return { ...patch(item), exception: draft.date !== original };
-        if (item.seriesId === task.seriesId && item.originalDate && item.originalDate >= original && !item.exception && !item.completed && !item.deleted) {
+        if (item.seriesId === task.seriesId && item.originalDate && item.originalDate >= original && !item.exception && taskMark(item) === null && !item.deleted) {
           return { ...item, title, dayPart: draft.dayPart, priority: draft.priority };
         }
         return item;
@@ -624,7 +650,7 @@ export function updateTask(book: Notebook, id: string, draft: TaskDraft, scope: 
     ...book,
     series: book.series.map((item) => item.id === task.seriesId ? { ...item, until } : item),
     tasks: book.tasks.map((item) => {
-      if (item.seriesId === task.seriesId && item.originalDate && item.originalDate >= original && !item.exception && !item.completed) {
+      if (item.seriesId === task.seriesId && item.originalDate && item.originalDate >= original && !item.exception && taskMark(item) === null) {
         return { ...item, deleted: true };
       }
       return item;
@@ -670,7 +696,7 @@ export function deleteFollowingOccurrences(book: Notebook, id: string): Notebook
     }),
     tasks: book.tasks.map((item) => {
       if (item.id === id) return { ...item, deleted: true };
-      if (item.seriesId !== task.seriesId || item.deleted || item.completed) return item;
+      if (item.seriesId !== task.seriesId || item.deleted || taskMark(item) !== null) return item;
       const itemDate = item.originalDate || item.date;
       if (itemDate >= original) return { ...item, deleted: true };
       return item;
@@ -732,6 +758,7 @@ export function fromLegacyTasks(tasks: LegacyStoredTask[]): Notebook {
       id: task.id,
       title: task.title.trim(),
       completed: task.completed,
+      mark: task.completed ? 'done' : null,
       createdAt: task.createdAt,
       completedAt: task.completedAt,
       date: task.date,
@@ -842,12 +869,15 @@ export function parseNotebook(value: unknown): Notebook | null {
       const task = item as Record<string, unknown>;
       if (typeof task.id !== 'string' || typeof task.title !== 'string' || typeof task.date !== 'string' || !isDateKey(task.date)) continue;
       const repeat = asSeriesRepeat(task.repeatKind);
+      const legacyDone = task.completed === true;
+      const mark = task.mark === 'done' || task.mark === 'missed' ? task.mark : legacyDone ? 'done' : null;
       book.tasks.push({
         id: task.id,
         title: task.title.trim().slice(0, 160),
-        completed: task.completed === true,
+        completed: mark === 'done',
+        mark,
         createdAt: typeof task.createdAt === 'string' ? task.createdAt : new Date(0).toISOString(),
-        completedAt: typeof task.completedAt === 'string' ? task.completedAt : null,
+        completedAt: mark === 'done' && typeof task.completedAt === 'string' ? task.completedAt : null,
         date: task.date,
         dayPart: asPart(task.dayPart),
         priority: asPriority(task.priority),
