@@ -330,10 +330,16 @@ export function habitsForDate(book: Notebook, date: string) {
     }));
 }
 
-export function dayHint(openTasks: number, taskCount: number, openHabits: number, habitCount: number, celebrated: boolean) {
-  if (celebrated) return 'Задача выполнена';
-  if (openTasks > 0 || openHabits > 0) return 'Есть незакрытые дела';
-  if (taskCount === 0 && habitCount === 0) return 'На сегодня тихо';
+/** Status of today's tasks. The same counts must be used in every section header. */
+export function dayHint(openTasks: number, taskCount: number, known = true) {
+  const reliable = known
+    && Number.isInteger(openTasks)
+    && Number.isInteger(taskCount)
+    && openTasks >= 0
+    && taskCount >= openTasks;
+  if (!reliable) return 'Сегодня';
+  if (openTasks > 0) return 'Есть незакрытые дела';
+  if (taskCount === 0) return 'На сегодня тихо';
   return 'Можно отдохнуть';
 }
 

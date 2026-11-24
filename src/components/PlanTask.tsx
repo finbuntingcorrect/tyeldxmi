@@ -5,6 +5,7 @@ import { dateFromKey } from '../lib/date';
 import type { NotebookTask, SeriesRule, TaskDraft } from '../lib/notebook';
 import { noneSchedule, normalizeSchedule, sameSchedule, scheduleLabel, type RepeatSchedule } from '../lib/schedule';
 import type { DayPart, Priority } from '../types';
+import { useDialogLayer } from '../hooks/useDialogLayer';
 import { PaperCheck } from './PaperCheck';
 import { RepeatField } from './RepeatField';
 
@@ -192,6 +193,7 @@ export function PlanTask({ task, today, series = null, onToggle, onMove, onUpdat
   const priorityId = useId();
   const noteId = useId();
   const titleButtonRef = useRef<HTMLButtonElement>(null);
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [menu, setMenu] = useState(false);
@@ -207,16 +209,7 @@ export function PlanTask({ task, today, series = null, onToggle, onMove, onUpdat
   const repeat = normalizeSchedule(schedule, date || task.date);
   const savedRepeat = taskSchedule(task, series);
 
-  function closeEditor() {
-    setAskScope(false);
-    setOpen(false);
-    titleButtonRef.current?.focus();
-  }
-
-  function openEditor() {
-    setMenu(false);
-    setRemoving(false);
-    setAskScope(false);
+  function resetDraft() {
     setTitle(task.title);
     setDate(task.date);
     setDayPart(task.dayPart);
@@ -224,8 +217,29 @@ export function PlanTask({ task, today, series = null, onToggle, onMove, onUpdat
     setSchedule(taskSchedule(task, series));
     setNote(task.note ?? '');
     setNoteOpen(Boolean(task.note?.trim()));
+  }
+
+  function closeEditor(discard = false) {
+    setAskScope(false);
+    if (discard) resetDraft();
+    setOpen(false);
+  }
+
+  function openEditor() {
+    setMenu(false);
+    setRemoving(false);
+    setAskScope(false);
     setOpen(true);
   }
+
+  const editorDialog = useDialogLayer(open, () => {
+    if (askScope) {
+      setAskScope(false);
+      return;
+    }
+    closeEditor(false);
+  }, titleButtonRef);
+  const deleteDialog = useDialogLayer(removing, () => setRemoving(false), menuButtonRef);
 
   function draft(): TaskDraft {
     return { title: title.trim(), date, dayPart, priority, ...repeat };
@@ -275,33 +289,6 @@ export function PlanTask({ task, today, series = null, onToggle, onMove, onUpdat
       document.body.style.overflow = previous;
     };
   }, [open, removing]);
-
-  useEffect(() => {
-    if (!open) return;
-    function onKey(event: KeyboardEvent) {
-      if (event.key !== 'Escape' || event.defaultPrevented) return;
-      event.preventDefault();
-      if (askScope) {
-        setAskScope(false);
-        return;
-      }
-      closeEditor();
-    }
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, askScope]);
-
-  useEffect(() => {
-    if (!removing) return;
-    function onKey(event: KeyboardEvent) {
-      if (event.key !== 'Escape') return;
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      setRemoving(false);
-    }
-    window.addEventListener('keydown', onKey, true);
-    return () => window.removeEventListener('keydown', onKey, true);
-  }, [removing]);
 
   useEffect(() => {
     if (!menu) return;
@@ -365,6 +352,7 @@ export function PlanTask({ task, today, series = null, onToggle, onMove, onUpdat
           <button
             type="button"
             aria-label={`Действия: ${task.title}`}
+            ref={menuButtonRef}
             aria-haspopup="menu"
             aria-expanded={menu}
             onClick={() => setMenu((value) => !value)}
@@ -397,8 +385,9 @@ export function PlanTask({ task, today, series = null, onToggle, onMove, onUpdat
         </div>
       </div>
       {open ? (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/35 sm:items-center sm:p-4" onClick={closeEditor}>
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/35 sm:items-center sm:p-4" onClick={() => closeEditor(false)}>
           <div
+            ref={editorDialog}
             role="dialog"
             aria-modal="true"
             aria-labelledby={dialogTitleId}
@@ -408,7 +397,7 @@ export function PlanTask({ task, today, series = null, onToggle, onMove, onUpdat
             <form className="flex min-h-0 flex-1 flex-col" onSubmit={(event) => { event.preventDefault(); save(); }}>
               <div className="flex items-center justify-between gap-3 px-5 pt-4">
                 <h2 id={dialogTitleId} className="font-serif text-2xl text-ink">Задача</h2>
-                <button type="button" aria-label="Закрыть" onClick={closeEditor} className="grid h-11 w-11 place-items-center text-ink">
+                <button type="button" aria-label="Закрыть" onClick={() => closeEditor(false)} className="grid h-11 w-11 place-items-center text-ink">
                   <X aria-hidden="true" size={18} />
                 </button>
               </div>
@@ -436,7 +425,7 @@ export function PlanTask({ task, today, series = null, onToggle, onMove, onUpdat
                 ) : (
                   <div className="flex gap-2">
                     <button type="submit" className="paper-submit min-h-11 flex-1">Сохранить</button>
-                    <button type="button" onClick={closeEditor} className="paper-choice min-h-11 flex-1">Отмена</button>
+                    <button type="button" onClick={() => closeEditor(true)} className="paper-choice min-h-11 flex-1">Отмена</button>
                   </div>
                 )}
               </div>
@@ -446,7 +435,7 @@ export function PlanTask({ task, today, series = null, onToggle, onMove, onUpdat
       ) : null}
       {removing ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/35 sm:items-center sm:p-4" onClick={() => setRemoving(false)}>
-          <div role="dialog" aria-modal="true" aria-labelledby={`${dialogTitleId}-delete`} onClick={(event) => event.stopPropagation()} className="w-full max-w-[28rem] border border-line bg-card px-5 py-4 shadow-sm">
+          <div ref={deleteDialog} role="dialog" aria-modal="true" aria-labelledby={`${dialogTitleId}-delete`} onClick={(event) => event.stopPropagation()} className="w-full max-w-[28rem] border border-line bg-card px-5 py-4 shadow-sm">
             <h2 id={`${dialogTitleId}-delete`} className="font-serif text-2xl text-ink">Удалить повторение</h2>
             <div className="mt-4 flex flex-col gap-2 pb-[max(0px,env(safe-area-inset-bottom))]">
               <button type="button" onClick={() => { setRemoving(false); onSkip(task.id); }} className="paper-submit min-h-11">Только это повторение</button>

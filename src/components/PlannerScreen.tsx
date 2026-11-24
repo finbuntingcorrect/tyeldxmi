@@ -105,7 +105,7 @@ function AddGoal({ onAdd }: { onAdd: (title: string) => void }) {
     return <button type="button" onClick={() => setOpen(true)} className="mt-1 min-h-11 px-1 text-sm font-semibold text-ink">+ Добавить цель</button>;
   }
 
-  function close() {
+  function cancel() {
     setTitle('');
     setOpen(false);
   }
@@ -117,13 +117,13 @@ function AddGoal({ onAdd }: { onAdd: (title: string) => void }) {
       onKeyDown={(event) => {
         if (event.key !== 'Escape') return;
         event.preventDefault();
-        close();
+        setOpen(false);
       }}
     >
       <input autoFocus aria-label="Новая цель недели" value={title} onChange={(event) => setTitle(event.target.value)} maxLength={160} className="paper-field min-w-0" />
       <div className="flex flex-col gap-2 sm:flex-row">
         <button type="submit" className="paper-submit sm:min-w-36">Добавить</button>
-        <button type="button" onClick={close} className="paper-choice">Отмена</button>
+        <button type="button" onClick={cancel} className="paper-choice">Отмена</button>
       </div>
     </form>
   );

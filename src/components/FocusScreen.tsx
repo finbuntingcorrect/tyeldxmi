@@ -138,11 +138,11 @@ export function FocusScreen(props: FocusScreenProps) {
         : paused
           ? 'Пауза'
           : doneFocus
-            ? 'Подход завершён. Время отдохнуть'
+            ? 'Подход завершён'
             : doneBreak
               ? 'Перерыв закончился'
               : early
-                ? 'Сессия завершена раньше. Время сохранено'
+                ? 'Фокус завершён раньше. Подход не засчитан'
                 : '';
 
   function begin() {
@@ -259,7 +259,7 @@ export function FocusScreen(props: FocusScreenProps) {
             <button type="button" onClick={props.onCompleteTask} className="paper-choice">Завершить задачу</button>
           </p>
         ) : null}
-        {doneFocus ? <p className="mt-2 text-center text-sm text-ink">Подход завершён. Можно отдохнуть.</p> : null}
+        {doneFocus ? <p className="mt-2 text-center text-sm text-ink">Подход завершён.</p> : null}
         {early ? <p className="mt-2 text-center text-sm text-muted">Время сохранено. Подход не засчитан.</p> : null}
         {props.remind && running ? (
           <p className="mt-2 text-center text-sm text-muted">

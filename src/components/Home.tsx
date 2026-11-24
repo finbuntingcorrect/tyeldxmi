@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { localDateKey, dateFromKey, formatLocalDate } from '../lib/date';
 import { claimTreat } from '../lib/treats';
 import type { TreatKind } from '../lib/focusSession';
 import { catPose } from '../lib/focusSession';
-import { dayHint, habitsForDate, needsHello, personName, tasksForDate } from '../lib/notebook';
+import { dayHint, needsHello, personName, tasksForDate } from '../lib/notebook';
 import { isPlannerPage, modeForPage, pagePath, safeNext } from '../lib/route';
 import { useRoute } from '../hooks/routeContext';
 import { unlockSound } from '../lib/focusSound';
@@ -21,6 +21,7 @@ import { ModeSwitch } from './ModeSwitch';
 import { DayBoard, MonthBoard } from './PlannerScreen';
 import { AppLink } from './AppLink';
 import { SettingsPanel } from './SettingsPanel';
+import { useDialogLayer } from '../hooks/useDialogLayer';
 
 export function Home() {
   const notebook = useNotebook();
@@ -29,6 +30,8 @@ export function Home() {
   const [burst, setBurst] = useState(0);
   const [greeting, setGreeting] = useState(false);
   const [conflict, setConflict] = useState<{ id: string | null } | null>(null);
+  const conflictOpener = useRef<HTMLElement | null>(null);
+  const conflictDialog = useDialogLayer(Boolean(conflict), () => setConflict(null), conflictOpener);
   const [reduced, setReduced] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   const [soundNote, setSoundNote] = useState<string | null>(null);
   const book = notebook.book;
@@ -88,15 +91,6 @@ export function Home() {
     document.title = title ? `${title} — Today Cat` : 'Today Cat';
   }, [page, notebook.status]);
 
-  useEffect(() => {
-    if (!conflict) return;
-    function onKey(event: KeyboardEvent) {
-      if (event.key === 'Escape') setConflict(null);
-    }
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [conflict]);
-
   const guestPlanner = notebook.status === 'anon' && !notebook.resetToken && isPlannerPage(page);
   const authedGate = notebook.status === 'ready' && (page.name === 'login' || page.name === 'signup');
   const redirectTo = guestPlanner
@@ -153,14 +147,8 @@ export function Home() {
   const person = personName(book.name, notebook.login);
 
   const todayTasks = tasksForDate(book, today);
-  const todayHabits = habitsForDate(book, today);
-  const hint = dayHint(
-    todayTasks.filter((task) => !task.completed).length,
-    todayTasks.length,
-    todayHabits.filter((row) => row.status !== 'done').length,
-    todayHabits.length,
-    burst > 0,
-  );
+  const openToday = todayTasks.filter((task) => !task.completed).length;
+  const hint = dayHint(openToday, todayTasks.length);
   const showingGreeting = greeting && (page.name === 'calendar' || page.name === 'day');
   const pose = catPose({
     greeting: showingGreeting,
@@ -184,6 +172,7 @@ export function Home() {
   function requestFocus(taskId: string) {
     const current = book.focusSession;
     if (current && !current.settled && current.taskId !== taskId) {
+      conflictOpener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       setConflict({ id: taskId });
       return;
     }
@@ -194,6 +183,7 @@ export function Home() {
   function selectTask(id: string | null) {
     const current = book.focusSession;
     if (current && !current.settled && (current.taskId || null) !== id) {
+      conflictOpener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       setConflict({ id });
       return;
     }
@@ -251,7 +241,12 @@ export function Home() {
           </div>
         </header>
         <ModeSwitch page={page} />
-        {notebook.error ? <p role="alert" className="border-b border-line px-4 py-3 text-sm font-semibold text-danger sm:px-6">{notebook.error}</p> : null}
+        {notebook.error ? (
+          <p role="alert" className="border-b border-line px-4 py-3 text-sm font-semibold text-danger sm:px-6">
+            {notebook.error}
+            {notebook.canRetry ? <button type="button" onClick={() => void notebook.retrySave()} className="paper-choice">Повторить</button> : null}
+          </p>
+        ) : null}
         {page.name === 'settings' ? (
           <div>
             <div className="px-4 pt-4 sm:px-6">
@@ -383,8 +378,8 @@ export function Home() {
       ) : null}
       {conflict ? (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-[rgb(46_33_27_/_0.28)] px-4 py-6 sm:items-center">
-          <div role="dialog" aria-modal="true" aria-labelledby="focus-conflict-title" className="w-full max-w-md border border-line bg-card p-5">
-            <h2 id="focus-conflict-title" className="text-2xl">Сначала заверши текущую сессию</h2>
+          <div ref={conflictDialog} role="dialog" aria-modal="true" aria-labelledby="focus-conflict-title" className="w-full max-w-md border border-line bg-card p-5">
+            <h2 id="focus-conflict-title" className="text-2xl">Сначала заверши текущий фокус или перерыв</h2>
             <p className="mt-2 text-sm text-ink">Отработанное время сохранится.</p>
             <div className="mt-4 flex flex-wrap gap-2">
               <button type="button" autoFocus onClick={confirmConflict} className="paper-submit">Завершить и переключить</button>

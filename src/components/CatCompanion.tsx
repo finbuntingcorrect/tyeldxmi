@@ -103,7 +103,7 @@ export function CatCompanion(props: CatCompanionProps) {
 
   useEffect(() => {
     const measure = () => {
-      const bar = document.querySelector('section[aria-label="Сессия фокуса"]');
+      const bar = document.querySelector('section[aria-label="Фокус"]');
       const next = bar ? Math.ceil(bar.getBoundingClientRect().height) + 16 : 24;
       setOccupiedBottom((current) => (current === next ? current : next));
     };

@@ -1,4 +1,5 @@
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import { dayHint } from '../lib/notebook';
 import type { CatLook, MascotMode } from '../types';
 import { LOOKS } from '../lib/plannerCopy';
 import { SuccessAnimation } from './SuccessAnimation';
@@ -19,12 +20,6 @@ const ART: Record<MascotMode, { src: string; label: string }> = {
   },
 };
 
-const CAPTION: Record<MascotMode, string> = {
-  working: 'Есть незакрытые дела',
-  sleeping: 'Можно отдохнуть!',
-  success: 'Задача выполнена!',
-};
-
 type MascotPanelProps = {
   mode: MascotMode;
   burstKey: number;
@@ -33,11 +28,10 @@ type MascotPanelProps = {
   catName?: string;
 };
 
-function detailLine(mode: MascotMode, total: number): string {
-  if (mode === 'success') return 'Котёнок это уже отметил';
-  if (mode === 'working') return 'Котёнок думает рядом';
-  if (total === 0) return 'На сегодня тихо';
-  return 'Все задачи на сегодня закрыты';
+function statusLine(mode: MascotMode, total: number) {
+  if (mode === 'success') return dayHint(0, 0, false);
+  if (mode === 'working') return dayHint(1, Math.max(total, 1));
+  return dayHint(0, total);
 }
 
 function SleepMarks() {
@@ -146,8 +140,7 @@ export function MascotPanel({ mode, burstKey, total, look = 'classic', catName }
       </div>
 
       <div id="mascot-caption" className="px-2 pb-1 pt-4 text-center" aria-live="polite">
-        <p className="text-lg font-extrabold text-ink">{catName ? `${catName}: ${CAPTION[mode]}` : CAPTION[mode]}</p>
-        <p className="mt-1 text-sm font-semibold text-muted">{detailLine(mode, total)}</p>
+        <p className="text-lg font-extrabold text-ink">{catName ? `${catName}: ${statusLine(mode, total)}` : statusLine(mode, total)}</p>
       </div>
     </section>
   );

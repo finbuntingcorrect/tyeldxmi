@@ -560,11 +560,11 @@ ranked = createTask(ranked, { title: 'Раньше обычная', date: '2026-
 const morningOrder = tasksForDate(ranked, '2026-11-20').filter((task) => task.dayPart === 'morning').map((task) => task.title);
 assert.deepEqual(morningOrder, ['Важная', 'Раньше обычная', 'Позже обычная', 'Низкая']);
 
-assert.equal(dayHint(1, 2, 0, 1, false), 'Есть незакрытые дела');
-assert.equal(dayHint(0, 2, 1, 1, false), 'Есть незакрытые дела');
-assert.equal(dayHint(0, 2, 0, 1, false), 'Можно отдохнуть');
-assert.equal(dayHint(0, 0, 0, 0, false), 'На сегодня тихо');
-assert.equal(dayHint(1, 2, 1, 1, true), 'Задача выполнена');
+assert.equal(dayHint(1, 2), 'Есть незакрытые дела');
+assert.equal(dayHint(0, 2), 'Можно отдохнуть');
+assert.equal(dayHint(0, 0), 'На сегодня тихо');
+assert.equal(dayHint(1, 0), 'Сегодня');
+assert.equal(dayHint(0, 0, false), 'Сегодня');
 assert.equal(goalWeekKey('2026-12', '2026-11-20', '2026-12-20'), '2026-12-14');
 assert.equal(goalWeekKey('2026-12', '2026-11-20', null), '2026-11-30');
 assert.equal(goalWeekKey('2026-11', '2026-11-20', '2026-12-20'), '2026-11-16');

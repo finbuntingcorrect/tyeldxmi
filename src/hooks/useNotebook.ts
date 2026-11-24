@@ -70,7 +70,9 @@ export function useNotebook() {
   const [state, setState] = useState<{ book: Notebook; error: string | null }>({ book: emptyNotebook(), error: null });
   const mounted = useRef(true);
   const generation = useRef(0);
-  const chain = useRef(Promise.resolve());
+  const chain = useRef(Promise.resolve<string | null>(null));
+  const failedSave = useRef<Notebook | null>(null);
+  const [canRetry, setCanRetry] = useState(false);
   const bookRef = useRef(state.book);
   bookRef.current = state.book;
 
@@ -146,21 +148,96 @@ export function useNotebook() {
       });
   }, []);
 
-  function persist(book: Notebook) {
+  function rememberFailure(book: Notebook, message: string) {
+    failedSave.current = book;
+    setCanRetry(true);
+    setState((current) => ({ ...current, error: message }));
+  }
+
+  function rememberSuccess(book: Notebook, apply: boolean) {
+    failedSave.current = null;
+    setCanRetry(false);
+    if (apply || bookRef.current === book) {
+      bookRef.current = book;
+      applyTheme(book.theme ?? 'yellow');
+      setState({ book, error: null });
+      return;
+    }
+    setState((current) => ({ ...current, error: null }));
+  }
+
+  function scheduleSave(): Promise<string | null> {
     const generationAtSave = generation.current;
-    chain.current = chain.current.then(async () => {
-      const message = await saveCabinet(book);
-      if (!mounted.current || generation.current !== generationAtSave) return;
-      setState((current) => ({ ...current, error: message }));
+    const job = chain.current.then(async () => {
+      let message: string | null = null;
+      while (mounted.current && generation.current === generationAtSave) {
+        const book = bookRef.current;
+        message = await saveCabinet(book);
+        if (!mounted.current || generation.current !== generationAtSave) return message;
+        if (bookRef.current !== book) continue;
+        if (message) rememberFailure(book, message);
+        else rememberSuccess(book, false);
+        break;
+      }
+      return message;
     });
+    chain.current = job.then((message) => message, () => 'Не получилось. Попробуй ещё раз.');
+    return job;
   }
 
   function commit(recipe: (book: Notebook) => Notebook) {
     const book = prepareNotebook(recipe(bookRef.current));
     bookRef.current = book;
-    setState({ book, error: null });
-    persist(book);
+    setState((current) => ({ book, error: current.error }));
+    void scheduleSave();
     return book;
+  }
+
+  function commitSaved(recipe: (book: Notebook) => Notebook) {
+    commit(recipe);
+    return chain.current;
+  }
+
+  function saveConfirmed(recipe: (book: Notebook) => Notebook) {
+    const generationAtSave = generation.current;
+    const job = chain.current.then(async () => {
+      if (!mounted.current || generation.current !== generationAtSave) return 'Не получилось. Попробуй ещё раз.';
+      const source = bookRef.current;
+      const book = prepareNotebook(recipe(source));
+      const message = await saveCabinet(book);
+      if (!mounted.current || generation.current !== generationAtSave) return message;
+      if (message) {
+        rememberFailure(book, message);
+        return message;
+      }
+      if (bookRef.current === source) {
+        rememberSuccess(book, true);
+        return null;
+      }
+      const merged = prepareNotebook(recipe(bookRef.current));
+      rememberSuccess(merged, true);
+      return scheduleSave();
+    });
+    chain.current = job.then((message) => message, () => 'Не получилось. Попробуй ещё раз.');
+    return job;
+  }
+
+  function retrySave() {
+    const book = failedSave.current;
+    if (!book) return Promise.resolve(null);
+    const generationAtSave = generation.current;
+    const job = chain.current.then(async () => {
+      const message = await saveCabinet(book);
+      if (!mounted.current || generation.current !== generationAtSave) return message;
+      if (message) {
+        rememberFailure(book, message);
+        return message;
+      }
+      rememberSuccess(book, true);
+      return null;
+    });
+    chain.current = job.then((message) => message, () => 'Не получилось. Попробуй ещё раз.');
+    return job;
   }
 
   async function requestEmail(email: string) {
@@ -237,16 +314,18 @@ export function useNotebook() {
     here: cabinetUsesBrowser(),
     book: state.book,
     error: state.error,
+    canRetry,
+    retrySave,
     requestEmail,
     register,
     signIn,
     setPassword,
     signOut,
     chooseMode: (mode: AppMode) => commit((book) => chooseMode(book, mode)),
-    setName: (name: string) => commit((book) => setName(book, name)),
+    setName: (name: string) => saveConfirmed((book) => setName(book, name)),
     setTheme: (theme: AppTheme) => {
       applyTheme(theme);
-      commit((book) => setTheme(book, theme));
+      return commitSaved((book) => setTheme(book, theme));
     },
     createTask: (draft: TaskDraft) => commit((book) => createTask(book, draft)),
     toggleTask: (id: string) => commit((book) => toggleTask(book, id)),
@@ -277,7 +356,7 @@ export function useNotebook() {
       const next = commit((book) => applyFocus(book, session, change, at));
       return change ? next.tasks.find((task) => task.id === change.taskId)?.focusMs ?? 0 : 0;
     },
-    setCat: (cat: CatPrefs) => commit((book) => setCatPrefs(book, cat)),
+    setCat: (cat: CatPrefs) => commitSaved((book) => setCatPrefs(book, cat)),
     feedTreat,
   };
 }
