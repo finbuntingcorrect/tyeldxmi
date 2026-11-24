@@ -192,13 +192,7 @@ export function AddTask({ date, part, onCreate }: {
   );
 }
 
-function stampTilt(id: string) {
-  let value = 0;
-  for (let index = 0; index < id.length; index += 1) value = (value + id.charCodeAt(index)) % 7;
-  return value - 3;
-}
-
-export function PlanTask({ task, today, series = null, onToggle, onMove, onUpdate, onSkip, onDeleteFollowing, onFocus, onNote, diary = false, stampFresh = false, onMark, onEditing }: PlanTaskProps) {
+export function PlanTask({ task, today, series = null, onToggle, onMove, onPriority, onUpdate, onSkip, onDeleteFollowing, onFocus, onNote, diary = false, stampFresh = false, onMark, onEditing }: PlanTaskProps) {
   const dialogTitleId = useId();
   const titleId = useId();
   const dateId = useId();
@@ -375,72 +369,68 @@ export function PlanTask({ task, today, series = null, onToggle, onMove, onUpdat
   return (
     <div>
       {diary ? (
-        <div className={`diary-task ${mark === 'done' ? 'is-done' : ''} ${mark === 'missed' ? 'is-missed' : ''} ${task.priority === 'high' && mark !== 'done' ? 'is-important' : ''}`}>
-          <div className="diary-task-main">
-            <div className="relative" ref={stampRef}>
-              <button
-                type="button"
-                aria-haspopup="menu"
-                aria-expanded={stamps}
-                data-stamp-control=""
-                aria-label={`${stampLabel}: ${task.title}`}
-                onClick={() => { setMenu(false); setStamps((value) => !value); }}
-                className="diary-state"
-              >
-                <span aria-hidden="true" className={`diary-state-box ${mark === 'done' ? 'is-done' : ''} ${mark === 'missed' ? 'is-missed' : ''}`} />
-              </button>
-              {stamps ? (
-                <div role="menu" data-stamp-control="" className="diary-stamp-menu">
-                  <button type="button" role="menuitem" onClick={() => chooseMark('done')}>Выполнено</button>
-                  <button type="button" role="menuitem" onClick={() => chooseMark('missed')}>Не выполнено</button>
-                  <button type="button" role="menuitem" onClick={() => chooseMark(null)}>Убрать отметку</button>
-                </div>
-              ) : null}
-            </div>
-            <button ref={titleButtonRef} type="button" onClick={openEditor} className="diary-title">
-              <span className={mark === 'done' ? 'diary-title-done' : undefined}>{task.title}</span>
-              {timeLabel ? <span className="diary-meta">{timeLabel}</span> : null}
-              {task.priority === 'high' ? <span className="diary-important">Важно</span> : null}
-              {overdue ? <span className="diary-overdue">Просрочено {overdueDate}</span> : null}
-              {savedRepeat.repeatKind !== 'none' ? <span className="diary-meta">{scheduleLabel(savedRepeat)}</span> : null}
-            </button>
-          </div>
-          <div className="diary-task-side">
+        <div className={`diary-task ${mark === 'done' ? 'is-done' : ''} ${mark === 'missed' ? 'is-missed' : ''} ${task.priority === 'high' ? 'is-important' : ''}`}>
+          <div className="diary-state-slot" ref={stampRef}>
             <button
               type="button"
               aria-haspopup="menu"
               aria-expanded={stamps}
               data-stamp-control=""
-              aria-label={mark ? `${stampLabel}. Изменить печать: ${task.title}` : `Поставить печать: ${task.title}`}
+              aria-label={`${stampLabel}: ${task.title}`}
+              onClick={() => { setMenu(false); setStamps((value) => !value); }}
+              className="diary-state"
+            >
+              <span aria-hidden="true" className={`diary-state-box ${mark === 'done' ? 'is-done' : ''} ${mark === 'missed' ? 'is-missed' : ''}`} />
+            </button>
+            {stamps ? (
+              <div role="menu" data-stamp-control="" className="diary-stamp-menu">
+                <button type="button" role="menuitem" onClick={() => chooseMark('done')}>Выполнено</button>
+                <button type="button" role="menuitem" onClick={() => chooseMark('missed')}>Не выполнено</button>
+                <button type="button" role="menuitem" onClick={() => chooseMark(null)}>Убрать отметку</button>
+              </div>
+            ) : null}
+          </div>
+          <button ref={titleButtonRef} type="button" onClick={openEditor} className="diary-title">
+            <span className={mark === 'done' ? 'diary-title-done' : undefined}>{task.title}</span>
+            {timeLabel || task.priority === 'high' || overdue || savedRepeat.repeatKind !== 'none' ? (
+              <span className="diary-notes">
+                {timeLabel ? <span className="diary-meta">{timeLabel}</span> : null}
+                {task.priority === 'high' ? <span className="diary-important">Важно</span> : null}
+                {overdue ? <span className="diary-overdue">Просрочено {overdueDate}</span> : null}
+                {savedRepeat.repeatKind !== 'none' ? <span className="diary-meta">{scheduleLabel(savedRepeat)}</span> : null}
+              </span>
+            ) : null}
+          </button>
+          {mark ? (
+            <button
+              type="button"
+              aria-haspopup="menu"
+              aria-expanded={stamps}
+              data-stamp-control=""
+              aria-label={`${stampLabel}. Изменить печать: ${task.title}`}
               onClick={() => { setMenu(false); setStamps((value) => !value); }}
               className="diary-stamp-button"
             >
-              {mark ? (
-                <span className="diary-stamp" style={{ transform: `rotate(${stampTilt(task.id)}deg)` }}>
-                  <span className={stampFresh ? 'diary-stamp-pop' : undefined}>
-                    <img src={mark === 'done' ? '/stamps/done.png' : '/stamps/missed.png'} alt="" />
-                  </span>
-                  <span className="diary-stamp-label">{stampLabel}</span>
-                </span>
-              ) : <span className="diary-stamp-empty" aria-hidden="true" />}
+              <span className={stampFresh ? 'diary-stamp-pop' : undefined}>
+                <img src={mark === 'done' ? '/stamps/done.png' : '/stamps/missed.png'} alt="" />
+              </span>
             </button>
-            <div ref={menuRef} className={`relative shrink-0 ${menu ? 'z-30' : ''}`}>
-              <button type="button" aria-label={`Действия: ${task.title}`} ref={menuButtonRef} aria-haspopup="menu" aria-expanded={menu} onClick={() => { setStamps(false); setMenu((value) => !value); }} className="grid h-11 w-11 place-items-center text-ink">
-                <MoreHorizontal aria-hidden="true" size={18} />
-              </button>
-              {menu ? (
-                <div role="menu" className="absolute right-0 z-30 min-w-56 border border-line bg-card py-1 shadow-sm">
-                  <button type="button" role="menuitem" onClick={() => { setMenu(false); openEditor(); }} className="block min-h-11 w-full px-3 text-left text-sm font-semibold">Редактировать</button>
-                  <button type="button" role="menuitem" onClick={() => { setMenu(false); onMove(task.id, addDays(task.date, 1)); }} className="block min-h-11 w-full px-3 text-left text-sm font-semibold">На завтра</button>
-                  {task.date === today ? (
-                    <button type="button" role="menuitem" onClick={() => { setMenu(false); onFocus(task.id); }} className="block min-h-11 w-full px-3 text-left text-sm font-semibold">В фокус</button>
-                  ) : null}
-                  <div className="mt-1 border-t border-line pt-1">
-                    <button type="button" role="menuitem" onClick={() => { setMenu(false); if (task.seriesId) { setRemoving(true); onEditing?.(true); } else onSkip(task.id); }} className="block min-h-11 w-full px-3 text-left text-sm font-semibold text-danger">Удалить</button>
-                  </div>
-                </div>
-              ) : null}
-            </div>
+          ) : null}
+          <div ref={menuRef} className={`diary-menu ${menu ? 'is-open' : ''}`}>
+            <button type="button" aria-label={`Действия: ${task.title}`} ref={menuButtonRef} aria-haspopup="menu" aria-expanded={menu} onClick={() => { setStamps(false); setMenu((value) => !value); }} className="diary-menu-button">
+              <MoreHorizontal aria-hidden="true" size={18} />
+            </button>
+            {menu ? (
+              <div role="menu" className="diary-action-menu">
+                <button type="button" role="menuitem" onClick={() => { setMenu(false); openEditor(); }}>Редактировать</button>
+                <button type="button" role="menuitem" onClick={() => { setMenu(false); onPriority(task.id, task.priority === 'high' ? 'normal' : 'high'); }}>{task.priority === 'high' ? 'Сделать обычной' : 'Отметить важной'}</button>
+                <button type="button" role="menuitem" onClick={() => { setMenu(false); onMove(task.id, addDays(task.date, 1)); }}>На завтра</button>
+                {task.date === today ? (
+                  <button type="button" role="menuitem" onClick={() => { setMenu(false); onFocus(task.id); }}>В фокус</button>
+                ) : null}
+                <button type="button" role="menuitem" onClick={() => { setMenu(false); if (task.seriesId) { setRemoving(true); onEditing?.(true); } else onSkip(task.id); }}>Удалить</button>
+              </div>
+            ) : null}
           </div>
         </div>
       ) : (

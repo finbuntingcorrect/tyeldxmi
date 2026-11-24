@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import { addDays } from '../../server/recurrence';
 import { dateFromKey } from '../lib/date';
 import { tasksForDate, weekDates, type Notebook, type TaskDraft, type TaskMark, type WeekItem } from '../lib/notebook';
@@ -65,6 +65,7 @@ export function DiaryScreen(props: DiaryScreenProps) {
   const [picking, setPicking] = useState(false);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [openDays, setOpenDays] = useState<Record<string, boolean>>({});
+  const [importantDays, setImportantDays] = useState<Record<string, boolean>>({});
   const desired = useRef(target);
   const adding = useRef(new Set<string>());
   const ensureRef = useRef(props.ensureWeek);
@@ -130,8 +131,16 @@ export function DiaryScreen(props: DiaryScreenProps) {
     window.setTimeout(() => setFresh((current) => current === id ? null : current), 260);
   }
 
+  function closeAdd(date: string) {
+    adding.current.delete(date);
+    setDrafts((current) => ({ ...current, [date]: '' }));
+    setImportantDays((current) => ({ ...current, [date]: false }));
+    setOpenDays((current) => ({ ...current, [date]: false }));
+  }
+
   function renderDay(date: string, index: number) {
     const open = openDays[date] === true;
+    const important = importantDays[date] === true;
     return (
       <section
         key={date}
@@ -166,31 +175,47 @@ export function DiaryScreen(props: DiaryScreenProps) {
           ))}
           {open ? (
             <form
-              className="diary-add"
+              className={`diary-task diary-compose ${important ? 'is-important' : ''}`}
               onSubmit={(event) => {
                 event.preventDefault();
                 const title = (drafts[date] ?? '').trim();
                 if (!title || adding.current.has(date)) return;
                 adding.current.add(date);
-                props.onCreate({ title, date, dayPart: 'anytime', priority: 'normal', repeatKind: 'none', weekdays: [] });
-                setDrafts((current) => ({ ...current, [date]: '' }));
-                setOpenDays((current) => ({ ...current, [date]: false }));
+                props.onCreate({ title, date, dayPart: 'anytime', priority: important ? 'high' : 'normal', repeatKind: 'none', weekdays: [] });
+                closeAdd(date);
+              }}
+              onKeyDown={(event) => {
+                if (event.key !== 'Escape') return;
+                event.preventDefault();
+                closeAdd(date);
               }}
             >
-              <label className="sr-only" htmlFor={`add-${date}`}>Новая задача, {dayLabel(date)}</label>
+              <span className="diary-state" aria-hidden="true"><span className="diary-state-box" /></span>
               <input
                 id={`add-${date}`}
                 autoFocus
                 value={drafts[date] ?? ''}
                 maxLength={160}
+                aria-label={`Новая задача, ${dayLabel(date)}`}
                 onChange={(event) => setDrafts((current) => ({ ...current, [date]: event.target.value }))}
-                className="paper-field"
+                className="diary-compose-input"
               />
-              <button type="submit" className="paper-submit">Сохранить</button>
-              <button type="button" className="paper-choice" onClick={() => setOpenDays((current) => ({ ...current, [date]: false }))}>Закрыть</button>
+              <button
+                type="button"
+                className={`diary-flag ${important ? 'is-on' : ''}`}
+                aria-pressed={important}
+                onClick={() => setImportantDays((current) => ({ ...current, [date]: !important }))}
+              >
+                Важно
+              </button>
+              <button type="submit" className="diary-compose-save" aria-label="Сохранить задачу">
+                <Check aria-hidden="true" size={18} />
+              </button>
             </form>
           ) : (
-            <button type="button" className="diary-add-button" onClick={() => { adding.current.delete(date); setOpenDays((current) => ({ ...current, [date]: true })); }}>+ Задача</button>
+            <button type="button" className="diary-plus" aria-label="Добавить задачу" onClick={() => { adding.current.delete(date); setOpenDays((current) => ({ ...current, [date]: true })); }}>
+              <Plus aria-hidden="true" size={18} />
+            </button>
           )}
         </div>
       </section>
@@ -268,7 +293,7 @@ function GoalAdd({ onAdd, onEditing }: { onAdd: (title: string) => void; onEditi
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState('');
   const lock = useRef(false);
-  if (!open) return <button type="button" className="diary-add-button" onClick={() => { lock.current = false; setOpen(true); onEditing(true); }}>+ Цель</button>;
+  if (!open) return <button type="button" className="diary-goal-add" onClick={() => { lock.current = false; setOpen(true); onEditing(true); }}>Добавить цель</button>;
   return (
     <form className="diary-add" onSubmit={(event) => {
       event.preventDefault();
