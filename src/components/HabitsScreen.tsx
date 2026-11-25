@@ -1,4 +1,5 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import { weekday } from '../../server/recurrence';
 import { dateFromKey } from '../lib/date';
@@ -38,6 +39,27 @@ function markLabel(status: HabitStatus | null) {
   if (status === 'done') return 'выполнено';
   if (status === 'missed') return 'не выполнено';
   return 'не отмечено';
+}
+
+function showFocus(node: HTMLElement | null | undefined) {
+  node?.focus(Object.assign({ preventScroll: true }, { focusVisible: true }));
+}
+
+function focusHabitTitle(id: string) {
+  window.requestAnimationFrame(() => showFocus(document.getElementById(`habit-title-${id}`)));
+}
+
+function placeHabitMenu(menu: HTMLElement, anchor: HTMLElement) {
+  const rect = anchor.getBoundingClientRect();
+  const margin = 8;
+  const width = menu.offsetWidth;
+  const height = menu.offsetHeight;
+  let left = rect.left;
+  let top = rect.bottom + 4;
+  if (left + width > window.innerWidth - margin) left = Math.max(margin, window.innerWidth - width - margin);
+  if (top + height > window.innerHeight - margin) top = Math.max(margin, rect.top - height - 4);
+  menu.style.left = `${left}px`;
+  menu.style.top = `${top}px`;
 }
 
 function alignTracker(node: HTMLDivElement, month: string, today: string) {
@@ -112,21 +134,50 @@ function HabitTable({
     alignTracker(node, month, today);
   }, [month, today, readOnly]);
 
+  const menuHabit = habits.find((habit) => habit.id === menuId) ?? null;
+
+  useLayoutEffect(() => {
+    if (!menuId) return;
+    const menu = document.getElementById(`habit-menu-${menuId}`);
+    const anchor = document.getElementById(`habit-title-${menuId}`);
+    if (!menu || !anchor) return;
+    placeHabitMenu(menu, anchor);
+    const frame = window.requestAnimationFrame(() => showFocus(menu.querySelector<HTMLElement>('[role="menuitem"]')));
+    return () => window.cancelAnimationFrame(frame);
+  }, [menuId]);
+
   useEffect(() => {
     if (!menuId) return;
+    const id = menuId;
+    function place() {
+      const menu = document.getElementById(`habit-menu-${id}`);
+      const anchor = document.getElementById(`habit-title-${id}`);
+      if (!menu || !anchor) return;
+      placeHabitMenu(menu, anchor);
+    }
+    function dismiss() {
+      setMenuId(null);
+      focusHabitTitle(id);
+    }
     function onKey(event: KeyboardEvent) {
       if (event.key !== 'Escape') return;
       event.preventDefault();
-      setMenuId(null);
+      dismiss();
     }
     function onPointer(event: PointerEvent) {
       const target = event.target as Node | null;
-      if (target && document.getElementById(`habit-menu-${menuId}`)?.contains(target)) return;
-      setMenuId(null);
+      if (!target) return;
+      if (document.getElementById(`habit-menu-${id}`)?.contains(target)) return;
+      if (document.getElementById(`habit-title-${id}`)?.contains(target)) return;
+      dismiss();
     }
+    window.addEventListener('resize', place);
+    window.addEventListener('scroll', place, true);
     window.addEventListener('keydown', onKey, true);
     document.addEventListener('pointerdown', onPointer);
     return () => {
+      window.removeEventListener('resize', place);
+      window.removeEventListener('scroll', place, true);
       window.removeEventListener('keydown', onKey, true);
       document.removeEventListener('pointerdown', onPointer);
     };
@@ -160,15 +211,21 @@ function HabitTable({
     else if (cellRect.right > scrollRect.right) scroller.scrollLeft += cellRect.right - scrollRect.right + 4;
   }
 
+  function finishRename(habit: Habit) {
+    setDraft(habit.title);
+    setRenamingId(null);
+    focusHabitTitle(habit.id);
+  }
+
   function saveName(habit: Habit) {
     const next = draft.trim();
     if (!next) {
-      setDraft(habit.title);
-      setRenamingId(null);
+      finishRename(habit);
       return;
     }
     onRename(habit.id, next);
     setRenamingId(null);
+    focusHabitTitle(habit.id);
   }
 
   return (
@@ -203,7 +260,7 @@ function HabitTable({
         <tbody>
           {habits.map((habit) => (
             <tr key={habit.id}>
-              <th scope="row" className="habit-name" id={`habit-menu-${habit.id}`}>
+              <th scope="row" className="habit-name">
                 {renamingId === habit.id ? (
                   <form className="habit-rename" onSubmit={(event) => { event.preventDefault(); saveName(habit); }}>
                     <label htmlFor={`habit-name-${habit.id}`} className="sr-only">Название привычки</label>
@@ -217,37 +274,28 @@ function HabitTable({
                         if (event.key !== 'Escape') return;
                         event.preventDefault();
                         event.stopPropagation();
-                        setDraft(habit.title);
-                        setRenamingId(null);
+                        finishRename(habit);
                       }}
                       className="paper-field"
                     />
                     <div className="habit-rename-actions">
                       <button type="submit" className="paper-choice">Сохранить</button>
-                      <button type="button" className="paper-choice" onClick={() => { setDraft(habit.title); setRenamingId(null); }}>Отмена</button>
+                      <button type="button" className="paper-choice" onClick={() => finishRename(habit)}>Отмена</button>
                     </div>
                   </form>
                 ) : (
-                  <div className="habit-name-line">
-                    <span className="habit-title">{habit.title}</span>
-                    <button
-                      type="button"
-                      className="habit-more"
-                      aria-label={`Действия: ${habit.title}`}
-                      aria-haspopup="menu"
-                      aria-expanded={menuId === habit.id}
-                      onClick={() => setMenuId((current) => current === habit.id ? null : habit.id)}
-                    >
-                      Ещё
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    id={`habit-title-${habit.id}`}
+                    className="habit-title"
+                    aria-haspopup="menu"
+                    aria-expanded={menuId === habit.id}
+                    aria-controls={menuId === habit.id ? `habit-menu-${habit.id}` : undefined}
+                    onClick={() => setMenuId((current) => current === habit.id ? null : habit.id)}
+                  >
+                    {habit.title}
+                  </button>
                 )}
-                {menuId === habit.id ? (
-                  <div role="menu" className="habit-menu">
-                    <button type="button" role="menuitem" className="paper-choice" onClick={() => { setDraft(habit.title); setRenamingId(habit.id); setMenuId(null); }}>Редактировать</button>
-                    <button type="button" role="menuitem" className="paper-choice" onClick={() => { onArchive(habit.id, !habit.archived); setMenuId(null); }}>{habit.archived ? 'Вернуть' : 'Архивировать'}</button>
-                  </div>
-                ) : null}
               </th>
               {dates.map((date) => {
                 const status = markMap.get(`${habit.id}:${date}`) ?? null;
@@ -327,6 +375,13 @@ function HabitTable({
           ) : null}
         </tbody>
       </table>
+      {menuHabit ? createPortal(
+        <div id={`habit-menu-${menuHabit.id}`} role="menu" aria-label={`Действия: ${menuHabit.title}`} className="habit-menu">
+          <button type="button" role="menuitem" className="paper-choice" onClick={() => { setDraft(menuHabit.title); setRenamingId(menuHabit.id); setMenuId(null); }}>Редактировать</button>
+          <button type="button" role="menuitem" className="paper-choice" onClick={() => { onArchive(menuHabit.id, !menuHabit.archived); setMenuId(null); }}>{menuHabit.archived ? 'Вернуть' : 'Архивировать'}</button>
+        </div>,
+        document.body,
+      ) : null}
     </div>
   );
 }
