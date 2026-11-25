@@ -226,7 +226,7 @@ html[data-theme='dark'] {
 
 .focus-stage {
   display: grid;
-  grid-template-columns: minmax(0, 22rem) 11rem;
+  grid-template-columns: minmax(0, 22rem) 16.5rem;
   column-gap: 4rem;
   row-gap: 0;
   align-items: start;
@@ -240,6 +240,8 @@ html[data-theme='dark'] {
   grid-column: 1;
   grid-row: 1;
   width: 100%;
+  container-type: inline-size;
+  container-name: focus-dial;
 }
 
 .focus-controls {
@@ -360,17 +362,20 @@ html[data-theme='dark'] {
 
 .focus-readout,
 .focus-entry {
-  width: 6.5ch;
+  width: auto;
+  max-width: none;
   margin: 0;
   border: 0;
   background: transparent;
   color: var(--color-ink);
   font: inherit;
-  font-size: clamp(2.5rem, 7vw, 4.25rem);
+  font-size: calc((0.58 * (100cqi - 44px) - 44px) / 2.64);
   font-weight: 650;
   font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
   line-height: 1;
   text-align: center;
+  white-space: nowrap;
   pointer-events: auto;
 }
 
@@ -383,6 +388,10 @@ html[data-theme='dark'] {
 
 .focus-readout {
   cursor: pointer;
+}
+
+.focus-entry {
+  width: 4ch;
 }
 
 .focus-entry:focus-visible,
@@ -434,21 +443,21 @@ html[data-theme='dark'] {
   position: relative;
   grid-column: 2;
   grid-row: 1;
-  width: 11rem;
-  height: 11rem;
+  width: 16.5rem;
+  height: 16.5rem;
   align-self: center;
   justify-self: center;
 }
 
 @media (max-height: 820px) and (min-width: 681px) {
   .focus-stage {
-    grid-template-columns: minmax(0, 18rem) 9rem;
+    grid-template-columns: minmax(0, 18rem) 13.5rem;
     column-gap: 3rem;
   }
 
   .focus-cat {
-    width: 9rem;
-    height: 9rem;
+    width: 13.5rem;
+    height: 13.5rem;
   }
 }
 
@@ -461,8 +470,8 @@ html[data-theme='dark'] {
   .focus-cat {
     grid-column: 1;
     grid-row: 3;
-    width: 6.25rem;
-    height: 6.25rem;
+    width: 9.375rem;
+    height: 9.375rem;
     margin-top: 0.75rem;
   }
 }
