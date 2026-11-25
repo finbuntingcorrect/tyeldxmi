@@ -318,13 +318,13 @@ export function Home() {
             reduced={reduced}
             notice={focus.notice ?? soundNote}
             remind={focus.remindOpen}
-            onStartPhase={(phase, taskId, minutes) => { focus.startPhase(taskId, phase, minutes, book.cat.pomodoroMinutes); }}
+            onStartPhase={(phase, taskId, minutes) => { focus.startPhase(phase === 'focus' ? '' : taskId, phase, minutes, minutes); }}
             onPause={focus.pause}
             onResume={focus.resume}
             onFinish={focus.finish}
             onBreak={focus.beginBreak}
             onSkipBreak={focus.skipBreak}
-            onAgain={() => focus.again(book.cat.pomodoroMinutes)}
+            onAgain={() => focus.again(session?.focusMinutes || book.cat.pomodoroMinutes)}
             onReset={() => { if (session && !session.settled) focus.finish(); focus.clear(); }}
             onCompleteTask={completeSessionTask}
             onToggle={toggle}

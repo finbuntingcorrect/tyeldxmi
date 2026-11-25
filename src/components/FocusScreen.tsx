@@ -1,23 +1,21 @@
-import { useId, useRef, useState } from 'react';
-import { Minus, Volume2, VolumeX } from 'lucide-react';
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { Pause, Play, Volume2, VolumeX } from 'lucide-react';
 import { CatSprite, type CatClip } from './CatSprite';
-import { PaperCheck } from './PaperCheck';
 import { TreatSprite } from './TreatSprite';
 import {
-  FOCUS_PRESETS,
-  countWord,
+  clampDialDrag,
+  clampDialMinutes,
   cycleMarks,
-  focusWorkedMs,
+  dialMinutesFromAngle,
   formatClock,
   minutesLabel,
   remainingMs,
-  treatDay,
-  treatOffer,
+  treatForMinutes,
   type FocusSession,
   type PhaseChoice,
   type TreatKind,
 } from '../lib/focusSession';
-import { isOpenTask, taskMark, tasksForDate, type Notebook, type NotebookTask } from '../lib/notebook';
+import type { Notebook } from '../lib/notebook';
 
 type FocusScreenProps = {
   book: Notebook;
@@ -46,325 +44,279 @@ type FocusScreenProps = {
   onFeed: (kind: TreatKind) => Promise<boolean>;
 };
 
-
-function FocusTaskRow({ task, selected, onToggle, onSelect }: {
-  task: NotebookTask;
-  selected: boolean;
-  onToggle: (id: string) => void;
-  onSelect: (id: string) => void;
-}) {
-  return (
-    <div className={`flex items-start ${selected ? 'bg-field' : ''}`}>
-      <PaperCheck checked={task.completed} label={task.completed ? `Вернуть «${task.title}»` : `Выполнить «${task.title}»`} onClick={() => onToggle(task.id)} />
-      <button type="button" onClick={() => onSelect(task.id)} className="min-h-11 min-w-0 flex-1 py-2 text-left">
-        {task.priority === 'high' && !task.completed ? (
-          <span className="task-title-important"><span aria-hidden="true">! </span>{task.title}</span>
-        ) : (
-          <span className={`block break-words text-base ${task.completed ? 'text-muted line-through' : task.priority === 'low' ? 'text-low' : 'text-ink'}`}>
-            {task.priority === 'high' ? <span aria-hidden="true">! </span> : null}
-            {task.title}
-          </span>
-        )}
-        {task.priority === 'high' ? <span className="sr-only"> Важный.</span> : null}
-      </button>
-      {task.priority === 'low' ? (
-        <span role="img" aria-label="Низкий" className="grid h-11 w-7 shrink-0 place-items-center text-low">
-          <Minus aria-hidden="true" size={15} />
-        </span>
-      ) : null}
-    </div>
-  );
-}
-
-function Ring({ progress, tone }: { progress: number; tone: 'focus' | 'break' }) {
-  const radius = 46;
-  const turn = 2 * Math.PI * radius;
-  const left = Math.max(0, Math.min(1, progress));
-  return (
-    <svg viewBox="0 0 100 100" className="h-full w-full -rotate-90" aria-hidden="true">
-      <circle cx="50" cy="50" r={radius} fill="none" stroke="var(--color-line)" strokeWidth="2.5" />
-      <circle
-        cx="50"
-        cy="50"
-        r={radius}
-        fill="none"
-        stroke={tone === 'break' ? 'var(--color-break)' : 'var(--color-focus)'}
-        strokeWidth="2.5"
-        strokeDasharray={`${turn * left} ${turn}`}
-        style={{ transition: 'stroke-dasharray 1s linear' }}
-      />
-    </svg>
-  );
+function angleAt(event: ReactPointerEvent, node: HTMLElement) {
+  const rect = node.getBoundingClientRect();
+  const x = event.clientX - (rect.left + rect.width / 2);
+  const y = event.clientY - (rect.top + rect.height / 2);
+  const angle = Math.atan2(x, -y);
+  return angle < 0 ? angle + Math.PI * 2 : angle;
 }
 
 export function FocusScreen(props: FocusScreenProps) {
   const { book, session, now, reduced } = props;
   const cat = book.cat;
-  const titleId = useId();
-  const [adding, setAdding] = useState(false);
-  const [draft, setDraft] = useState('');
+  const dialRef = useRef<HTMLDivElement>(null);
+  const drag = useRef<{ id: number; last: number } | null>(null);
+  const rewardSeen = useRef(session?.rewarded ? session.signalId : '');
+  const cleared = useRef(false);
+  const feedRef = useRef(props.onFeed);
+  const [chosen, setChosen] = useState(() => clampDialMinutes(cat.pomodoroMinutes));
+  const chosenRef = useRef(chosen);
+  const [editing, setEditing] = useState(false);
+  const [entry, setEntry] = useState('');
   const [feeding, setFeeding] = useState<TreatKind | null>(null);
-  const [doneChoice, setDoneChoice] = useState(false);
-  const feedLock = useRef(false);
-  const addingLock = useRef(false);
-  const tasks = tasksForDate(book, props.today);
-  const openTasks = tasks.filter((task) => isOpenTask(task));
-  const doneTasks = tasks.filter((task) => taskMark(task) === 'done');
-  const doneVisible = doneChoice;
-  const running = Boolean(session && !session.paused && !session.settled);
-  const paused = Boolean(session && session.paused && !session.settled);
-  const doneFocus = Boolean(session?.settled && session.phase === 'focus' && session.full);
-  const early = Boolean(session?.settled && session.phase === 'focus' && !session.full);
-  const doneBreak = Boolean(session?.settled && session.phase === 'break');
-  const locked = running || paused;
-  const phase: PhaseChoice = !session || session.phase === 'focus' ? 'focus' : session.plannedBreak;
-  const tone = phase === 'focus' ? 'focus' : 'break';
-  const focusMinutes = cat.pomodoroMinutes;
-  const phaseMinutes = phase === 'focus' ? focusMinutes : phase === 'long' ? cat.longMinutes : cat.shortMinutes;
-  const duration = session ? session.durationMs : phaseMinutes * 60_000;
-  const left = session ? remainingMs(session, now) : duration;
-  const progress = duration > 0 ? left / duration : 0;
-  const linkedId = session?.taskId || book.focusId || '';
-  const linked = book.tasks.find((task) => task.id === linkedId && !task.deleted) ?? null;
+  const [frameNow, setFrameNow] = useState(now);
+  const active = Boolean(session && !session.settled);
+  const running = Boolean(active && session && !session.paused);
+  const paused = Boolean(active && session?.paused);
+  const finished = Boolean(session?.settled && session.phase === 'focus' && session.full);
+  const adjustable = !active;
+  const displayNow = running && !reduced ? frameNow : now;
+  const left = active && session ? remainingMs(session, displayNow) : finished ? 0 : chosen * 60_000;
+  const span = Math.max(60_000, (active && session ? session.focusMinutes : chosen) * 60_000);
+  const progress = active && session ? Math.max(0, Math.min(1, remainingMs(session, displayNow) / span)) : finished ? 0 : chosen / 60;
   const marks = cycleMarks(Math.min(4, cat.focusCycle), 4, Boolean(session?.phase === 'focus' && !session.settled));
-  const todayMinutes = Math.floor(cat.focusMsToday / 60_000);
-  const offer = treatOffer(focusWorkedMs(cat, session, now, props.today), treatDay(cat, props.today));
+  const primary = running ? 'Пауза' : paused ? 'Продолжить' : finished ? 'Начать снова' : 'Начать';
 
-  const live = !session
-    ? ''
-    : running && session.phase === 'focus'
-      ? 'Фокус начался'
-      : running && session.phase === 'break'
-        ? 'Перерыв начался'
-        : paused
-          ? 'Пауза'
-          : doneFocus
-            ? 'Подход завершён'
-            : doneBreak
-              ? 'Перерыв закончился'
-              : early
-                ? 'Фокус завершён раньше. Подход не засчитан'
-                : '';
+  useEffect(() => {
+    feedRef.current = props.onFeed;
+  });
 
-  function begin() {
-    props.onStartPhase(phase, book.focusId ?? '', phase === 'focus' ? focusMinutes : phaseMinutes);
-  }
+  useEffect(() => {
+    cleared.current = false;
+  }, [session?.signalId]);
 
-  function addTask() {
-    if (addingLock.current) return;
-    const title = draft.trim();
-    if (!title) return;
-    addingLock.current = true;
-    props.onCreate(title);
-    setDraft('');
-    setAdding(false);
-  }
+  useEffect(() => {
+    if (drag.current) return;
+    const next = clampDialMinutes(cat.pomodoroMinutes);
+    chosenRef.current = next;
+    setChosen(next);
+  }, [cat.pomodoroMinutes]);
 
-  const clip: CatClip = !session
-    ? 'think'
-    : doneFocus
-      ? 'stretch'
-      : paused || early || session.phase === 'break'
-        ? 'sleep'
-        : 'blink';
+  useEffect(() => {
+    if (!running || reduced) return;
+    let frame = 0;
+    const loop = () => {
+      setFrameNow(Date.now());
+      frame = window.requestAnimationFrame(loop);
+    };
+    frame = window.requestAnimationFrame(loop);
+    return () => window.cancelAnimationFrame(frame);
+  }, [reduced, running]);
 
-  const primaryLabel = running ? 'Пауза' : paused ? 'Продолжить' : 'Начать';
-  const secondary = locked
-    ? { label: 'Завершить', run: props.onFinish }
-    : session
-      ? { label: 'Сброс', run: props.onReset }
-      : null;
-
-  async function feed(kind: TreatKind) {
-    if (feedLock.current || feeding) return;
-    feedLock.current = true;
-    const won = await props.onFeed(kind);
-    if (!won) {
-      feedLock.current = false;
-      return;
-    }
+  useEffect(() => {
+    if (!session?.rewarded || session.phase !== 'focus' || !session.full) return;
+    if (rewardSeen.current === session.signalId) return;
+    rewardSeen.current = session.signalId;
+    const kind = treatForMinutes(session.focusMinutes);
     setFeeding(kind);
+    void feedRef.current(kind);
+  }, [session]);
+
+  function remember(minutes: number, persist: boolean) {
+    const next = clampDialMinutes(minutes);
+    chosenRef.current = next;
+    setChosen(next);
+    if (session?.settled && !cleared.current) {
+      cleared.current = true;
+      props.onReset();
+    }
+    if (persist) props.onMinutes(next);
+  }
+
+  function readMinutes(event: ReactPointerEvent) {
+    const node = dialRef.current;
+    if (!node) return chosenRef.current;
+    return dialMinutesFromAngle(angleAt(event, node));
+  }
+
+  function onPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!adjustable) return;
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      /* A pointer that is already gone still updates the value below. */
+    }
+    const next = readMinutes(event);
+    drag.current = { id: event.pointerId, last: next };
+    remember(next, false);
+  }
+
+  function onPointerMove(event: ReactPointerEvent<HTMLDivElement>) {
+    const current = drag.current;
+    if (!current || event.pointerId !== current.id) return;
+    const next = clampDialDrag(current.last, readMinutes(event));
+    current.last = next;
+    remember(next, false);
+  }
+
+  function onPointerUp(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!drag.current || event.pointerId !== drag.current.id) return;
+    drag.current = null;
+    props.onMinutes(chosenRef.current);
+  }
+
+  function onKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (!adjustable) return;
+    const key = event.key;
+    if (key === 'ArrowRight' || key === 'ArrowUp') {
+      event.preventDefault();
+      remember(Math.min(60, chosenRef.current + 1), true);
+    } else if (key === 'ArrowLeft' || key === 'ArrowDown') {
+      event.preventDefault();
+      remember(Math.max(1, chosenRef.current - 1), true);
+    } else if (key === 'Home') {
+      event.preventDefault();
+      remember(1, true);
+    } else if (key === 'End') {
+      event.preventDefault();
+      remember(60, true);
+    }
+  }
+
+  function commitEntry() {
+    const value = Number(entry.trim());
+    setEditing(false);
+    if (!Number.isInteger(value) || value < 1 || value > 60) return;
+    remember(value, true);
   }
 
   function onPrimary() {
     if (running) props.onPause();
     else if (paused) props.onResume();
-    else if (doneFocus || doneBreak) props.onAgain();
-    else begin();
+    else if (finished) props.onAgain();
+    else {
+      props.onMinutes(chosenRef.current);
+      props.onStartPhase('focus', '', chosenRef.current);
+    }
   }
 
+  const radius = 34;
+  const turn = 2 * Math.PI * radius;
+  const shown = progress <= 0 ? 0 : Math.min(progress, 0.985);
+  const knobTurn = (adjustable && !finished ? chosen / 60 : 0) * Math.PI * 2 - Math.PI / 2;
+  const knobX = 50 + radius * Math.cos(knobTurn);
+  const knobY = 50 + radius * Math.sin(knobTurn);
+  const clip: CatClip = running ? 'blink' : paused ? 'sleep' : 'think';
+
   return (
-    <section className="lg:grid lg:grid-cols-[minmax(0,1fr)_17rem] lg:items-start">
-      <div className="mx-auto w-full max-w-[760px] px-4 py-4 sm:px-6">
-        <p className="sr-only" aria-live="polite">{live}</p>
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="border-b-2 text-sm leading-tight font-semibold" style={{ color: 'var(--color-focus)', borderColor: 'currentColor' }}>Фокус</h2>
+    <section className="focus-stage">
+      <div className="focus-main">
+        <div className="focus-tools">
           <button
             type="button"
             aria-pressed={cat.sound}
             aria-label={cat.sound ? 'Выключить звук' : 'Включить звук'}
             onClick={props.onToggleSound}
-            className="grid h-11 w-11 shrink-0 place-items-center text-ink"
+            className="focus-sound"
           >
             {cat.sound ? <Volume2 size={18} aria-hidden="true" /> : <VolumeX size={18} aria-hidden="true" />}
           </button>
         </div>
-        {cat.autoStart ? <p className="mt-2 text-sm font-semibold text-ink">Автозапуск включён</p> : null}
-        <div className="mx-auto mt-3 grid w-full max-w-xl grid-cols-[minmax(0,1fr)_7.5rem] items-start gap-x-2 sm:grid-cols-[minmax(0,1fr)_13rem] sm:gap-x-4">
-          <div className="@container relative mx-auto aspect-square w-full max-w-72">
-            <Ring progress={progress} tone={tone} />
-            <p aria-hidden="true" className="absolute inset-0 flex items-center justify-center font-sans text-[26cqw] leading-none font-semibold tabular-nums text-ink">{formatClock(left)}</p>
-          </div>
-          <div className="relative mx-auto aspect-square w-full" aria-hidden={feeding ? undefined : true}>
-            {feeding ? (
-              <TreatSprite
-                kind={feeding}
-                reduced={reduced}
-                onDone={() => {
-                  feedLock.current = false;
-                  setFeeding(null);
-                }}
-              />
-            ) : (
-              <div className="absolute inset-0 overflow-hidden">
-                <CatSprite clip={clip} face={1} reduced={reduced} />
-              </div>
-            )}
-          </div>
-          <p className="mt-2 min-h-5 text-center text-sm text-ink">{offer.line}</p>
-          <div className="mt-2 flex flex-col items-stretch gap-1">
-            {offer.available.map((kind) => (
-              <button
-                key={kind}
-                type="button"
-                disabled={Boolean(feeding)}
-                onClick={() => void feed(kind)}
-                className="treat-button"
-              >
-                {kind === 'whiskas' ? 'Угостить Whiskas' : 'Угостить Sheba'}
-              </button>
-            ))}
-          </div>
-        </div>
-        <p className={`mt-3 text-center text-base break-words ${linked ? '' : 'text-muted'}`}>
-          {!linked ? 'Без задачи' : linked.priority === 'high' && !linked.completed ? (
-            <span className="task-title-important"><span aria-hidden="true">! </span>{linked.title}<span className="sr-only"> Важный.</span></span>
-          ) : (
-            <span className={linked.completed ? 'text-muted line-through' : linked.priority === 'low' ? 'text-low' : 'text-ink'}>
-              {linked.priority === 'high' ? <span aria-hidden="true">! </span> : null}
-              {linked.title}
-              {linked.priority === 'low' ? <span className="sr-only"> Низкий приоритет.</span> : null}
-            </span>
-          )}
-        </p>
-        {linked && !linked.completed && session?.settled ? (
-          <p className="text-center">
-            <button type="button" onClick={props.onCompleteTask} className="paper-choice">Завершить задачу</button>
-          </p>
-        ) : null}
-        {doneFocus ? <p className="mt-2 text-center text-sm text-ink">Подход завершён.</p> : null}
-        {early ? <p className="mt-2 text-center text-sm text-muted">Время сохранено. Подход не засчитан.</p> : null}
-        {props.remind && running ? (
-          <p className="mt-2 text-center text-sm text-muted">
-            Середина подхода
-            <button type="button" onClick={props.onDismissRemind} className="paper-choice">Работаю</button>
-          </p>
-        ) : null}
-        {props.notice ? (
-          <p role="status" className="mt-2 text-center text-sm text-ink">
-            {props.notice}
-            <button type="button" onClick={props.onDismissNotice} className="paper-choice">Скрыть</button>
-          </p>
-        ) : null}
-        <div className="mt-4 flex items-center justify-center gap-2">
-          <button type="button" onClick={onPrimary} className="paper-submit min-w-44">
-            {primaryLabel}
-          </button>
-          {secondary ? <button type="button" onClick={secondary.run} className="paper-choice">{secondary.label}</button> : null}
-        </div>
-        {doneFocus ? (
-          <p className="mt-2 text-center">
-            <button type="button" onClick={props.onBreak} className="paper-choice">{session?.plannedBreak === 'long' ? 'Начать длинный перерыв' : 'Начать перерыв'}</button>
-          </p>
-        ) : null}
-        {!locked ? (
-          <div className="mt-3 flex flex-wrap justify-center" role="group" aria-label="Длительность фокуса">
-            {FOCUS_PRESETS.map((preset) => (
-              <button key={preset} type="button" aria-pressed={focusMinutes === preset} onClick={() => props.onMinutes(preset)} className="paper-choice">{preset} мин</button>
-            ))}
-          </div>
-        ) : null}
-        <p className="mt-4 text-center text-sm text-ink">{marks.label}</p>
-        <div className="mt-1 flex justify-center gap-2" role="img" aria-label={`${marks.filled} из 4 подходов завершено`}>
-          {Array.from({ length: 4 }, (_, index) => {
-            const filled = index < marks.filled;
-            return (
-              <span
-                key={index}
-                className="h-2.5 w-2.5 rounded-full border"
-                style={{ background: filled ? 'var(--color-ink)' : 'transparent', borderColor: 'var(--color-ink)' }}
-              />
-            );
-          })}
-        </div>
-        <p className="mt-2 text-center text-sm text-muted">
-          Сегодня {cat.focusCompleted} {countWord(cat.focusCompleted, 'подход', 'подхода', 'подходов')} · {minutesLabel(todayMinutes)}
-        </p>
-      </div>
-      <aside className="px-4 pb-6 sm:px-6 lg:px-3 lg:py-4">
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-muted">Задачи</p>
-          <button type="button" aria-expanded={adding} onClick={() => { addingLock.current = false; setAdding((value) => !value); }} className="min-h-11 px-2 text-sm font-semibold text-ink">+ Задача</button>
-        </div>
-        {adding ? (
-          <form
-            className="mt-1 flex flex-col gap-2 sm:flex-row sm:items-end"
-            onSubmit={(event) => { event.preventDefault(); addTask(); }}
-            onKeyDown={(event) => {
-              if (event.key !== 'Escape') return;
-              event.preventDefault();
-              setDraft('');
-              setAdding(false);
-            }}
-          >
-            <input
-              autoFocus
-              aria-label="Новая задача"
-              value={draft}
-              onChange={(event) => setDraft(event.target.value)}
-              onFocus={(event) => event.currentTarget.scrollIntoView({ block: 'center' })}
-              maxLength={160}
-              className="paper-field"
-              id={titleId}
-            />
-            <button type="submit" className="paper-choice sm:shrink-0">Ок</button>
-            <button type="button" onClick={() => { setDraft(''); setAdding(false); }} className="paper-choice sm:shrink-0">Отмена</button>
-          </form>
-        ) : null}
-        <button
-          type="button"
-          aria-pressed={!linked}
-          onClick={() => props.onSelectTask(null)}
-          className="mt-2 min-h-11 w-full px-1 text-left text-sm font-semibold text-ink"
+        <div className="focus-dial-wrap">
+        <div
+          ref={dialRef}
+          className="focus-dial"
+          role="slider"
+          aria-label="Длительность фокуса"
+          aria-valuemin={1}
+          aria-valuemax={60}
+          aria-valuenow={adjustable ? chosen : Math.max(1, Math.round(left / 60_000))}
+          aria-valuetext={adjustable ? minutesLabel(chosen) : formatClock(left)}
+          aria-disabled={adjustable ? undefined : true}
+          tabIndex={adjustable ? 0 : -1}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
+          onKeyDown={onKeyDown}
         >
-          Без задачи
-        </button>
-        <div className="lg:max-h-[32rem] lg:overflow-y-auto">
-          {openTasks.map((task) => (
-            <FocusTaskRow key={task.id} task={task} selected={task.id === linked?.id} onToggle={props.onToggle} onSelect={props.onSelectTask} />
-          ))}
-          {doneTasks.length > 0 ? (
-            <div className="mt-2">
-              <button type="button" aria-expanded={doneVisible} onClick={() => setDoneChoice(!doneVisible)} className="min-h-11 px-1 text-sm font-semibold text-muted">
-                Выполненные · {doneTasks.length}
-              </button>
-              {doneVisible ? doneTasks.map((task) => (
-                <FocusTaskRow key={task.id} task={task} selected={task.id === linked?.id} onToggle={props.onToggle} onSelect={props.onSelectTask} />
-              )) : null}
-            </div>
+          <svg viewBox="0 0 100 100" className="focus-ring" aria-hidden="true">
+            <circle cx="50" cy="50" r={radius} className="focus-track" />
+            {Array.from({ length: 60 }, (_, index) => {
+              const turnAngle = (index / 60) * Math.PI * 2 - Math.PI / 2;
+              const major = index % 5 === 0;
+              const inner = major ? 29 : 31.5;
+              const outer = 33.2;
+              return (
+                <line
+                  key={index}
+                  x1={50 + inner * Math.cos(turnAngle)}
+                  y1={50 + inner * Math.sin(turnAngle)}
+                  x2={50 + outer * Math.cos(turnAngle)}
+                  y2={50 + outer * Math.sin(turnAngle)}
+                  className={major ? 'focus-tick is-major' : 'focus-tick'}
+                />
+              );
+            })}
+            {shown > 0 ? (
+              <circle
+                cx="50"
+                cy="50"
+                r={radius}
+                className="focus-arc"
+                transform="rotate(-90 50 50)"
+                strokeDasharray={`${turn * shown} ${turn}`}
+              />
+            ) : null}
+          </svg>
+          {adjustable && !finished ? (
+            <span
+              className="focus-knob"
+              style={{ left: `calc(22px + (100% - 44px) * ${knobX / 100})`, top: `calc(22px + (100% - 44px) * ${knobY / 100})` }}
+            />
           ) : null}
         </div>
-      </aside>
+          {editing ? (
+            <input
+              className="focus-entry"
+              inputMode="numeric"
+              autoFocus
+              aria-label="Минуты"
+              value={entry}
+              onChange={(event) => setEntry(event.target.value)}
+              onBlur={commitEntry}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  commitEntry();
+                } else if (event.key === 'Escape') {
+                  event.preventDefault();
+                  setEditing(false);
+                }
+              }}
+            />
+          ) : adjustable ? (
+            <button
+              type="button"
+              className="focus-readout"
+              onClick={() => { setEntry(String(chosen)); setEditing(true); }}
+            >
+              {finished ? '00:00' : formatClock(chosen * 60_000)}
+            </button>
+          ) : (
+            <p className="focus-readout" aria-hidden="true">{formatClock(left)}</p>
+          )}
+        </div>
+        <button type="button" className="paper-submit focus-go" onClick={onPrimary}>
+          {running ? <Pause aria-hidden="true" size={22} /> : <Play aria-hidden="true" size={22} />}
+          {primary}
+        </button>
+        {active ? <button type="button" className="focus-reset" onClick={props.onReset}>Сбросить</button> : null}
+        <div className="focus-marks" role="img" aria-label={`${marks.filled} из 4 подходов завершено`}>
+          {Array.from({ length: 4 }, (_, index) => (
+            <span key={index} className={index < marks.filled ? 'is-filled' : ''} />
+          ))}
+        </div>
+        {props.notice ? <p role="status" className="focus-note">{props.notice}</p> : null}
+      </div>
+      <div className="focus-cat">
+        {feeding ? (
+          <TreatSprite kind={feeding} reduced={reduced} onDone={() => setFeeding(null)} />
+        ) : (
+          <CatSprite clip={clip} face={1} reduced={reduced} />
+        )}
+      </div>
     </section>
   );
 }

@@ -21,7 +21,12 @@ import {
   feedTreat,
   focusWorkedMs,
   treatDurationMs,
+  treatForMinutes,
   treatOffer,
+  clampDialDrag,
+  clampDialMinutes,
+  dialMinutesFromAngle,
+  parseFocusSession,
   TREAT_FRAMES,
   WHISKAS_MS,
   SHEBA_MS,
@@ -128,6 +133,22 @@ assert.deepEqual(treatOffer(SHEBA_MS, { whiskas: false, sheba: false }).availabl
 assert.equal(treatOffer(45 * 60_000, { whiskas: false, sheba: false }).line, '');
 assert.deepEqual(treatOffer(45 * 60_000, { whiskas: true, sheba: false }).available, ['sheba']);
 assert.equal(treatOffer(45 * 60_000, { whiskas: true, sheba: true }).line, 'Все угощения сегодня получены');
+assert.equal(treatForMinutes(1), 'whiskas');
+assert.equal(treatForMinutes(20), 'whiskas');
+assert.equal(treatForMinutes(39), 'whiskas');
+assert.equal(treatForMinutes(40), 'sheba');
+assert.equal(treatForMinutes(60), 'sheba');
+assert.equal(clampDialMinutes(0), 1);
+assert.equal(clampDialMinutes(20.2), 20);
+assert.equal(clampDialMinutes(90), 60);
+assert.equal(dialMinutesFromAngle(0), 60);
+assert.equal(dialMinutesFromAngle((1 / 60) * Math.PI * 2), 1);
+assert.equal(dialMinutesFromAngle((20 / 60) * Math.PI * 2), 20);
+assert.equal(clampDialDrag(59, 2), 60);
+assert.equal(clampDialDrag(2, 58), 1);
+assert.equal(clampDialDrag(20, 21), 21);
+assert.equal(parseFocusSession({ ...session, rewarded: true })?.rewarded, true);
+assert.equal(parseFocusSession(session)?.rewarded, false);
 
 const todayCat = { ...idle, focusDate: '2026-11-20', focusMsToday: 19 * 60_000 };
 const running = startFocus('task-1', 45, start, 'long');

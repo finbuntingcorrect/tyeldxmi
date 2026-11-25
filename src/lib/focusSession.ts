@@ -27,6 +27,8 @@ export type FocusSession = {
   plannedBreak: BreakKind;
   reminded: boolean;
   signalId: string;
+  /** The natural end of this session already played its reward. */
+  rewarded?: boolean;
 };
 
 export type FocusChange = {
@@ -142,6 +144,33 @@ export function focusWorkedMs(cat: CatPrefs, session: FocusSession | null, now: 
   return banked + (session ? unappliedFocusMs(session, now) : 0);
 }
 
+export const DIAL_MIN = 1;
+export const DIAL_MAX = 60;
+
+export function clampDialMinutes(value: number): number {
+  if (!Number.isFinite(value)) return DEFAULT_FOCUS_MINUTES;
+  return Math.min(DIAL_MAX, Math.max(DIAL_MIN, Math.round(value)));
+}
+
+/** Angle in radians, 0 at the top, clockwise. The top itself is 60, never 0. */
+export function dialMinutesFromAngle(angle: number): number {
+  const turn = ((angle % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+  const raw = Math.round((turn / (Math.PI * 2)) * DIAL_MAX);
+  return raw <= 0 ? DIAL_MAX : raw;
+}
+
+/** A drag that crosses the top stays on the end it came from. */
+export function clampDialDrag(previous: number, next: number): number {
+  if (previous >= 45 && next <= 15) return DIAL_MAX;
+  if (previous <= 15 && next >= 45) return DIAL_MIN;
+  return next;
+}
+
+/** One finished session. Under 40 minutes is Whiskas, 40 to 60 is Sheba. */
+export function treatForMinutes(minutes: number): TreatKind {
+  return minutes >= 40 ? 'sheba' : 'whiskas';
+}
+
 export function treatOffer(workedMs: number, fed: { whiskas: boolean; sheba: boolean }): { line: string; available: TreatKind[] } {
   const available: TreatKind[] = [];
   if (workedMs >= WHISKAS_MS && !fed.whiskas) available.push('whiskas');
@@ -235,6 +264,7 @@ function slice(taskId: string, phase: FocusPhase, focusMinutes: number, duration
     plannedBreak: 'short',
     reminded,
     signalId,
+    rewarded: false,
   };
 }
 
@@ -402,6 +432,7 @@ export function parseFocusSession(value: unknown): FocusSession | null {
     plannedBreak: raw.plannedBreak === 'long' ? 'long' : 'short',
     reminded: raw.reminded === true,
     signalId: raw.signalId,
+    rewarded: raw.rewarded === true,
   };
 }
 

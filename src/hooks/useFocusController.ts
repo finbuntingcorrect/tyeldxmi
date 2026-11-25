@@ -105,6 +105,12 @@ export function useFocusController({ login, session, focusAt, reminders, sound, 
     publish(next, addMs);
   }
 
+  async function meow(id: string) {
+    if (!soundRef.current) return;
+    if (!(await claimSignal(id))) return;
+    await playMeow(volumeRef.current);
+  }
+
   async function chime(id: string) {
     if (!soundRef.current) return;
     if (!(await claimSignal(id))) return;
@@ -129,8 +135,7 @@ export function useFocusController({ login, session, focusAt, reminders, sound, 
       if (soundRef.current) {
         void claimSignal(`remind:${next.signalId}`).then(async (won) => {
           if (!won) return;
-          const result = await playMeow(volumeRef.current);
-          if (result === 'blocked') setNotice('Звук не включился.');
+          await playMeow(volumeRef.current);
         });
       }
       return;
@@ -142,14 +147,15 @@ export function useFocusController({ login, session, focusAt, reminders, sound, 
       : settled.session.plannedBreak;
     const done = { ...settled.session, plannedBreak: kind };
     const advance = shouldAutoAdvance(current.endsAt, clock, autoRef.current) && done.full;
-    bank(done, settled.addMs);
-    void chime(done.signalId);
-    if (!advance) return;
-    if (done.phase === 'focus') {
-      const minutes = kind === 'long' ? longRef.current : shortRef.current;
-      publish(startBreak(done, clock, signal(), minutes, kind));
+    const fullFocus = done.phase === 'focus' && done.full;
+    const rewarded = fullFocus ? { ...done, rewarded: true } : done;
+    bank(rewarded, settled.addMs);
+    if (fullFocus) {
+      void meow(rewarded.signalId);
       return;
     }
+    void chime(done.signalId);
+    if (!advance || done.phase === 'focus') return;
     publish(startAnother(done, clock, signal()), 0, openingNewCycle());
   }
 
@@ -174,7 +180,10 @@ export function useFocusController({ login, session, focusAt, reminders, sound, 
         focusAtRef.current = live.at;
         onApplyRef.current(next, live.focus, live.at);
         if (next?.reminded && !previous?.reminded && next.phase === 'focus' && !next.settled) showRemind();
-        if (next?.settled && !previous?.settled) void chime(next.signalId);
+        if (next?.settled && !previous?.settled) {
+          if (next.phase === 'focus' && next.full) void meow(next.signalId);
+          else void chime(next.signalId);
+        }
       } catch {
         /* ignore a damaged live record */
       }
@@ -202,11 +211,7 @@ export function useFocusController({ login, session, focusAt, reminders, sound, 
     const current = sessionRef.current;
     if (current && !current.settled) return false;
     takeLead(loginRef.current, true);
-    if (soundRef.current) {
-      void unlockSound().then((ready) => {
-        if (!ready) setNotice('Звук не включился.');
-      });
-    }
+    if (soundRef.current) void unlockSound();
     publish(startFocus(taskId, minutes, Date.now(), signal()), 0, openingNewCycle());
     setRemindOpen(false);
     return true;
@@ -265,11 +270,7 @@ export function useFocusController({ login, session, focusAt, reminders, sound, 
     const current = sessionRef.current;
     if (current && !current.settled) return false;
     takeLead(loginRef.current, true);
-    if (soundRef.current) {
-      void unlockSound().then((ready) => {
-        if (!ready) setNotice('Звук не включился.');
-      });
-    }
+    if (soundRef.current) void unlockSound();
     publish(startIdle(taskId, phase, focusMinutes, minutes, Date.now(), signal()), 0, phase === 'focus' && openingNewCycle());
     setRemindOpen(false);
     return true;
@@ -279,6 +280,7 @@ export function useFocusController({ login, session, focusAt, reminders, sound, 
     const current = sessionRef.current;
     if (!current?.settled) return;
     takeLead(loginRef.current, true);
+    if (soundRef.current) void unlockSound();
     publish(startAnother({ ...current, focusMinutes: minutes }, Date.now(), signal()), 0, openingNewCycle());
     setRemindOpen(false);
   }
