@@ -5,12 +5,13 @@ import { TreatSprite } from './TreatSprite';
 import {
   clampDialDrag,
   clampDialMinutes,
-  cycleMarks,
   dialMinutesFromAngle,
+  focusTodayLine,
   formatClock,
   minutesLabel,
   remainingMs,
   treatForMinutes,
+  unappliedFocusMs,
   type FocusSession,
   type PhaseChoice,
   type TreatKind,
@@ -73,10 +74,12 @@ export function FocusScreen(props: FocusScreenProps) {
   const adjustable = !active;
   const displayNow = running && !reduced ? frameNow : now;
   const left = active && session ? remainingMs(session, displayNow) : finished ? 0 : chosen * 60_000;
-  const span = Math.max(60_000, (active && session ? session.focusMinutes : chosen) * 60_000);
-  const progress = active && session ? Math.max(0, Math.min(1, remainingMs(session, displayNow) / span)) : finished ? 0 : chosen / 60;
-  const marks = cycleMarks(Math.min(4, cat.focusCycle), 4, Boolean(session?.phase === 'focus' && !session.settled));
+  const phaseMs = session?.phase === 'break' ? 5 * 60_000 : Math.max(60_000, (session?.focusMinutes || chosen) * 60_000);
+  const progress = active && session ? Math.max(0, Math.min(1, remainingMs(session, displayNow) / phaseMs)) : finished ? 0 : chosen / 60;
   const primary = running ? 'Пауза' : paused ? 'Продолжить' : finished ? 'Начать снова' : 'Начать';
+  const status = paused ? 'На паузе' : running && session?.phase === 'break' ? 'Перерыв' : '';
+  const bankedToday = cat.focusDate === props.today ? cat.focusMsToday : 0;
+  const todayLine = focusTodayLine(bankedToday + (session ? unappliedFocusMs(session, displayNow) : 0));
 
   useEffect(() => {
     feedRef.current = props.onFeed;
@@ -201,19 +204,16 @@ export function FocusScreen(props: FocusScreenProps) {
 
   return (
     <section className="focus-stage">
-      <div className="focus-main">
-        <div className="focus-tools">
-          <button
-            type="button"
-            aria-pressed={cat.sound}
-            aria-label={cat.sound ? 'Выключить звук' : 'Включить звук'}
-            onClick={props.onToggleSound}
-            className="focus-sound"
-          >
-            {cat.sound ? <Volume2 size={18} aria-hidden="true" /> : <VolumeX size={18} aria-hidden="true" />}
-          </button>
-        </div>
-        <div className="focus-dial-wrap">
+      <div className="focus-dial-wrap">
+        <button
+          type="button"
+          aria-pressed={cat.sound}
+          aria-label={cat.sound ? 'Выключить звук' : 'Включить звук'}
+          onClick={props.onToggleSound}
+          className="focus-sound"
+        >
+          {cat.sound ? <Volume2 size={18} aria-hidden="true" /> : <VolumeX size={18} aria-hidden="true" />}
+        </button>
         <div
           ref={dialRef}
           className="focus-dial"
@@ -267,6 +267,7 @@ export function FocusScreen(props: FocusScreenProps) {
             />
           ) : null}
         </div>
+        <div className={status ? 'focus-face has-status' : 'focus-face'}>
           {editing ? (
             <input
               className="focus-entry"
@@ -297,17 +298,17 @@ export function FocusScreen(props: FocusScreenProps) {
           ) : (
             <p className="focus-readout" aria-hidden="true">{formatClock(left)}</p>
           )}
+          {status ? <p className="focus-status">{status}</p> : null}
         </div>
+      </div>
+      <div className="focus-controls">
         <button type="button" className="paper-submit focus-go" onClick={onPrimary}>
           {running ? <Pause aria-hidden="true" size={22} /> : <Play aria-hidden="true" size={22} />}
           {primary}
         </button>
         {active ? <button type="button" className="focus-reset" onClick={props.onReset}>Сбросить</button> : null}
-        <div className="focus-marks" role="img" aria-label={`${marks.filled} из 4 подходов завершено`}>
-          {Array.from({ length: 4 }, (_, index) => (
-            <span key={index} className={index < marks.filled ? 'is-filled' : ''} />
-          ))}
-        </div>
+        {finished ? <button type="button" className="focus-break" onClick={props.onBreak}>Перерыв 5 минут</button> : null}
+        <p className="focus-today">{todayLine}</p>
         {props.notice ? <p role="status" className="focus-note">{props.notice}</p> : null}
       </div>
       <div className="focus-cat">

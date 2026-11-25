@@ -26,6 +26,7 @@ import {
   clampDialDrag,
   clampDialMinutes,
   dialMinutesFromAngle,
+  focusTodayLine,
   parseFocusSession,
   TREAT_FRAMES,
   WHISKAS_MS,
@@ -147,6 +148,11 @@ assert.equal(dialMinutesFromAngle((20 / 60) * Math.PI * 2), 20);
 assert.equal(clampDialDrag(59, 2), 60);
 assert.equal(clampDialDrag(2, 58), 1);
 assert.equal(clampDialDrag(20, 21), 21);
+assert.equal(focusTodayLine(0), 'Сегодня в фокусе: 0 минут');
+assert.equal(focusTodayLine(20_000), 'Сегодня в фокусе: меньше минуты');
+assert.equal(focusTodayLine(60_000), 'Сегодня в фокусе: 1 минута');
+assert.equal(focusTodayLine(40 * 60_000), 'Сегодня в фокусе: 40 минут');
+assert.equal(unappliedFocusMs({ ...session, phase: 'break' }, session.endsAt ?? 0), 0);
 assert.equal(parseFocusSession({ ...session, rewarded: true })?.rewarded, true);
 assert.equal(parseFocusSession(session)?.rewarded, false);
 

@@ -226,33 +226,35 @@ html[data-theme='dark'] {
 
 .focus-stage {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 12rem;
-  align-items: center;
-  gap: 0.5rem 1rem;
-  min-width: 0;
-  padding: 0.35rem 0.35rem 1.25rem;
+  grid-template-columns: minmax(0, 22rem) 11rem;
+  column-gap: 4rem;
+  row-gap: 0;
+  align-items: start;
+  justify-content: center;
+  width: min(100%, 60rem);
+  margin: 0.25rem auto 0.75rem;
 }
 
-.focus-main {
+.focus-dial-wrap {
+  position: relative;
+  grid-column: 1;
+  grid-row: 1;
+  width: 100%;
+}
+
+.focus-controls {
   display: flex;
-  min-width: 0;
+  grid-column: 1;
+  grid-row: 2;
   flex-direction: column;
   align-items: center;
 }
 
-.focus-tools,
-.focus-dial-wrap {
-  align-self: stretch;
-}
-
-.focus-tools {
-  display: flex;
-  justify-content: flex-end;
-  width: min(100%, 24rem);
-  align-self: center;
-}
-
 .focus-sound {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  right: 0;
   display: grid;
   width: 2.75rem;
   height: 2.75rem;
@@ -262,10 +264,13 @@ html[data-theme='dark'] {
   color: var(--color-ink);
 }
 
-.focus-dial-wrap {
-  position: relative;
-  width: min(100%, 24rem);
-  margin: 0 auto;
+.focus-sound:hover {
+  color: var(--color-primary-hover);
+}
+
+.focus-sound:focus-visible {
+  outline: 2px solid var(--color-primary-hover);
+  outline-offset: 3px;
 }
 
 .focus-dial {
@@ -279,7 +284,13 @@ html[data-theme='dark'] {
 
 .focus-dial:focus-visible {
   outline: none;
-  box-shadow: inset 0 0 0 2px var(--color-primary-hover);
+  box-shadow: none;
+}
+
+.focus-dial:focus-visible .focus-ring {
+  outline: 2px solid var(--color-primary-hover);
+  outline-offset: 6px;
+  border-radius: 50%;
 }
 
 .focus-ring {
@@ -335,11 +346,20 @@ html[data-theme='dark'] {
   transform: translate(-50%, -50%);
 }
 
-.focus-readout,
-.focus-entry {
+.focus-face {
   position: absolute;
   top: 50%;
   left: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+
+.focus-readout,
+.focus-entry {
   width: 6.5ch;
   margin: 0;
   border: 0;
@@ -351,7 +371,14 @@ html[data-theme='dark'] {
   font-variant-numeric: tabular-nums;
   line-height: 1;
   text-align: center;
-  transform: translate(-50%, -50%);
+  pointer-events: auto;
+}
+
+.focus-status {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 0.85rem;
+  line-height: 1.2;
 }
 
 .focus-readout {
@@ -369,41 +396,35 @@ html[data-theme='dark'] {
   align-items: center;
   justify-content: center;
   gap: 0.45rem;
+  height: 3.125rem;
   min-width: 12rem;
-  margin: 1rem auto 0;
+  min-height: 3.125rem;
+  margin: 1.75rem 0 0;
 }
 
-.focus-reset {
-  display: block;
+.focus-reset,
+.focus-break {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-height: 2.75rem;
-  margin: 0.15rem auto 0;
+  margin: 0.875rem 0 0;
   border: 0;
   background: transparent;
   color: var(--color-muted);
+  font-size: 0.9rem;
   font-weight: 650;
   cursor: pointer;
 }
 
-.focus-marks {
-  display: flex;
-  justify-content: center;
-  gap: 0.5rem;
-  margin-top: 0.75rem;
+.focus-reset:hover,
+.focus-break:hover {
+  color: var(--color-primary-hover);
 }
 
-.focus-marks span {
-  width: 0.65rem;
-  height: 0.65rem;
-  border: 1px solid var(--color-ink);
-  border-radius: 50%;
-}
-
-.focus-marks span.is-filled {
-  background: var(--color-ink);
-}
-
+.focus-today,
 .focus-note {
-  margin: 0.4rem 0 0;
+  margin: 0.35rem 0 0;
   color: var(--color-muted);
   font-size: 0.9rem;
   text-align: center;
@@ -411,17 +432,35 @@ html[data-theme='dark'] {
 
 .focus-cat {
   position: relative;
+  grid-column: 2;
+  grid-row: 1;
   width: 11rem;
   height: 11rem;
+  align-self: center;
   justify-self: center;
 }
 
-@media (max-width: 767px) {
+@media (max-height: 820px) and (min-width: 681px) {
   .focus-stage {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: minmax(0, 18rem) 9rem;
+    column-gap: 3rem;
   }
 
   .focus-cat {
+    width: 9rem;
+    height: 9rem;
+  }
+}
+
+@media (max-width: 680px) {
+  .focus-stage {
+    grid-template-columns: minmax(0, 22rem);
+    width: 100%;
+  }
+
+  .focus-cat {
+    grid-column: 1;
+    grid-row: 3;
     width: 6.25rem;
     height: 6.25rem;
     margin-top: 0.75rem;

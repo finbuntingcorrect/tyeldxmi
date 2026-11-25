@@ -208,6 +208,13 @@ export function unappliedFocusMs(session: FocusSession, now: number): number {
   return Math.max(0, spent - session.sliceAppliedMs);
 }
 
+export function focusTodayLine(ms: number): string {
+  const safe = Number.isFinite(ms) ? Math.max(0, ms) : 0;
+  const minutes = Math.round(safe / 60_000);
+  if (safe > 0 && minutes === 0) return 'Сегодня в фокусе: меньше минуты';
+  return `Сегодня в фокусе: ${minutes} ${countWord(minutes, 'минута', 'минуты', 'минут')}`;
+}
+
 export function minutesLabel(minutes: number): string {
   const mod10 = minutes % 10;
   const mod100 = minutes % 100;

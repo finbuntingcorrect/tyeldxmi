@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { claimSignal, readLive, takeLead, writeLive, type FocusLive } from '../lib/focusChannel';
 import {
+  BREAK_MINUTES,
   finishEarly,
   isExpired,
   markReminded,
@@ -45,7 +46,7 @@ function signal() {
 
 const appliedBanks = new Set<string>();
 
-export function useFocusController({ login, session, focusAt, reminders, sound, volume, autoStart, rounds, cycle, shortMinutes, longMinutes, onApply }: Options) {
+export function useFocusController({ login, session, focusAt, reminders, sound, volume, autoStart, rounds, cycle, onApply }: Options) {
   const [now, setNow] = useState(() => Date.now());
   const [remindOpen, setRemindOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -58,8 +59,6 @@ export function useFocusController({ login, session, focusAt, reminders, sound, 
   const autoRef = useRef(autoStart);
   const roundsRef = useRef(rounds);
   const cycleRef = useRef(cycle);
-  const shortRef = useRef(shortMinutes);
-  const longRef = useRef(longMinutes);
   const onApplyRef = useRef(onApply);
 
   useEffect(() => {
@@ -72,10 +71,8 @@ export function useFocusController({ login, session, focusAt, reminders, sound, 
     autoRef.current = autoStart;
     roundsRef.current = rounds;
     cycleRef.current = cycle;
-    shortRef.current = shortMinutes;
-    longRef.current = longMinutes;
     onApplyRef.current = onApply;
-  }, [session, focusAt, login, reminders, sound, volume, autoStart, rounds, cycle, shortMinutes, longMinutes, onApply]);
+  }, [session, focusAt, login, reminders, sound, volume, autoStart, rounds, cycle, onApply]);
 
   function openingNewCycle() {
     const size = Math.max(1, Math.round(roundsRef.current) || 1);
@@ -154,6 +151,7 @@ export function useFocusController({ login, session, focusAt, reminders, sound, 
       void meow(rewarded.signalId);
       return;
     }
+    if (done.phase === 'break') return;
     void chime(done.signalId);
     if (!advance || done.phase === 'focus') return;
     publish(startAnother(done, clock, signal()), 0, openingNewCycle());
@@ -180,10 +178,7 @@ export function useFocusController({ login, session, focusAt, reminders, sound, 
         focusAtRef.current = live.at;
         onApplyRef.current(next, live.focus, live.at);
         if (next?.reminded && !previous?.reminded && next.phase === 'focus' && !next.settled) showRemind();
-        if (next?.settled && !previous?.settled) {
-          if (next.phase === 'focus' && next.full) void meow(next.signalId);
-          else void chime(next.signalId);
-        }
+        if (next?.settled && !previous?.settled && next.phase === 'focus' && next.full) void meow(next.signalId);
       } catch {
         /* ignore a damaged live record */
       }
@@ -252,9 +247,7 @@ export function useFocusController({ login, session, focusAt, reminders, sound, 
     const current = sessionRef.current;
     if (!current || current.phase !== 'focus' || !current.settled) return;
     takeLead(loginRef.current, true);
-    const kind = current.full ? current.plannedBreak : 'short';
-    const minutes = kind === 'long' ? longRef.current : shortRef.current;
-    publish(startBreak(current, Date.now(), signal(), minutes, kind));
+    publish(startBreak(current, Date.now(), signal(), BREAK_MINUTES, 'short'));
     setRemindOpen(false);
   }
 
