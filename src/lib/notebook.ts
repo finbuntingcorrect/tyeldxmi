@@ -184,6 +184,18 @@ export function goalWeekKey(monthKey: string, today: string, selected: string | 
   return weekDates(`${monthKey}-01`)[0];
 }
 
+export function monthDates(month: string): string[] {
+  const first = `${month}-01`;
+  if (!isDateKey(first)) return [];
+  const [year, mon] = month.split('-').map(Number);
+  const count = new Date(Date.UTC(year, mon, 0)).getUTCDate();
+  return Array.from({ length: count }, (_, index) => addDays(first, index));
+}
+
+export function habitIsScheduled(habit: Habit, date: string) {
+  return occurs(habit.repeatKind, habit.weekdays, habit.start, null, date);
+}
+
 export function monthGrid(anchor: string): string[] {
   const first = `${anchor.slice(0, 7)}-01`;
   if (!isDateKey(anchor) || !isDateKey(first)) return [];

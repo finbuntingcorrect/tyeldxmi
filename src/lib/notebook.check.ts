@@ -18,7 +18,9 @@ import {
   addWeekItem,
   assignWeekItem,
   habitProgressLabel,
+  habitIsScheduled,
   habitSpan,
+  monthDates,
   habitsForDate,
   materialize,
   bringReturnRow,
@@ -406,6 +408,17 @@ assert.equal(notebookIsEmpty(first), false);
 assert.equal(nextHabitStatus(null), 'done');
 assert.equal(nextHabitStatus('done'), 'missed');
 assert.equal(nextHabitStatus('missed'), null);
+assert.equal(monthDates('2026-02').length, 28);
+assert.equal(monthDates('2024-02').length, 29);
+assert.equal(monthDates('2024-02')[28], '2024-02-29');
+assert.equal(monthDates('2026-04').length, 30);
+assert.equal(monthDates('2026-01').length, 31);
+assert.equal(monthDates('2026-12')[30], '2026-12-31');
+assert.equal(monthDates('2027-01')[0], '2027-01-01');
+const weeklyHabit = createHabit(emptyNotebook(), 'Зал', 'weekly', [1, 3], '2026-11-02');
+assert.equal(habitIsScheduled(weeklyHabit.habits[0], '2026-11-02'), true);
+assert.equal(habitIsScheduled(weeklyHabit.habits[0], '2026-11-03'), false);
+assert.equal(habitIsScheduled(weeklyHabit.habits[0], '2026-11-01'), false);
 
 const timed = createTask(emptyNotebook(), {
   title: 'Письмо',

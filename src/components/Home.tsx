@@ -107,6 +107,16 @@ export function Home() {
   }, [redirectTo, replace]);
 
   if (notebook.status === 'loading') return <CabinetSplash />;
+  if (notebook.status === 'error') {
+    if (!isPlannerPage(page)) return <LandingPage signedIn={false} />;
+    return (
+      <main className="mx-auto max-w-lg px-4 py-16">
+        <h1 className="font-serif text-3xl">Today Cat</h1>
+        <p role="alert" className="mt-4 text-base text-ink">{notebook.error ?? 'Не получилось загрузить данные.'}</p>
+        <button type="button" className="paper-submit mt-4" onClick={() => void notebook.reload()}>Повторить</button>
+      </main>
+    );
+  }
   if (notebook.resetToken && notebook.status === 'anon') {
     return <ResetScreen token={notebook.resetToken} onReset={notebook.setPassword} />;
   }

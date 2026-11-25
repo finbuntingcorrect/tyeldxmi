@@ -33,6 +33,7 @@ import {
   setCatPrefs,
   setFocus,
   setHabitMark,
+  nextHabitStatus,
   setName,
   setTaskDuration,
   setTaskNote,
@@ -61,7 +62,7 @@ import { localDateKey } from '../lib/date';
 import { readTreatMirror, treatMirrorKey } from '../lib/treats';
 import type { DayPart, Priority, RepeatKind } from '../types';
 
-type Status = 'loading' | 'anon' | 'ready';
+type Status = 'loading' | 'anon' | 'ready' | 'error';
 
 function named(book: Notebook, login: string) {
   if (book.name.trim() || login.includes('@')) return book;
@@ -78,6 +79,8 @@ export function useNotebook() {
   const chain = useRef(Promise.resolve<string | null>(null));
   const failedSave = useRef<Notebook | null>(null);
   const [canRetry, setCanRetry] = useState(false);
+  const habitBaseline = useRef<Notebook | null>(null);
+  const habitPending = useRef(false);
   const bookRef = useRef(state.book);
   bookRef.current = state.book;
 
@@ -149,7 +152,7 @@ export function useNotebook() {
       .catch((error: unknown) => {
         if (!mounted.current || generation.current !== generationAtLoad) return;
         setState({ book: emptyNotebook(), error: cabinetError(error) });
-        setStatus('anon');
+        setStatus('error');
       });
   }, []);
 
@@ -225,6 +228,74 @@ export function useNotebook() {
     });
     chain.current = job.then((message) => message, () => 'Не получилось. Попробуй ещё раз.');
     return job;
+  }
+
+  async function reload() {
+    if (!mounted.current) return;
+    generation.current += 1;
+    habitBaseline.current = null;
+    habitPending.current = false;
+    setCanRetry(false);
+    setStatus('loading');
+    setState((current) => ({ ...current, error: null }));
+    try {
+      const result = await fetchCabinet();
+      if (!mounted.current) return;
+      if (!result) {
+        setStatus('anon');
+        return;
+      }
+      await adoptRef.current(result.login, result.notebook, false);
+    } catch (error) {
+      if (!mounted.current) return;
+      setState({ book: emptyNotebook(), error: cabinetError(error) });
+      setStatus('error');
+    }
+  }
+
+  function ensureHabitSave() {
+    if (habitPending.current) return;
+    habitPending.current = true;
+    const generationAtSave = generation.current;
+    const job = chain.current.then(async () => {
+      let message: string | null = null;
+      let saved = bookRef.current;
+      while (mounted.current && generation.current === generationAtSave) {
+        saved = bookRef.current;
+        message = await saveCabinet(saved);
+        if (!mounted.current || generation.current !== generationAtSave) {
+          habitPending.current = false;
+          return message;
+        }
+        if (!message) habitBaseline.current = saved;
+        if (bookRef.current !== saved) continue;
+        break;
+      }
+      habitPending.current = false;
+      if (!mounted.current || generation.current !== generationAtSave) return message;
+      if (bookRef.current !== saved) {
+        ensureHabitSave();
+        return null;
+      }
+      if (message) {
+        const baseline = habitBaseline.current;
+        habitBaseline.current = null;
+        if (baseline) {
+          const restored = { ...bookRef.current, marks: baseline.marks };
+          bookRef.current = restored;
+          setState({ book: restored, error: message });
+        } else {
+          setState((current) => ({ ...current, error: message }));
+        }
+        failedSave.current = saved;
+        setCanRetry(true);
+        return message;
+      }
+      habitBaseline.current = null;
+      rememberSuccess(saved, false);
+      return null;
+    });
+    chain.current = job.then((message) => message, () => 'Не получилось. Попробуй ещё раз.');
   }
 
   function retrySave() {
@@ -321,6 +392,7 @@ export function useNotebook() {
     error: state.error,
     canRetry,
     retrySave,
+    reload,
     requestEmail,
     register,
     signIn,
@@ -392,7 +464,21 @@ export function useNotebook() {
     renameHabit: (id: string, title: string) => commit((book) => renameHabit(book, id, title)),
     setHabitArchived: (id: string, archived: boolean) => commit((book) => setHabitArchived(book, id, archived)),
     deleteHabit: (id: string) => commit((book) => deleteHabit(book, id)),
-    setHabitMark: (habitId: string, date: string, status: HabitStatus | null) => commit((book) => setHabitMark(book, habitId, date, status)),
+    setHabitMark: (habitId: string, date: string, status: HabitStatus | null) => {
+      const current = bookRef.current;
+      const live = current.marks.find((mark) => mark.habitId === habitId && mark.date === date)?.status ?? null;
+      const stepped = nextHabitStatus(live);
+      // A repeated click can still describe the previous render. Continue from the notebook.
+      const resolved = status === stepped ? status : stepped;
+      const marked = setHabitMark(current, habitId, date, resolved);
+      if (marked === current) return Promise.resolve(null);
+      const next = prepareNotebook(marked);
+      if (!habitBaseline.current) habitBaseline.current = current;
+      bookRef.current = next;
+      setState((state) => ({ book: next, error: state.error }));
+      ensureHabitSave();
+      return chain.current;
+    },
     addWeekItem: (week: string, kind: WeekItem['kind'], title: string) => commit((book) => addWeekItem(book, week, kind, title)),
     toggleWeekItem: (id: string) => commit((book) => toggleWeekItem(book, id)),
     assignWeekItem: (id: string, date: string) => commit((book) => assignWeekItem(book, id, date)),
