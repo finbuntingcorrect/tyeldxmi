@@ -1,5 +1,7 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Check, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+import { PageFlip } from 'page-flip';
 import { addDays } from '../../server/recurrence';
 import { dateFromKey } from '../lib/date';
 import { tasksForDate, weekDates, type Notebook, type TaskDraft, type TaskMark, type WeekItem } from '../lib/notebook';
@@ -57,6 +59,101 @@ function dayLabel(date: string) {
 
 type Turn = { to: string; direction: 'next' | 'prev'; half: 'lift' | 'lay' };
 
+function withoutPageDrag(run: () => void) {
+  const proto = EventTarget.prototype;
+  const original = proto.addEventListener;
+  proto.addEventListener = function (this: EventTarget, ...args: Parameters<typeof original>) {
+    const type = args[0];
+    const block = this instanceof Element && this.classList.contains('stf__block') && (type === 'mousedown' || type === 'touchstart');
+    const windowMouse = this === window && (type === 'mousemove' || type === 'mouseup' || type === 'touchmove' || type === 'touchend');
+    if (!block && !windowMouse) original.apply(this, args);
+  } as typeof original;
+  try {
+    run();
+  } finally {
+    proto.addEventListener = original;
+  }
+}
+
+function bindPageEdges(host: HTMLElement, book: PageFlip, editing: { current: number }, onGrab: () => void) {
+  let dragging = false;
+  let startX = 0;
+  let fromRight = false;
+  function point(event: PointerEvent) {
+    const rect = book.getUI().getDistElement().getBoundingClientRect();
+    return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+  }
+  function onOuterEdge(event: PointerEvent) {
+    if (!(event.target instanceof Element)) return false;
+    if (event.target.closest('[data-flip-edge]')) return true;
+    if (event.target.closest('button, a, input, textarea, select, label, [role="menu"], [data-stamp-control]')) return false;
+    const pos = point(event);
+    const bounds = book.getBoundsRect();
+    const left = bounds.left;
+    const right = bounds.left + bounds.width;
+    return pos.x >= left && pos.x <= right && (pos.x - left <= 64 || right - pos.x <= 64);
+  }
+  function onDown(event: PointerEvent) {
+    if (event.button !== 0 || editing.current > 0 || book.getState() !== 'read') return;
+    if (!onOuterEdge(event)) return;
+    const pos = point(event);
+    const bounds = book.getBoundsRect();
+    dragging = true;
+    startX = pos.x;
+    fromRight = pos.x > bounds.left + bounds.width / 2;
+    onGrab();
+    book.startUserTouch(pos);
+    try {
+      host.setPointerCapture(event.pointerId);
+    } catch {
+      // The drag still follows the pointer if capture is unavailable.
+    }
+    event.preventDefault();
+  }
+  function onMove(event: PointerEvent) {
+    const pos = point(event);
+    if (dragging) {
+      book.userMove(pos, false);
+      return;
+    }
+    const onEdge = event.target instanceof Element && Boolean(event.target.closest('[data-flip-edge]'));
+    if (onEdge || book.getState() === 'fold_corner') book.userMove(pos, false);
+  }
+  function finish(event: PointerEvent) {
+    if (!dragging) return;
+    dragging = false;
+    const pos = point(event);
+    const towardSpine = fromRight ? pos.x < startX - 72 : pos.x > startX + 72;
+    if (towardSpine) {
+      const bounds = book.getBoundsRect();
+      const dest = fromRight
+        ? { x: bounds.left + 12, y: pos.y }
+        : { x: bounds.left + bounds.width - 12, y: pos.y };
+      book.userMove(dest, false);
+      book.userStop(dest);
+      return;
+    }
+    book.userStop(pos);
+  }
+  function onLeave() {
+    if (dragging || book.getState() !== 'fold_corner') return;
+    const bounds = book.getBoundsRect();
+    book.userMove({ x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2 }, false);
+  }
+  host.addEventListener('pointerdown', onDown);
+  host.addEventListener('pointermove', onMove);
+  host.addEventListener('pointerup', finish);
+  host.addEventListener('pointercancel', finish);
+  host.addEventListener('pointerleave', onLeave);
+  return () => {
+    host.removeEventListener('pointerdown', onDown);
+    host.removeEventListener('pointermove', onMove);
+    host.removeEventListener('pointerup', finish);
+    host.removeEventListener('pointercancel', finish);
+    host.removeEventListener('pointerleave', onLeave);
+  };
+}
+
 export function DiaryScreen(props: DiaryScreenProps) {
   const target = weekMonday(props.week && isPageDate(props.week) ? props.week : props.today);
   const [shown, setShown] = useState(target);
@@ -75,18 +172,35 @@ export function DiaryScreen(props: DiaryScreenProps) {
   const ensureRef = useRef(props.ensureWeek);
   const spreadRef = useRef<HTMLDivElement>(null);
   const underlayRef = useRef<HTMLDivElement>(null);
+  const hostRef = useRef<HTMLDivElement>(null);
+  const bookRef = useRef<PageFlip | null>(null);
+  const sheetsRef = useRef<HTMLDivElement[] | null>(null);
+  const bookToken = useRef(0);
+  const shownRef = useRef(shown);
+  const editingRef = useRef(editing);
+  const openWeekRef = useRef(props.onOpenWeek);
+  const flipLock = useRef(false);
+  const recenter = useRef(false);
   const turningLock = useRef(false);
   const wideRef = useRef(wide);
   const releaseTicket = useRef(0);
+  const [sheets, setSheets] = useState<HTMLDivElement[] | null>(null);
+  const [busyFlip, setBusyFlip] = useState(false);
   const pickerId = useId();
+  const curl = wide && !props.reduced;
   const goals = props.book.weekItems.filter((item) => item.week === shown && item.kind === 'goal');
   const label = weekLabel(shown);
 
   useEffect(() => {
     ensureRef.current = props.ensureWeek;
+    shownRef.current = shown;
+    editingRef.current = editing;
+    openWeekRef.current = props.onOpenWeek;
   });
   useEffect(() => {
     ensureRef.current(shown);
+    ensureRef.current(addDays(shown, -7));
+    ensureRef.current(addDays(shown, 7));
     if (turn) ensureRef.current(turn.to);
   }, [shown, turn]);
   useEffect(() => {
@@ -100,12 +214,22 @@ export function DiaryScreen(props: DiaryScreenProps) {
     return () => media.removeEventListener('change', onChange);
   }, []);
 
-  if (target !== shown && !turn) {
+  if (!curl && target !== shown && !turn) {
     if (props.reduced) setShown(target);
     else if (editing === 0) {
       setFresh(null);
       if (release) setRelease(false);
       setTurn({ to: target, direction: target > shown ? 'next' : 'prev', half: 'lift' });
+    }
+  }
+  if (curl && editing === 0 && target !== shown && !busyFlip) {
+    const adjacent = target === addDays(shown, 7) || target === addDays(shown, -7);
+    if (!adjacent) {
+      setShown(target);
+      if (fresh) setFresh(null);
+    } else {
+      setBusyFlip(true);
+      if (fresh) setFresh(null);
     }
   }
 
@@ -175,10 +299,149 @@ export function DiaryScreen(props: DiaryScreenProps) {
     };
   }, [turn]);
 
+  useEffect(() => {
+    if (!curl) return;
+    const host = hostRef.current;
+    if (!host) return;
+    const block = document.createElement('div');
+    block.className = 'diary-flip-root';
+    host.appendChild(block);
+    const pages = Array.from({ length: 6 }, (_, index) => {
+      const page = document.createElement('div');
+      page.className = 'diary-sheet';
+      page.dataset.density = 'soft';
+      page.dataset.side = index % 2 === 0 ? 'left' : 'right';
+      if (index < 2 || index > 3) {
+        page.setAttribute('aria-hidden', 'true');
+        page.inert = true;
+      }
+      return page;
+    });
+    const book = new PageFlip(block, {
+      width: 400,
+      height: 560,
+      size: 'fixed',
+      usePortrait: false,
+      showCover: false,
+      drawShadow: true,
+      maxShadowOpacity: 0.45,
+      flippingTime: 1050,
+      startPage: 2,
+      autoSize: true,
+      useMouseEvents: true,
+      showPageCorners: true,
+      disableFlipByClick: true,
+      clickEventForward: true,
+      mobileScrollSupport: true,
+      swipeDistance: 1000,
+      startZIndex: 2,
+    });
+    withoutPageDrag(() => book.loadFromHTML(pages));
+    let ignoreFlip = true;
+    book.on('flip', (event) => {
+      const page = Number(event.data);
+      if (ignoreFlip || page === 2) return;
+      const base = shownRef.current;
+      const next = page > 3 ? addDays(base, 7) : addDays(base, -7);
+      recenter.current = true;
+      openWeekRef.current(next);
+      setShown(next);
+      window.requestAnimationFrame(() => {
+        flipLock.current = false;
+        setBusyFlip(false);
+      });
+    });
+    book.on('changeState', (event) => {
+      if (event.data !== 'read' || recenter.current || ignoreFlip) return;
+      flipLock.current = false;
+      setBusyFlip(false);
+    });
+    const fit = () => {
+      const dist = book.getUI().getDistElement();
+      const width = Math.floor(dist.clientWidth / 2);
+      const height = Math.floor(dist.clientHeight);
+      if (width < 120 || height < 120) return;
+      const settings = book.getSettings();
+      const changed = Math.abs(settings.width - width) > 1 || Math.abs(settings.height - height) > 1;
+      settings.width = width;
+      settings.height = height;
+      settings.minWidth = width;
+      settings.maxWidth = width;
+      settings.minHeight = height;
+      settings.maxHeight = height;
+      const wrapper = block.querySelector('.stf__wrapper');
+      if (wrapper instanceof HTMLElement) {
+        wrapper.style.height = '100%';
+        wrapper.style.paddingBottom = '0px';
+      }
+      if (changed) book.update();
+      if (wrapper instanceof HTMLElement) {
+        wrapper.style.height = '100%';
+        wrapper.style.paddingBottom = '0px';
+      }
+    };
+    fit();
+    ignoreFlip = false;
+    bookRef.current = book;
+    const unbind = bindPageEdges(host, book, editingRef, () => setBusyFlip(true));
+    const observer = new ResizeObserver(() => {
+      if (book.getState() !== 'read') return;
+      fit();
+    });
+    observer.observe(host);
+    const token = bookToken.current + 1;
+    bookToken.current = token;
+    sheetsRef.current = pages;
+    queueMicrotask(() => {
+      if (bookToken.current !== token) return;
+      setSheets(pages);
+    });
+    return () => {
+      bookToken.current += 1;
+      observer.disconnect();
+      unbind();
+      book.off('flip');
+      book.off('changeState');
+      bookRef.current = null;
+      sheetsRef.current = null;
+      flipLock.current = false;
+      recenter.current = false;
+      book.destroy();
+      setSheets(null);
+    };
+  }, [curl]);
+
+  useEffect(() => {
+    if (!curl || !sheets || !busyFlip || target === shown || flipLock.current) return;
+    const book = bookRef.current;
+    if (!book || book.getState() !== 'read') return;
+    const forward = target === addDays(shown, 7);
+    const backward = target === addDays(shown, -7);
+    if (!forward && !backward) return;
+    flipLock.current = true;
+    if (forward) book.flipNext('bottom');
+    else book.flipPrev('bottom');
+    if (book.getState() === 'read') {
+      flipLock.current = false;
+      window.requestAnimationFrame(() => setBusyFlip(false));
+    }
+  }, [curl, sheets, busyFlip, target, shown]);
+
+  useLayoutEffect(() => {
+    if (!recenter.current) return;
+    bookRef.current?.turnToPage(2);
+    recenter.current = false;
+  }, [shown, sheets]);
+
   function goWeek(monday: string) {
-    if (editing > 0 || turn || turningLock.current) return;
+    if (editing > 0 || turn || busyFlip || turningLock.current || flipLock.current) return;
+    if (bookRef.current && bookRef.current.getState() !== 'read') return;
     const next = weekMonday(monday);
-    if (next !== shown && !props.reduced) turningLock.current = true;
+    if (next === shown) {
+      setPicking(false);
+      return;
+    }
+    if (!props.reduced && !curl) turningLock.current = true;
     props.ensureWeek(next);
     setPicking(false);
     props.onOpenWeek(next);
@@ -256,7 +519,7 @@ export function DiaryScreen(props: DiaryScreenProps) {
               <span className="diary-state" aria-hidden="true"><span className="diary-state-box" /></span>
               <input
                 id={quiet ? undefined : `add-${date}`}
-                autoFocus
+                autoFocus={!quiet}
                 value={drafts[date] ?? ''}
                 maxLength={160}
                 aria-label={`Новая задача, ${dayLabel(date)}`}
@@ -317,7 +580,8 @@ export function DiaryScreen(props: DiaryScreenProps) {
     );
   }
 
-  const busy = turn !== null;
+  const busy = turn !== null || busyFlip;
+  const weeks = [addDays(shown, -7), shown, addDays(shown, 7)];
 
   return (
     <section className="diary" aria-busy={busy}>
@@ -354,7 +618,8 @@ export function DiaryScreen(props: DiaryScreenProps) {
         </button>
         <button type="button" className="diary-today-button" disabled={editing > 0 || busy} onClick={() => goWeek(props.today)}>Эта неделя</button>
       </div>
-      <div className="diary-stage">
+      <div className={`diary-stage ${curl ? 'is-book' : ''}`}>
+      {curl ? <div ref={hostRef} className={`diary-book ${busyFlip ? 'is-turning' : ''}`} /> : (
       <div
         ref={spreadRef}
         className={`diary-spread ${turn ? `is-turning turn-${turn.direction}` : ''} ${settle ? 'is-settling' : ''} ${release ? 'is-releasing' : ''}`}
@@ -380,7 +645,22 @@ export function DiaryScreen(props: DiaryScreenProps) {
         ) : null}
         {turn && wide ? <div className="diary-cast" /> : null}
       </div>
+      )}
       </div>
+      {curl && sheets ? weeks.flatMap((monday, slot) => (['left', 'right'] as const).map((side, sideIndex) => {
+        const quiet = slot !== 1;
+        const page = sheets[slot * 2 + sideIndex];
+        return createPortal(
+          <>
+            <div className="diary-sheet-scroll" inert={quiet ? true : undefined} aria-hidden={quiet ? true : undefined}>
+              {renderPage(side, monday, quiet)}
+            </div>
+            <div className="diary-edge" data-flip-edge="" />
+          </>,
+          page,
+          `${monday}-${side}`,
+        );
+      })) : null}
       <aside className="diary-goals">
         <h3>Цели недели</h3>
         <p>{label}</p>
