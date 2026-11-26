@@ -4,7 +4,7 @@ import { Check, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import { PageFlip } from 'page-flip';
 import { addDays } from '../../server/recurrence';
 import { dateFromKey } from '../lib/date';
-import { tasksForDate, weekDates, type Notebook, type TaskDraft, type TaskMark, type WeekItem } from '../lib/notebook';
+import { tasksForDate, weekDates, type Notebook, type TaskDraft, type TaskMark } from '../lib/notebook';
 import { isPageDate, weekMonday } from '../lib/route';
 import { PlanTask } from './PlanTask';
 
@@ -29,8 +29,6 @@ type DiaryScreenProps = {
   onFocus: (id: string) => void;
   onNote: (id: string, text: string) => void;
   onMark: (id: string, mark: TaskMark | null) => Promise<string | null>;
-  onAddWeekItem: (week: string, kind: WeekItem['kind'], title: string) => void;
-  onToggleWeekItem: (id: string) => void;
   ensureWeek: (monday: string) => void;
 };
 
@@ -188,7 +186,6 @@ export function DiaryScreen(props: DiaryScreenProps) {
   const [busyFlip, setBusyFlip] = useState(false);
   const pickerId = useId();
   const curl = wide && !props.reduced;
-  const goals = props.book.weekItems.filter((item) => item.week === shown && item.kind === 'goal');
   const label = weekLabel(shown);
 
   useEffect(() => {
@@ -661,46 +658,6 @@ export function DiaryScreen(props: DiaryScreenProps) {
           `${monday}-${side}`,
         );
       })) : null}
-      <aside className="diary-goals">
-        <h3>Цели недели</h3>
-        <p>{label}</p>
-        {goals.map((item) => (
-          <label key={item.id} className="diary-goal">
-            <input type="checkbox" checked={item.completed} onChange={() => props.onToggleWeekItem(item.id)} />
-            <span className={item.completed ? 'is-done' : undefined}>{item.title}</span>
-          </label>
-        ))}
-        <GoalAdd
-          onAdd={(title) => props.onAddWeekItem(shown, 'goal', title)}
-          onEditing={(value) => setEditing((count) => value ? count + 1 : Math.max(0, count - 1))}
-        />
-      </aside>
     </section>
-  );
-}
-
-function GoalAdd({ onAdd, onEditing }: { onAdd: (title: string) => void; onEditing: (open: boolean) => void }) {
-  const [open, setOpen] = useState(false);
-  const [title, setTitle] = useState('');
-  const lock = useRef(false);
-  if (!open) return <button type="button" className="diary-goal-add" onClick={() => { lock.current = false; setOpen(true); onEditing(true); }}>Добавить цель</button>;
-  return (
-    <form className="diary-add" onSubmit={(event) => {
-      event.preventDefault();
-      if (lock.current) return;
-      const next = title.trim();
-      if (!next) return;
-      lock.current = true;
-      onAdd(next);
-      setTitle('');
-      setOpen(false);
-      onEditing(false);
-    }}
-    >
-      <label className="sr-only" htmlFor="week-goal">Новая цель недели</label>
-      <input id="week-goal" autoFocus value={title} maxLength={160} onChange={(event) => setTitle(event.target.value)} className="paper-field" />
-      <button type="submit" className="paper-submit">Добавить</button>
-      <button type="button" className="paper-choice" onClick={() => { setTitle(''); setOpen(false); onEditing(false); }}>Отмена</button>
-    </form>
   );
 }
