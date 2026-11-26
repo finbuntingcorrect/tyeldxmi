@@ -1,6 +1,8 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+import { PixelArrow } from './PixelArrow';
+import { PixelIconButton } from './PixelIconButton';
+import { uiKit } from '../lib/uiKit';
 import { weekday } from '../../server/recurrence';
 import { dateFromKey } from '../lib/date';
 import { habitIsScheduled, monthDates, nextHabitStatus, type Habit, type HabitStatus, type Notebook } from '../lib/notebook';
@@ -328,8 +330,8 @@ function HabitTable({
                         onMark(habit.id, date, nextHabitStatus(status));
                       }}
                     >
-                      {status === 'done' ? <span className="habit-check" aria-hidden="true">✓</span> : null}
-                      {status === 'missed' ? <span className="habit-cross" aria-hidden="true">×</span> : null}
+                      {status === 'done' ? <img className="habit-mark" src={uiKit.icon.check} alt="" width={22} height={22} draggable={false} /> : null}
+                      {status === 'missed' ? <img className="habit-mark" src={uiKit.icon.cross} alt="" width={22} height={22} draggable={false} /> : null}
                     </button>
                   </td>
                 );
@@ -364,10 +366,9 @@ function HabitTable({
                     </div>
                   </form>
                 ) : (
-                  <button type="button" className="habit-add" onClick={adding.onOpen}>
-                    <Plus aria-hidden="true" size={18} />
+                  <PixelIconButton kind="add" label="Добавить привычку" className="habit-add" onClick={adding.onOpen}>
                     Добавить привычку
-                  </button>
+                  </PixelIconButton>
                 )}
               </th>
               {dates.map((date) => <td key={date} />)}
@@ -449,9 +450,7 @@ export function HabitsScreen({ book, today, onCreate, onRename, onArchive, onMar
   return (
     <section className="habit-board">
       <header className="habit-nav">
-        <button type="button" className="habit-arrow" aria-label="Предыдущий месяц" onClick={() => showMonth(shiftMonth(month, -1))}>
-          <ChevronLeft aria-hidden="true" size={22} />
-        </button>
+        <PixelArrow direction="previous" label="Предыдущий месяц" onClick={() => showMonth(shiftMonth(month, -1))} />
         <div className="habit-month-wrap">
           <button
             type="button"
@@ -482,13 +481,16 @@ export function HabitsScreen({ book, today, onCreate, onRename, onArchive, onMar
             </div>
           ) : null}
         </div>
-        <button type="button" className="habit-arrow" aria-label="Следующий месяц" onClick={() => showMonth(shiftMonth(month, 1))}>
-          <ChevronRight aria-hidden="true" size={22} />
-        </button>
+        <PixelArrow direction="next" label="Следующий месяц" onClick={() => showMonth(shiftMonth(month, 1))} />
         <button type="button" className="habit-current" disabled={month === currentMonth} onClick={() => showMonth(currentMonth)}>Текущий месяц</button>
       </header>
       <p className="habit-hint">Нажимай на ячейку: ✓ → × → пусто</p>
-      {active.length === 0 && !adding ? <p className="habit-empty">Пока нет привычек.</p> : null}
+      {active.length === 0 && !adding ? (
+        <div className="habit-empty">
+          <img src={uiKit.empty.habits} alt="" width={160} height={160} draggable={false} />
+          <p>Пока нет привычек.</p>
+        </div>
+      ) : null}
       <HabitTable
         habits={active}
         month={month}

@@ -1,10 +1,11 @@
 import { AppLink } from './AppLink';
 import type { AppPage } from '../lib/route';
+import { uiKit } from '../lib/uiKit';
 
-const LINKS: { id: 'calendar' | 'habits' | 'focus'; href: string; label: string }[] = [
-  { id: 'calendar', href: '/app', label: 'Дневник' },
-  { id: 'habits', href: '/app/habits', label: 'Привычки' },
-  { id: 'focus', href: '/app/focus', label: 'Фокус' },
+const LINKS: { id: 'calendar' | 'habits' | 'focus'; href: string; label: string; art: string }[] = [
+  { id: 'calendar', href: '/app', label: 'Дневник', art: uiKit.tab.diary },
+  { id: 'habits', href: '/app/habits', label: 'Привычки', art: uiKit.tab.habits },
+  { id: 'focus', href: '/app/focus', label: 'Фокус', art: uiKit.tab.focus },
 ];
 
 function currentLink(page: AppPage) {
@@ -17,15 +18,16 @@ function currentLink(page: AppPage) {
 export function ModeSwitch({ page }: { page: AppPage }) {
   const current = currentLink(page);
   return (
-    <nav aria-label="Страницы" className="grid grid-cols-3 border-y border-line">
+    <nav aria-label="Страницы" className="mode-tabs">
       {LINKS.map((item) => (
         <AppLink
           key={item.id}
           href={item.href}
           aria-current={current === item.id ? 'page' : undefined}
-          className={`grid min-h-11 place-items-center text-sm font-semibold ${current === item.id ? 'text-ink shadow-[inset_0_-2px_0_var(--color-primary)]' : 'text-muted'}`}
+          className="mode-tab"
+          style={{ backgroundImage: `url(${item.art})` }}
         >
-          {item.label}
+          <span className="mode-tab-label">{item.label}</span>
         </AppLink>
       ))}
     </nav>

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { PawLoader } from './PawLoader';
 
 type AccountGateProps = {
   notice?: string | null;
@@ -12,13 +13,14 @@ type AccountGateProps = {
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export function CabinetSplash() {
+export function CabinetSplash({ busy = false }: { busy?: boolean }) {
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-xl items-center px-4 py-10">
       <article className="w-full border border-line p-2">
         <div className="border border-line bg-card px-6 py-10 text-center sm:px-10">
           <img src="/mascot/cat-wave.png" alt="" className="mx-auto h-36 w-auto object-contain" />
           <p className="mt-6 text-2xl text-ink">Смотрю, кто пришёл…</p>
+          {busy ? <PawLoader /> : null}
         </div>
       </article>
     </main>

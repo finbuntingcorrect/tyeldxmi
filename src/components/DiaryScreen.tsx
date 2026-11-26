@@ -1,12 +1,15 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+import { Check } from 'lucide-react';
 import { PageFlip } from 'page-flip';
 import { addDays } from '../../server/recurrence';
 import { dateFromKey } from '../lib/date';
 import { tasksForDate, weekDates, type Notebook, type TaskDraft, type TaskMark } from '../lib/notebook';
 import { isPageDate, weekMonday } from '../lib/route';
 import { PlanTask } from './PlanTask';
+import { PixelArrow } from './PixelArrow';
+import { PixelIconButton } from './PixelIconButton';
+import { uiKit } from '../lib/uiKit';
 
 const DAY_NAMES = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье'];
 const BANDS = ['sage', 'peach', 'sand', 'sage', 'sand', 'peach', 'sage'];
@@ -536,9 +539,7 @@ export function DiaryScreen(props: DiaryScreenProps) {
               </button>
             </form>
           ) : (
-            <button type="button" className="diary-plus" aria-label="Добавить задачу" onClick={() => { adding.current.delete(date); setOpenDays((current) => ({ ...current, [date]: true })); }}>
-              <Plus aria-hidden="true" size={18} />
-            </button>
+            <PixelIconButton kind="add" label="Добавить задачу" className="diary-plus" onClick={() => { adding.current.delete(date); setOpenDays((current) => ({ ...current, [date]: true })); }} />
           )}
         </div>
       </section>
@@ -579,13 +580,12 @@ export function DiaryScreen(props: DiaryScreenProps) {
 
   const busy = turn !== null || busyFlip;
   const weeks = [addDays(shown, -7), shown, addDays(shown, 7)];
+  const noTasks = props.book.tasks.every((task) => task.deleted);
 
   return (
     <section className="diary" aria-busy={busy}>
       <div className="diary-nav">
-        <button type="button" className="diary-arrow" aria-label="Предыдущая неделя" disabled={editing > 0 || busy} onClick={() => goWeek(addDays(shown, -7))}>
-          <ChevronLeft aria-hidden="true" size={22} />
-        </button>
+        <PixelArrow direction="previous" label="Предыдущая неделя" disabled={editing > 0 || busy} onClick={() => goWeek(addDays(shown, -7))} />
         <div className="diary-range">
           <button type="button" className="diary-range-button" aria-expanded={picking} aria-controls={pickerId} disabled={busy} onClick={() => setPicking((value) => !value)}>
             {label}
@@ -610,11 +610,15 @@ export function DiaryScreen(props: DiaryScreenProps) {
             </div>
           ) : null}
         </div>
-        <button type="button" className="diary-arrow" aria-label="Следующая неделя" disabled={editing > 0 || busy} onClick={() => goWeek(addDays(shown, 7))}>
-          <ChevronRight aria-hidden="true" size={22} />
-        </button>
-        <button type="button" className="diary-today-button" disabled={editing > 0 || busy} onClick={() => goWeek(props.today)}>Эта неделя</button>
+        <PixelArrow direction="next" label="Следующая неделя" disabled={editing > 0 || busy} onClick={() => goWeek(addDays(shown, 7))} />
+        <button type="button" className="diary-today-button" disabled={editing > 0 || busy} onClick={() => goWeek(props.today)}><span>Эта неделя</span></button>
       </div>
+      {noTasks ? (
+        <div className="diary-empty">
+          <img src={uiKit.empty.tasks} alt="" width={160} height={160} draggable={false} />
+          <p>Пока нет задач.</p>
+        </div>
+      ) : null}
       <div className={`diary-stage ${curl ? 'is-book' : ''}`}>
       {curl ? <div ref={hostRef} className={`diary-book ${busyFlip ? 'is-turning' : ''}`} /> : (
       <div

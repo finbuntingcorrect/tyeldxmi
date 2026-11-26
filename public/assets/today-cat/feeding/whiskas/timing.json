@@ -1,0 +1,23 @@
+{
+  "frames": [
+    "feeding/whiskas/frame-01.png",
+    "feeding/whiskas/frame-02.png",
+    "feeding/whiskas/frame-03.png",
+    "feeding/whiskas/frame-04.png",
+    "feeding/whiskas/frame-05.png",
+    "feeding/whiskas/frame-06.png"
+  ],
+  "durations_ms": [
+    500,
+    350,
+    180,
+    650,
+    350,
+    900
+  ],
+  "playback": "once on completed focus session; preview.webp loops for preview only",
+  "canvas": [
+    512,
+    512
+  ]
+}

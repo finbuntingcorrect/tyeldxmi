@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { Pause, Play, Volume2, VolumeX } from 'lucide-react';
 import { CatSprite, type CatClip } from './CatSprite';
+import { PixelIconButton } from './PixelIconButton';
+import { feedingSources, warmImages } from '../lib/uiKit';
 import { TreatSprite } from './TreatSprite';
 import {
   clampDialDrag,
@@ -80,6 +81,10 @@ export function FocusScreen(props: FocusScreenProps) {
   const status = paused ? 'На паузе' : running && session?.phase === 'break' ? 'Перерыв' : '';
   const bankedToday = cat.focusDate === props.today ? cat.focusMsToday : 0;
   const todayLine = focusTodayLine(bankedToday + (session ? unappliedFocusMs(session, displayNow) : 0));
+
+  useEffect(() => {
+    warmImages(feedingSources());
+  }, []);
 
   useEffect(() => {
     feedRef.current = props.onFeed;
@@ -205,15 +210,13 @@ export function FocusScreen(props: FocusScreenProps) {
   return (
     <section className="focus-stage">
       <div className="focus-dial-wrap">
-        <button
-          type="button"
+        <PixelIconButton
+          kind={cat.sound ? 'sound-on' : 'sound-off'}
+          label={cat.sound ? 'Выключить звук' : 'Включить звук'}
           aria-pressed={cat.sound}
-          aria-label={cat.sound ? 'Выключить звук' : 'Включить звук'}
           onClick={props.onToggleSound}
           className="focus-sound"
-        >
-          {cat.sound ? <Volume2 size={18} aria-hidden="true" /> : <VolumeX size={18} aria-hidden="true" />}
-        </button>
+        />
         <div
           ref={dialRef}
           className="focus-dial"
@@ -302,10 +305,7 @@ export function FocusScreen(props: FocusScreenProps) {
         </div>
       </div>
       <div className="focus-controls">
-        <button type="button" className="paper-submit focus-go" onClick={onPrimary}>
-          {running ? <Pause aria-hidden="true" size={22} /> : <Play aria-hidden="true" size={22} />}
-          {primary}
-        </button>
+        <PixelIconButton kind={running ? 'pause' : 'play'} label={primary} className="focus-go" onClick={onPrimary} />
         {active ? <button type="button" className="focus-reset" onClick={props.onReset}>Сбросить</button> : null}
         {finished ? <button type="button" className="focus-break" onClick={props.onBreak}>Перерыв 5 минут</button> : null}
         <p className="focus-today">{todayLine}</p>

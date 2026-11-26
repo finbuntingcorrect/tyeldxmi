@@ -22,6 +22,7 @@ import { DiaryScreen } from './DiaryScreen';
 import { AppLink } from './AppLink';
 import { SettingsPanel } from './SettingsPanel';
 import { useDialogLayer } from '../hooks/useDialogLayer';
+import { cabinetSources, uiKit, warmImages } from '../lib/uiKit';
 
 export function Home() {
   const notebook = useNotebook();
@@ -74,6 +75,10 @@ export function Home() {
   }, [page, book.greeted, book.mode, book.name, notebook]);
 
   useEffect(() => {
+    warmImages(cabinetSources());
+  }, []);
+
+  useEffect(() => {
     if (notebook.status === 'loading') {
       document.title = 'Today Cat';
       return;
@@ -106,7 +111,7 @@ export function Home() {
     replace(redirectTo);
   }, [redirectTo, replace]);
 
-  if (notebook.status === 'loading') return <CabinetSplash />;
+  if (notebook.status === 'loading') return <CabinetSplash busy />;
   if (notebook.status === 'error') {
     if (!isPlannerPage(page)) return <LandingPage signedIn={false} />;
     return (
@@ -247,7 +252,10 @@ export function Home() {
             <p className="text-sm text-muted">{hint}</p>
           </div>
           <div className="account-actions">
-            <AppLink href="/app/settings" aria-current={page.name === 'settings' ? 'page' : undefined} className={page.name === 'settings' ? 'is-current' : undefined}>Настройки</AppLink>
+            <AppLink href="/app/settings" aria-current={page.name === 'settings' ? 'page' : undefined} className={page.name === 'settings' ? 'account-settings is-current' : 'account-settings'}>
+              <img className="settings-paw" src={uiKit.icon.settings} alt="" width={30} height={30} draggable={false} />
+              Настройки
+            </AppLink>
             <button type="button" onClick={() => { void notebook.signOut().then((left) => { if (left) go('/'); }); }}>Выйти</button>
           </div>
         </header>

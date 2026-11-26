@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
-import { TREAT_FRAMES, type TreatKind } from '../lib/focusSession';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { TreatKind } from '../lib/focusSession';
+import { FEED_FRAME_MS, feedFrames, type FeedKind, warmImages } from '../lib/uiKit';
 
 type TreatSpriteProps = {
   kind: TreatKind;
@@ -7,51 +8,69 @@ type TreatSpriteProps = {
   onDone: () => void;
 };
 
-const SHEETS: Record<TreatKind, string> = {
-  whiskas: '/mascot/treat-whiskas.png',
-  sheba: '/mascot/treat-sheba.png',
-};
+function framesFor(kind: TreatKind): string[] {
+  const sequence: FeedKind = kind === 'sheba' || kind === 'whiskas' ? kind : 'basic';
+  return feedFrames(sequence);
+}
 
 export function TreatSprite({ kind, reduced, onDone }: TreatSpriteProps) {
-  const [frame, setFrame] = useState(reduced ? 5 : 0);
+  const frames = useMemo(() => framesFor(kind), [kind]);
+  const [index, setIndex] = useState(reduced ? frames.length - 1 : 0);
   const done = useRef(onDone);
   useEffect(() => {
     done.current = onDone;
   });
 
   useEffect(() => {
-    if (reduced) {
-      const id = window.setTimeout(() => done.current(), 1200);
-      return () => window.clearTimeout(id);
-    }
-    let index = 0;
+    warmImages(frames);
+    let cancelled = false;
+    let started = false;
     let timer = 0;
-    const step = () => {
-      const item = TREAT_FRAMES[index];
-      setFrame(item.frame);
-      index += 1;
-      if (index >= TREAT_FRAMES.length) {
-        timer = window.setTimeout(() => done.current(), item.ms);
+    const last = frames.length - 1;
+
+    const play = () => {
+      if (started || cancelled) return;
+      started = true;
+      if (reduced) {
+        setIndex(last);
+        timer = window.setTimeout(() => done.current(), 1200);
         return;
       }
-      timer = window.setTimeout(step, item.ms);
+      let step = 0;
+      const advance = () => {
+        if (cancelled) return;
+        setIndex(step);
+        const ms = FEED_FRAME_MS[step] ?? FEED_FRAME_MS[FEED_FRAME_MS.length - 1];
+        step += 1;
+        if (step >= frames.length) {
+          timer = window.setTimeout(() => done.current(), ms);
+          return;
+        }
+        timer = window.setTimeout(advance, ms);
+      };
+      advance();
     };
-    timer = window.setTimeout(step, 0);
-    return () => window.clearTimeout(timer);
-  }, [kind, reduced]);
 
-  const column = frame % 3;
-  const row = Math.floor(frame / 3);
+    const ready = Promise.all(frames.map((src) => {
+      const image = new Image();
+      image.src = src;
+      return image.decode?.().catch(() => undefined) ?? Promise.resolve();
+    }));
+    const fallback = window.setTimeout(play, 400);
+    void ready.then(() => {
+      window.clearTimeout(fallback);
+      play();
+    });
+    return () => {
+      cancelled = true;
+      window.clearTimeout(fallback);
+      window.clearTimeout(timer);
+    };
+  }, [frames, reduced]);
+
   return (
-    <div
-      aria-hidden="true"
-      className="pointer-events-none absolute inset-0"
-      style={{
-        backgroundImage: `url(${SHEETS[kind]})`,
-        backgroundRepeat: 'no-repeat',
-        backgroundSize: '300% 200%',
-        backgroundPosition: `${column * 50}% ${row * 100}%`,
-      }}
-    />
+    <div className="treat-play" aria-hidden="true">
+      <img src={frames[index]} alt="" draggable={false} />
+    </div>
   );
 }
