@@ -2383,6 +2383,7 @@ html[data-theme='dark'] {
 .mode-tab-label {
   grid-column: 2;
   min-width: 0;
+  margin-left: 2mm;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
