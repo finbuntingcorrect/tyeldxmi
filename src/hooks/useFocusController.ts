@@ -125,7 +125,7 @@ export function useFocusController({ login, session, focusAt, reminders, sound, 
     setNow(clock);
     const current = sessionRef.current;
     if (!current || !takeLead(loginRef.current)) return;
-    if (reminderDue(current, clock, remindersRef.current)) {
+    if (reminderDue(current, clock, remindersRef.current && soundRef.current)) {
       const next = markReminded(current);
       publish(next);
       showRemind();
@@ -177,7 +177,7 @@ export function useFocusController({ login, session, focusAt, reminders, sound, 
         sessionRef.current = next;
         focusAtRef.current = live.at;
         onApplyRef.current(next, live.focus, live.at);
-        if (next?.reminded && !previous?.reminded && next.phase === 'focus' && !next.settled) showRemind();
+        if (next?.reminded && !previous?.reminded && next.phase === 'focus' && !next.settled && soundRef.current && remindersRef.current) showRemind();
         if (next?.settled && !previous?.settled && next.phase === 'focus' && next.full) void meow(next.signalId);
       } catch {
         /* ignore a damaged live record */

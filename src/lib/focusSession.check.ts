@@ -11,6 +11,7 @@ import {
   plannedBreakFor,
   remainingMs,
   reminderDue,
+  markReminded,
   resumeSession,
   settleSession,
   shouldAutoAdvance,
@@ -96,6 +97,9 @@ assert.equal(reminderDue(session, start + 10 * 60_000, false), false);
 assert.equal(reminderDue({ ...session, reminded: true }, start + 12 * 60_000, true), false);
 assert.equal(reminderDue(session, start + 20 * 60_000, true), false);
 assert.equal(reminderDue(paused.session, start + 12 * 60_000, true), false);
+const reminded = markReminded(session);
+const remindedPaused = pauseSession(reminded, start + 12 * 60_000).session;
+assert.equal(reminderDue(resumeSession(remindedPaused, start + 20 * 60_000), start + 21 * 60_000, true), false);
 
 assert.equal(catPose({ greeting: true, openTasks: true, taskSuccess: false, remindVisible: false, session: null, now: start }), 'greet');
 assert.equal(catPose({ greeting: true, openTasks: false, taskSuccess: false, remindVisible: false, session: null, now: start }), 'greet');

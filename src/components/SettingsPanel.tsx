@@ -1,203 +1,220 @@
-import { useState } from 'react';
-import { parseFocusMinutes, type CatPrefs } from '../lib/focusSession';
-import { playMeow, unlockSound } from '../lib/focusSound';
-import type { AppTheme } from '../lib/notebook';
+import { useEffect, useState } from 'react';
 import { ThemePicker } from './ThemePicker';
+import { playMeow, unlockSound } from '../lib/focusSound';
+import type { CatPrefs } from '../lib/focusSession';
+import type { AppTheme } from '../lib/notebook';
 
-type SettingsPanelProps = {
-  login: string;
+type Props = {
+  login: string | null;
   name: string;
   theme: AppTheme | null;
   cat: CatPrefs;
   onName: (name: string) => Promise<string | null>;
   onTheme: (theme: AppTheme) => Promise<string | null>;
   onCat: (cat: CatPrefs) => Promise<string | null>;
-  here?: boolean;
 };
 
-function saveMinute(input: HTMLInputElement, current: number, max: number, apply: (value: number) => void) {
-  const number = Number(input.value);
-  if (!Number.isInteger(number) || number < 1 || number > max) input.value = String(current);
-  else apply(number);
-}
-
-function FieldNote({ pending, failed, onRetry }: { pending: boolean; failed: boolean; onRetry: () => void }) {
-  if (pending) return <p role="status" className="mt-1 text-sm text-muted">Сохраняем…</p>;
-  if (!failed) return null;
-  return (
-    <p role="alert" className="mt-1 text-sm font-semibold text-danger">
-      Не сохранилось.
-      <button type="button" onClick={onRetry} className="paper-choice">Повторить</button>
-    </p>
-  );
-}
-
-export function SettingsPanel({ login, name, theme, cat, onName, onTheme, onCat, here = false }: SettingsPanelProps) {
+export function SettingsPanel({ login, name, theme, cat, onName, onTheme, onCat }: Props) {
   const [draft, setDraft] = useState(name);
-  const [hint, setHint] = useState<string | null>(null);
-  const [draftVolume, setDraftVolume] = useState<number | null>(null);
-  const [soundNote, setSoundNote] = useState<string | null>(null);
   const [namePending, setNamePending] = useState(false);
   const [nameSaved, setNameSaved] = useState(false);
-  const [nameFailed, setNameFailed] = useState(false);
-  const [pending, setPending] = useState<string | null>(null);
-  const [failed, setFailed] = useState<string | null>(null);
-  const volume = draftVolume ?? cat.volume;
+  const [nameError, setNameError] = useState<string | null>(null);
+  const [volumeDraft, setVolumeDraft] = useState<number | null>(null);
+  const volume = volumeDraft != null && volumeDraft !== cat.volume ? volumeDraft : cat.volume;
+  const [soundState, setSoundState] = useState<'saving' | 'saved' | 'error' | null>(null);
+  const [soundHeard, setSoundHeard] = useState<string | null>(null);
+  const [catError, setCatError] = useState<string | null>(null);
+  const [themeError, setThemeError] = useState<string | null>(null);
 
-  function dismissName() {
-    setNameSaved(false);
-  }
+  useEffect(() => {
+    if (!nameSaved) return;
+    const timer = window.setTimeout(() => setNameSaved(false), 2200);
+    return () => window.clearTimeout(timer);
+  }, [nameSaved]);
+  useEffect(() => {
+    if (soundState !== 'saved') return;
+    const timer = window.setTimeout(() => setSoundState(null), 2200);
+    return () => window.clearTimeout(timer);
+  }, [soundState]);
 
   async function saveName() {
     const next = draft.trim();
-    if (!next || next.includes('@')) {
-      setHint(next.includes('@') ? 'Напиши имя, не почту.' : 'Введи имя, чтобы продолжить');
+    if (!next) {
+      setNameError('Введи имя, чтобы продолжить.');
+      setNameSaved(false);
+      return;
+    }
+    if (next.includes('@')) {
+      setNameError('Напиши имя, не почту.');
       setNameSaved(false);
       return;
     }
     setNamePending(true);
+    setNameError(null);
     setNameSaved(false);
-    setNameFailed(false);
-    setHint(null);
-    const message = await onName(next);
+    const error = await onName(next);
     setNamePending(false);
-    if (message) {
-      setNameFailed(true);
-      return;
+    if (error) setNameError('Не сохранилось.');
+    else {
+      setDraft(next);
+      setNameSaved(true);
     }
-    setDraft(next);
-    setNameSaved(true);
   }
 
-  async function saveCat(field: string, next: CatPrefs) {
-    dismissName();
-    setPending(field);
-    setFailed(null);
-    const message = await onCat(next);
-    setPending((current) => current === field ? null : current);
-    if (message) setFailed(field);
+  async function saveSound(next: CatPrefs) {
+    setSoundState('saving');
+    const error = await onCat(next);
+    setSoundState(error ? 'error' : 'saved');
   }
 
-  async function saveTheme(next: AppTheme) {
-    dismissName();
-    setPending('theme');
-    setFailed(null);
-    const message = await onTheme(next);
-    setPending((current) => current === 'theme' ? null : current);
-    if (message) setFailed('theme');
+  async function saveKitten(next: CatPrefs) {
+    setCatError(null);
+    const error = await onCat(next);
+    if (error) setCatError('Не сохранилось. Повтори изменение.');
   }
 
   function commitVolume(value: number) {
-    const next = Math.min(1, Math.max(0, value));
-    const changed = draftVolume != null && next !== cat.volume;
-    setDraftVolume(null);
-    if (!changed) return;
-    void saveCat('volume', { ...cat, volume: next });
-  }
-
-  function fieldNote(field: string, retry: () => void) {
-    return <FieldNote pending={pending === field} failed={failed === field} onRetry={retry} />;
+    if (!cat.sound) return;
+    const next = Number(value.toFixed(2));
+    if (next === cat.volume) return;
+    void saveSound({ ...cat, volume: next });
   }
 
   async function testSound() {
+    setSoundHeard(null);
     const ready = await unlockSound();
     if (!ready) {
-      setSoundNote('Звук не включился.');
+      setSoundHeard('Звук не включился.');
       return;
     }
-    const result = await playMeow(volume);
-    setSoundNote(result === 'blocked' ? 'Звук не включился.' : 'Звук есть.');
+    await playMeow(volume);
+    setSoundHeard('Звук есть.');
   }
 
+  const soundNote = soundState === 'saving' ? 'Сохраняем…' : soundState === 'saved' ? 'Сохранено' : soundState === 'error' ? 'Не сохранилось.' : null;
+
   return (
-    <section className="border-b border-line px-4 py-5 sm:px-6">
-      <h2 className="text-3xl text-ink">Настройки</h2>
-      <p className="mt-2 text-sm text-muted break-words">{login.includes('@') ? 'Почта' : 'Логин'}: {login}</p>
-      {here ? <p className="mt-1 text-sm text-muted">Кабинет открывается в этом браузере.</p> : null}
-      <form className="mt-4" onSubmit={(event) => { event.preventDefault(); void saveName(); }}>
-        <label htmlFor="settings-name" className="text-sm font-semibold text-ink">Имя</label>
-        <p className="mt-1 text-sm text-muted">Сохраняется кнопкой «Сохранить».</p>
-        <div className="mt-1 flex flex-col gap-3 sm:flex-row sm:items-end">
-          <input id="settings-name" value={draft} onChange={(event) => { setDraft(event.target.value); setHint(null); setNameSaved(false); setNameFailed(false); }} maxLength={40} autoComplete="nickname" className="paper-field" />
-          <button type="submit" className="paper-submit" disabled={namePending}>{namePending ? 'Сохраняем…' : 'Сохранить'}</button>
-        </div>
-        {hint ? <p role="alert" className="mt-2 text-sm font-semibold text-danger">{hint}</p> : null}
-        {nameSaved && !nameFailed && !namePending ? <p role="status" className="mt-2 text-sm text-ink">Сохранено</p> : null}
-        {nameFailed ? (
-          <p role="alert" className="mt-2 text-sm font-semibold text-danger">
-            Не сохранилось.
-            <button type="button" onClick={() => void saveName()} className="paper-choice">Повторить</button>
-          </p>
-        ) : null}
-      </form>
-      <h3 className="mt-6 text-2xl text-ink">Звук</h3>
-      <p className="mt-1 text-sm text-muted">Эти настройки сохраняются сами.</p>
-      <label className="mt-3 flex min-h-11 items-center gap-3 text-sm font-semibold text-ink">
-        <input type="checkbox" checked={cat.sound} onChange={(event) => {
-          const checked = event.target.checked;
-          dismissName();
-          void (async () => {
-            if (checked) {
-              const ready = await unlockSound();
-              if (!ready) setSoundNote('Звук не включился.');
-            }
-            await saveCat('sound', { ...cat, sound: checked });
-          })();
+    <div className="settings-sheet">
+      <section className="settings-block" aria-labelledby="settings-profile">
+        <h2 id="settings-profile">Профиль</h2>
+        <p className="settings-mail">
+          <span>Почта</span>
+          <strong>{login ?? 'Почта не указана'}</strong>
+        </p>
+        <form
+          className="settings-name"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void saveName();
+          }}
+        >
+          <label htmlFor="display-name">Имя</label>
+          <input id="display-name" className="paper-field" autoComplete="nickname" value={draft} onChange={(event) => { setDraft(event.target.value); setNameSaved(false); setNameError(null); }} />
+          <div className="settings-name-actions">
+            <button type="submit" className="paper-submit" disabled={namePending}>{namePending ? 'Сохраняем…' : 'Сохранить'}</button>
+            {nameSaved ? <p role="status">Сохранено</p> : null}
+            {nameError ? (
+              <p role="alert">
+                {nameError}{' '}
+                <button type="button" className="settings-retry" onClick={() => void saveName()}>Повторить</button>
+              </p>
+            ) : null}
+          </div>
+        </form>
+      </section>
+
+      <section className="settings-block" aria-labelledby="settings-sound">
+        <h2 id="settings-sound">Звук</h2>
+        <SwitchRow
+          id="sound-enabled"
+          label="Звук"
+          checked={cat.sound}
+          onChange={(checked) => void saveSound({ ...cat, sound: checked })}
+        />
+        <label className="settings-volume" htmlFor="sound-volume">
+          <span>Громкость</span>
+          <input
+            id="sound-volume"
+            type="range"
+            min="0"
+            max="1"
+            step="0.05"
+            value={volume}
+            disabled={!cat.sound}
+            aria-valuetext={`${Math.round(volume * 100)} процентов`}
+            onChange={(event) => setVolumeDraft(Number(event.target.value))}
+            onPointerUp={(event) => commitVolume(Number(event.currentTarget.value))}
+            onKeyUp={(event) => {
+              if (event.key.startsWith('Arrow')) commitVolume(Number(event.currentTarget.value));
+            }}
+            onBlur={(event) => commitVolume(Number(event.currentTarget.value))}
+          />
+        </label>
+        <button type="button" className="settings-test" disabled={!cat.sound} onClick={() => void testSound()}>Проверить звук</button>
+        {soundNote ? <p role="status" className="settings-note">{soundNote}{soundState === 'error' ? ' Повтори изменение.' : ''}</p> : null}
+        {soundHeard ? <p role="status" className="settings-note">{soundHeard}</p> : null}
+      </section>
+
+      <section className="settings-block" aria-labelledby="settings-cat">
+        <h2 id="settings-cat">Котёнок</h2>
+        <SwitchRow
+          id="cat-motion"
+          label="Анимация котёнка"
+          hint="Выключена — котёнок остаётся на месте, без покадрового движения."
+          checked={cat.walks}
+          onChange={(checked) => void saveKitten({ ...cat, walks: checked })}
+        />
+        <SwitchRow
+          id="cat-meow"
+          label="Мяукнуть в середине фокуса"
+          hint={cat.sound ? 'Один раз за текущую сессию. Пауза в это время не входит.' : 'Сначала включи звук.'}
+          checked={cat.reminders}
+          disabled={!cat.sound}
+          onChange={(checked) => void saveKitten({ ...cat, reminders: checked })}
+        />
+        {catError ? <p role="alert" className="settings-note">{catError}</p> : null}
+      </section>
+
+      <section className="settings-block" aria-labelledby="settings-look">
+        <h2 id="settings-look">Оформление</h2>
+        <ThemePicker theme={theme ?? 'yellow'} compact label="Оформление" onChange={(next) => {
+          setThemeError(null);
+          void onTheme(next).then((error) => {
+            if (error) setThemeError('Не сохранилось. Повтори выбор.');
+          });
         }} />
-        Звуковые сигналы
-      </label>
-      {fieldNote('sound', () => void saveCat('sound', cat))}
-      <label className="mt-2 block text-sm font-semibold text-ink" htmlFor="sound-volume">Громкость</label>
-      <input id="sound-volume" type="range" min={0} max={100} value={Math.round(volume * 100)} onChange={(event) => setDraftVolume(Number(event.target.value) / 100)} onPointerUp={(event) => commitVolume(Number(event.currentTarget.value) / 100)} onKeyUp={(event) => commitVolume(Number(event.currentTarget.value) / 100)} onBlur={(event) => commitVolume(Number(event.currentTarget.value) / 100)} className="mt-2 block h-11 w-full max-w-xs" />
-      {fieldNote('volume', () => void saveCat('volume', cat))}
-      <button type="button" onClick={() => void testSound()} className="paper-choice mt-2 px-0">Проверить звук</button>
-      {soundNote ? <p role="status" className="mt-2 text-sm text-ink">{soundNote}</p> : null}
-      <h3 className="mt-6 text-2xl text-ink">Фокус и перерывы</h3>
-      <div className="mt-3 grid max-w-sm gap-3">
-        <label className="text-sm font-semibold text-ink" htmlFor="pomodoro-focus">Фокус, минуты
-          <input id="pomodoro-focus" inputMode="numeric" defaultValue={cat.pomodoroMinutes} key={`focus-${cat.pomodoroMinutes}`} onBlur={(event) => {
-            const next = parseFocusMinutes(event.target.value);
-            if (next == null) event.target.value = String(cat.pomodoroMinutes);
-            else if (next !== cat.pomodoroMinutes) void saveCat('focus', { ...cat, pomodoroMinutes: next });
-          }} className="paper-field mt-1" />
-          {fieldNote('focus', () => void saveCat('focus', cat))}
-        </label>
-        <label className="text-sm font-semibold text-ink" htmlFor="pomodoro-short">Короткий перерыв, минуты
-          <input id="pomodoro-short" inputMode="numeric" defaultValue={cat.shortMinutes} key={`short-${cat.shortMinutes}`} onBlur={(event) => saveMinute(event.target, cat.shortMinutes, 60, (value) => { if (value !== cat.shortMinutes) void saveCat('short', { ...cat, shortMinutes: value }); })} className="paper-field mt-1" />
-          {fieldNote('short', () => void saveCat('short', cat))}
-        </label>
-        <label className="text-sm font-semibold text-ink" htmlFor="pomodoro-long">Длинный перерыв, минуты
-          <input id="pomodoro-long" inputMode="numeric" defaultValue={cat.longMinutes} key={`long-${cat.longMinutes}`} onBlur={(event) => saveMinute(event.target, cat.longMinutes, 60, (value) => { if (value !== cat.longMinutes) void saveCat('long', { ...cat, longMinutes: value }); })} className="paper-field mt-1" />
-          {fieldNote('long', () => void saveCat('long', cat))}
-        </label>
-        <label className="text-sm font-semibold text-ink" htmlFor="pomodoro-rounds">Подходов до длинного перерыва
-          <input id="pomodoro-rounds" inputMode="numeric" defaultValue={cat.rounds} key={`rounds-${cat.rounds}`} onBlur={(event) => saveMinute(event.target, cat.rounds, 8, (value) => { if (value !== cat.rounds) void saveCat('rounds', { ...cat, rounds: value }); })} className="paper-field mt-1" />
-          {fieldNote('rounds', () => void saveCat('rounds', cat))}
-        </label>
+        {themeError ? <p role="alert" className="settings-note">{themeError}</p> : null}
+      </section>
+    </div>
+  );
+}
+
+function SwitchRow({ id, label, hint, checked, disabled, onChange }: {
+  id: string;
+  label: string;
+  hint?: string;
+  checked: boolean;
+  disabled?: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <div className={`settings-row${disabled ? ' is-disabled' : ''}`}>
+      <div className="settings-copy">
+        <label htmlFor={id}>{label}</label>
+        {hint ? <p id={`${id}-hint`}>{hint}</p> : null}
       </div>
-      <label className="mt-3 flex min-h-11 items-center gap-3 text-sm font-semibold text-ink">
-        <input type="checkbox" checked={cat.autoStart} onChange={(event) => void saveCat('auto', { ...cat, autoStart: event.target.checked })} />
-        Автозапуск перерыва и следующего подхода
-      </label>
-      {fieldNote('auto', () => void saveCat('auto', cat))}
-      <h3 className="mt-6 text-2xl text-ink">Котёнок</h3>
-      <label className="mt-3 flex min-h-11 items-center gap-3 text-sm font-semibold text-ink">
-        <input type="checkbox" checked={cat.reminders} onChange={(event) => void saveCat('remind', { ...cat, reminders: event.target.checked })} />
-        Кот напоминает о фокусе
-      </label>
-      {fieldNote('remind', () => void saveCat('remind', cat))}
-      <p className="text-sm text-muted">Один раз в середине подхода.</p>
-      {cat.hidden ? <button type="button" onClick={() => void saveCat('cat', { ...cat, hidden: false })} className="paper-submit mt-3">Вернуть котёнка</button> : null}
-      {fieldNote('cat', () => void saveCat('cat', cat))}
-      <details className="mt-3 text-sm text-ink">
-        <summary className="cursor-pointer font-semibold">Как двигать котёнка</summary>
-        <p className="mt-2 text-muted">Потяни, чтобы переставить. Нажми, чтобы открыть меню.</p>
-      </details>
-      <h3 className="mt-6 text-2xl text-ink">Цвет приложения</h3>
-      <div className="mt-3">
-        <ThemePicker theme={theme ?? 'yellow'} onChange={(next) => void saveTheme(next)} />
-        {fieldNote('theme', () => void saveTheme(theme ?? 'yellow'))}
-      </div>
-    </section>
+      <span className="settings-switch">
+        <input
+          id={id}
+          type="checkbox"
+          role="switch"
+          checked={checked}
+          disabled={disabled}
+          aria-describedby={hint ? `${id}-hint` : undefined}
+          onChange={(event) => onChange(event.target.checked)}
+        />
+        <span aria-hidden="true" />
+      </span>
+    </div>
   );
 }

@@ -5,11 +5,39 @@ import { THEME_OPTIONS } from '../lib/theme';
 type ThemePickerProps = {
   theme: AppTheme | null;
   onChange: (theme: AppTheme) => void;
+  compact?: boolean;
+  label?: string;
 };
 
-export function ThemePicker({ theme, onChange }: ThemePickerProps) {
+export function ThemePicker({ theme, onChange, compact = false, label = 'Цвет приложения' }: ThemePickerProps) {
+  if (compact) {
+    return (
+      <div className="theme-samples" role="listbox" aria-label={label}>
+        {THEME_OPTIONS.map((option) => {
+          const selected = theme === option.id;
+          return (
+            <button
+              key={option.id}
+              type="button"
+              role="option"
+              aria-selected={selected}
+              onClick={() => onChange(option.id)}
+              className={`theme-sample${selected ? ' is-selected' : ''}`}
+            >
+              <span className="theme-swatch" style={{ backgroundColor: option.page }} aria-hidden="true">
+                <span style={{ backgroundColor: option.accent }} />
+              </span>
+              <span>{option.label}</span>
+              {selected ? <Check className="theme-mark" aria-hidden="true" /> : <span className="theme-mark" aria-hidden="true" />}
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
+
   return (
-    <div className="grid grid-cols-2 gap-3" role="listbox" aria-label="Цвет приложения">
+    <div className="grid grid-cols-2 gap-3" role="listbox" aria-label={label}>
       {THEME_OPTIONS.map((option) => {
         const selected = theme === option.id;
         return (

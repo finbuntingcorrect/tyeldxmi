@@ -57,6 +57,7 @@ function angleAt(event: ReactPointerEvent, node: HTMLElement) {
 export function FocusScreen(props: FocusScreenProps) {
   const { book, session, now, reduced } = props;
   const cat = book.cat;
+  const still = reduced || !cat.walks;
   const dialRef = useRef<HTMLDivElement>(null);
   const drag = useRef<{ id: number; last: number } | null>(null);
   const rewardSeen = useRef(session?.rewarded ? session.signalId : '');
@@ -313,9 +314,9 @@ export function FocusScreen(props: FocusScreenProps) {
       </div>
       <div className="focus-cat">
         {feeding ? (
-          <TreatSprite kind={feeding} reduced={reduced} onDone={() => setFeeding(null)} />
+          <TreatSprite kind={feeding} reduced={still} onDone={() => setFeeding(null)} />
         ) : (
-          <CatSprite clip={clip} face={1} reduced={reduced} />
+          <CatSprite clip={clip} face={1} reduced={still} />
         )}
       </div>
     </section>

@@ -246,7 +246,7 @@ export function CatCompanion(props: CatCompanionProps) {
       {menu ? (
         <div role="menu" className={`absolute z-10 w-52 border border-line bg-card p-1 ${lineAbove ? 'bottom-full mb-2' : 'top-full mt-2'} ${side ? 'right-0' : 'left-0'}`} style={{ pointerEvents: 'auto' }}>
           <button type="button" role="menuitem" onClick={props.onToggleSound} className="paper-choice w-full text-left">{props.sound ? 'Выключить звук' : 'Включить звук'}</button>
-          <button type="button" role="menuitem" onClick={props.onToggleWalks} className="paper-choice w-full text-left">{props.walks ? 'Остановить прогулки' : 'Разрешить прогулки'}</button>
+          <button type="button" role="menuitem" onClick={props.onToggleWalks} className="paper-choice w-full text-left">{props.walks ? 'Выключить анимацию' : 'Включить анимацию'}</button>
           <button type="button" role="menuitem" onClick={props.onTogglePin} className="paper-choice w-full text-left">{props.pinned ? 'Открепить' : 'Закрепить'}</button>
           <button type="button" role="menuitem" onClick={props.onHide} className="paper-choice w-full text-left">Скрыть котёнка</button>
         </div>

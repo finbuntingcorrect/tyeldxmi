@@ -43,7 +43,7 @@ export function Home() {
     reminders: book.cat.reminders,
     sound: book.cat.sound,
     volume: book.cat.volume,
-    autoStart: book.cat.autoStart,
+    autoStart: false, // ignore a stored auto-start so an old setting cannot launch the next session
     rounds: book.cat.rounds,
     cycle: book.cat.focusCycle,
     shortMinutes: book.cat.shortMinutes,
@@ -267,21 +267,15 @@ export function Home() {
           </p>
         ) : null}
         {page.name === 'settings' ? (
-          <div>
-            <div className="px-4 pt-4 sm:px-6">
-              <AppLink href="/app" className="inline-flex min-h-11 items-center text-sm font-semibold text-muted">К дневнику</AppLink>
-            </div>
-            <SettingsPanel
-              login={notebook.login}
-              name={person}
-              theme={book.theme}
-              cat={book.cat}
-              onName={notebook.setName}
-              onTheme={notebook.setTheme}
-              onCat={notebook.setCat}
-              here={notebook.here}
-            />
-          </div>
+          <SettingsPanel
+            login={notebook.login}
+            name={book.name}
+            theme={book.theme}
+            cat={book.cat}
+            onName={notebook.setName}
+            onTheme={notebook.setTheme}
+            onCat={notebook.setCat}
+          />
         ) : null}
         {page.name === 'habits' ? (
           <HabitsScreen
@@ -355,7 +349,7 @@ export function Home() {
         pinned={book.cat.pinned}
         walks={book.cat.walks}
         sound={book.cat.sound}
-        reduced={reduced}
+        reduced={reduced || !book.cat.walks}
         position={{ x: book.cat.x, y: book.cat.y }}
         remind={focus.remindOpen}
         greeting={showingGreeting}
