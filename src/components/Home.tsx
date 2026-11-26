@@ -238,7 +238,7 @@ export function Home() {
 
   return (
     <div className="min-w-0 overflow-x-clip overflow-y-auto" style={{ paddingRight: 'var(--cat-lane, 0px)', height: 'calc(100dvh - var(--cat-bottom, 0px))' }}>
-    <div className={`mx-auto w-full min-w-0 max-w-6xl px-2 py-4 sm:px-6 sm:py-10 ${session && !session.settled && page.name !== 'focus' ? 'pb-28' : ''}`}>
+    <div className={`mx-auto w-full min-w-0 px-2 py-4 sm:px-6 sm:py-10 ${page.name === 'calendar' || page.name === 'day' ? 'max-w-[88rem]' : 'max-w-6xl'} ${session && !session.settled && page.name !== 'focus' ? 'pb-28' : ''}`}>
       <div className="min-w-0 overflow-x-clip border border-line bg-card">
         <header className="flex flex-col gap-2 px-3 py-4 sm:flex-row sm:items-end sm:justify-between sm:px-6">
           <div className="min-w-0">
