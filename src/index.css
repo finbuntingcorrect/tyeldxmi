@@ -1196,6 +1196,7 @@ html[data-theme='dark'] {
 
 .diary {
   --diary-rule: calc(2.75rem - 2mm);
+  --diary-box: 1rem;
   --diary-head: 2.5rem;
   --diary-slots: 7;
   --diary-gap: 0.5rem;
@@ -1426,8 +1427,8 @@ html[data-theme='dark'] {
 }
 
 .diary-state-box {
-  width: 1rem;
-  height: 1rem;
+  width: var(--diary-box);
+  height: var(--diary-box);
   border: 1.5px solid var(--color-ink);
   border-radius: 2px;
   background: transparent;
@@ -2394,13 +2395,14 @@ html[data-theme='dark'] {
 
 .diary-plus.pixel-button {
   display: grid;
+  margin: 0 0 0 0.55rem;
   border-radius: 0;
   background: transparent;
 }
 
 .diary-plus.pixel-button .pixel-button-art {
-  width: var(--diary-rule);
-  height: var(--diary-rule);
+  width: var(--diary-box);
+  height: var(--diary-box);
 }
 
 .habit-add.pixel-button {
