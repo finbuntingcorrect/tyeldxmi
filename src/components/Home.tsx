@@ -236,16 +236,20 @@ export function Home() {
       <div className="min-w-0 overflow-x-clip border border-line bg-card">
         <header className="app-header">
           <div className="app-header-row">
-            <h1 className="app-header-title">{person ? `Привет, ${person}` : 'Привет'}</h1>
+            {page.name === 'calendar' || page.name === 'day' ? (
+              <p className="app-header-date is-inline">{formatLocalDate(dateFromKey(today))}</p>
+            ) : (
+              <h1 className="app-header-title">{person ? `Привет, ${person}` : 'Привет'}</h1>
+            )}
             <div className="account-actions">
-            <AppLink href="/app/settings" aria-current={page.name === 'settings' ? 'page' : undefined} className={page.name === 'settings' ? 'account-settings is-current' : 'account-settings'}>
+            <AppLink href={page.name === 'settings' ? '/app' : '/app/settings'} aria-current={page.name === 'settings' ? 'page' : undefined} className={page.name === 'settings' ? 'account-settings is-current' : 'account-settings'}>
               <img className="settings-paw" src={uiKit.icon.settings} alt="" width={30} height={30} draggable={false} />
               Настройки
             </AppLink>
             <button type="button" onClick={() => { void notebook.signOut().then((left) => { if (left) go('/'); }); }}>Выйти</button>
             </div>
           </div>
-          <p className="app-header-date">{formatLocalDate(dateFromKey(today))}</p>
+          {page.name === 'calendar' || page.name === 'day' ? null : <p className="app-header-date">{formatLocalDate(dateFromKey(today))}</p>}
         </header>
         <ModeSwitch page={page} />
         {notebook.error ? (

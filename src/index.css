@@ -1537,6 +1537,11 @@ html[data-theme='dark'] {
   font-size: 0.875rem;
 }
 
+.app-header-date.is-inline {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
 @media (max-width: 420px) {
   .app-header-title {
     font-size: 1.28rem;
@@ -2584,22 +2589,22 @@ html[data-theme='dark'] {
   position: relative;
   display: grid;
   grid-template-columns: 35% minmax(0, 1fr);
-  flex: 0 0 156px;
+  flex: 0 0 220px;
   align-items: center;
   box-sizing: border-box;
-  width: 156px;
-  min-width: 156px;
-  max-width: 156px;
+  width: 220px;
+  min-width: 220px;
+  max-width: 220px;
   aspect-ratio: 768 / 256;
-  min-height: 44px;
-  padding: 0 0.4rem 0 0;
+  min-height: 56px;
+  padding: 0 0.55rem 0 0;
   background-color: transparent;
   background-position: center;
   background-repeat: no-repeat;
   background-size: 100% 100%;
   image-rendering: pixelated;
   color: #2e211b;
-  font-size: 0.78rem;
+  font-size: 1.05rem;
   font-weight: 800;
   line-height: 1.05;
   text-decoration: none;
@@ -2734,10 +2739,10 @@ html[data-theme='dark'] {
     width: auto;
     min-width: 0;
     max-width: none;
-    height: 2.75rem;
+    height: 3.6rem;
     aspect-ratio: auto;
-    padding: 0 0.15rem 0 0;
-    font-size: clamp(0.62rem, 2.8vw, 0.78rem);
+    padding: 0 0.25rem 0 0;
+    font-size: clamp(0.85rem, 3.4vw, 1.05rem);
     background-size: 100% 100%;
   }
 
