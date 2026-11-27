@@ -60,11 +60,16 @@ assert.equal(grantReward(finished('signal-one'), 'no', '2026-11-26', () => 0).er
 
 for (const item of REWARD_ITEMS) {
   const slot = rewardSlot(item.id);
-  assert.ok(slot.left >= 0.142, item.id);
-  assert.ok(slot.left + slot.width <= 0.857, item.id);
+  const index = REWARD_ITEMS.findIndex((entry) => entry.id === item.id);
+  const column = index % 4;
+  const span = (0.857 - 0.142) / 4;
   const band = item.shelf === 'top' ? [0.268, 0.404] : item.shelf === 'middle' ? [0.484, 0.619] : [0.701, 0.832];
-  assert.ok(slot.top >= band[0], item.id);
-  assert.ok(slot.top + slot.height <= band[1] + 0.001, item.id);
+  const innerW = span * (1 - 0.16);
+  const innerH = (band[1] - band[0]) * (1 - 0.16);
+  assert.ok(Math.abs(slot.left + slot.width / 2 - (0.142 + column * span + span / 2)) < 0.001, item.id);
+  assert.ok(Math.abs(slot.top + slot.height / 2 - (band[0] + band[1]) / 2) < 0.001, item.id);
+  assert.ok(Math.abs(slot.width - innerW * 2) < 0.001, item.id);
+  assert.ok(Math.abs(slot.height - innerH * 2) < 0.001, item.id);
 }
 
 console.log('rewards ok');

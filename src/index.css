@@ -252,29 +252,6 @@ html[data-theme='dark'] {
   align-items: center;
 }
 
-.focus-sound {
-  position: absolute;
-  z-index: 2;
-  top: 0;
-  right: 0;
-  display: grid;
-  width: 2.75rem;
-  height: 2.75rem;
-  place-items: center;
-  border: 0;
-  background: transparent;
-  color: var(--color-ink);
-}
-
-.focus-sound:hover {
-  color: var(--color-primary-hover);
-}
-
-.focus-sound:focus-visible {
-  outline: 2px solid var(--color-primary-hover);
-  outline-offset: 3px;
-}
-
 .focus-dial {
   position: relative;
   box-sizing: border-box;
@@ -2515,17 +2492,6 @@ html[data-theme='dark'] {
 }
 
 .habit-add.pixel-button .pixel-button-art {
-  width: 48px;
-  height: 48px;
-}
-
-.focus-sound.pixel-button {
-  width: 48px;
-  height: 48px;
-  padding: 0;
-}
-
-.focus-sound.pixel-button .pixel-button-art {
   width: 48px;
   height: 48px;
 }

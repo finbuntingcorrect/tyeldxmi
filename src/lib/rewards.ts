@@ -83,11 +83,13 @@ export function rewardSlot(id: RewardId) {
   const span = (SHELF_RIGHT - SHELF_LEFT) / 4;
   const insetX = span * 0.08;
   const insetY = (band.bottom - band.top) * 0.08;
+  const width = (span - insetX * 2) * 2;
+  const height = (band.bottom - band.top - insetY * 2) * 2;
   return {
-    left: SHELF_LEFT + column * span + insetX,
-    top: band.top + insetY,
-    width: span - insetX * 2,
-    height: band.bottom - band.top - insetY * 2,
+    left: SHELF_LEFT + column * span + span / 2 - width / 2,
+    top: (band.top + band.bottom) / 2 - height / 2,
+    width,
+    height,
   };
 }
 

@@ -41,7 +41,6 @@ type FocusScreenProps = {
   onSelectTask: (id: string | null) => void;
   onCreate: (title: string) => void;
   onMinutes: (minutes: number) => void;
-  onToggleSound: () => void;
   onDismissNotice: () => void;
   onDismissRemind: () => void;
   onReward: (signalId: string) => Promise<{ food: TreatKind; itemId: RewardId; created: boolean } | null>;
@@ -273,13 +272,6 @@ export function FocusScreen(props: FocusScreenProps) {
   return (
     <section className="focus-stage">
       <div className="focus-dial-wrap">
-        <PixelIconButton
-          kind={cat.sound ? 'sound-on' : 'sound-off'}
-          label={cat.sound ? 'Выключить звук' : 'Включить звук'}
-          aria-pressed={cat.sound}
-          onClick={props.onToggleSound}
-          className="focus-sound"
-        />
         <div
           ref={dialRef}
           className="focus-dial"

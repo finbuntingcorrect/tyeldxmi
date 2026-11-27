@@ -168,14 +168,6 @@ export function SettingsPanel({ login, name, theme, cat, onName, onTheme, onCat 
           checked={cat.walks}
           onChange={(checked) => void saveKitten({ ...cat, walks: checked })}
         />
-        <SwitchRow
-          id="cat-meow"
-          label="Мяукнуть в середине фокуса"
-          hint={cat.sound ? 'Один раз за текущую сессию. Пауза в это время не входит.' : 'Сначала включи звук.'}
-          checked={cat.reminders}
-          disabled={!cat.sound}
-          onChange={(checked) => void saveKitten({ ...cat, reminders: checked })}
-        />
         {catError ? <p role="alert" className="settings-note">{catError}</p> : null}
       </section>
 

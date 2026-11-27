@@ -38,7 +38,6 @@ export function Home() {
     login: notebook.login,
     session: book.focusSession,
     focusAt: book.focusAt,
-    reminders: book.cat.reminders,
     sound: book.cat.sound,
     volume: book.cat.volume,
     autoStart: false, // ignore a stored auto-start so an old setting cannot launch the next session
@@ -325,7 +324,6 @@ export function Home() {
             onSelectTask={selectTask}
             onCreate={addFocusTask}
             onMinutes={(value) => notebook.setCat({ ...book.cat, pomodoroMinutes: value })}
-            onToggleSound={() => void toggleSound()}
             onDismissNotice={() => { focus.clearNotice(); setSoundNote(null); }}
             onDismissRemind={focus.dismissRemind}
             onReward={async (signalId) => {
