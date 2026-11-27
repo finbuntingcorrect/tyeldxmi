@@ -11,12 +11,13 @@ import {
   formatClock,
   minutesLabel,
   remainingMs,
-  treatForMinutes,
   unappliedFocusMs,
   type FocusSession,
   type PhaseChoice,
   type TreatKind,
 } from '../lib/focusSession';
+import { broughtLine, type RewardId } from '../lib/rewards';
+import { RewardCabinet } from './RewardCabinet';
 import type { Notebook } from '../lib/notebook';
 
 type FocusScreenProps = {
@@ -43,8 +44,34 @@ type FocusScreenProps = {
   onToggleSound: () => void;
   onDismissNotice: () => void;
   onDismissRemind: () => void;
-  onFeed: (kind: TreatKind) => Promise<boolean>;
+  onReward: (signalId: string) => Promise<{ food: TreatKind; itemId: RewardId; created: boolean } | null>;
 };
+
+const PENDING_REWARD = 'today-cat-reward-pending';
+
+function readPendingReward() {
+  try {
+    return sessionStorage.getItem(PENDING_REWARD);
+  } catch {
+    return null;
+  }
+}
+
+function writePendingReward(signalId: string) {
+  try {
+    sessionStorage.setItem(PENDING_REWARD, signalId);
+  } catch {
+    /* A private window still grants; the retry button covers a lost mark. */
+  }
+}
+
+function clearPendingReward(signalId: string) {
+  try {
+    if (sessionStorage.getItem(PENDING_REWARD) === signalId) sessionStorage.removeItem(PENDING_REWARD);
+  } catch {
+    /* The stored reward itself is what stops a second roll. */
+  }
+}
 
 function angleAt(event: ReactPointerEvent, node: HTMLElement) {
   const rect = node.getBoundingClientRect();
@@ -60,14 +87,20 @@ export function FocusScreen(props: FocusScreenProps) {
   const still = reduced || !cat.walks;
   const dialRef = useRef<HTMLDivElement>(null);
   const drag = useRef<{ id: number; last: number } | null>(null);
-  const rewardSeen = useRef(session?.rewarded ? session.signalId : '');
+  const openedRewarded = useRef(session?.rewarded ? session.signalId : '');
+  const shownReward = useRef(session && book.rewards.some((reward) => reward.signalId === session.signalId) ? session.signalId : '');
+  const asked = useRef('');
+  const alive = useRef(true);
+  const rewardRef = useRef(props.onReward);
   const cleared = useRef(false);
-  const feedRef = useRef(props.onFeed);
   const [chosen, setChosen] = useState(() => clampDialMinutes(cat.pomodoroMinutes));
   const chosenRef = useRef(chosen);
   const [editing, setEditing] = useState(false);
   const [entry, setEntry] = useState('');
   const [feeding, setFeeding] = useState<TreatKind | null>(null);
+  const [arrival, setArrival] = useState<{ id: RewardId; token: number } | null>(null);
+  const [brought, setBrought] = useState<string | null>(null);
+  const [rewardError, setRewardError] = useState<string | null>(null);
   const [frameNow, setFrameNow] = useState(now);
   const active = Boolean(session && !session.settled);
   const running = Boolean(active && session && !session.paused);
@@ -86,10 +119,6 @@ export function FocusScreen(props: FocusScreenProps) {
   useEffect(() => {
     warmImages(feedingSources());
   }, []);
-
-  useEffect(() => {
-    feedRef.current = props.onFeed;
-  });
 
   useEffect(() => {
     cleared.current = false;
@@ -114,12 +143,45 @@ export function FocusScreen(props: FocusScreenProps) {
   }, [reduced, running]);
 
   useEffect(() => {
-    if (!session?.rewarded || session.phase !== 'focus' || !session.full) return;
-    if (rewardSeen.current === session.signalId) return;
-    rewardSeen.current = session.signalId;
-    const kind = treatForMinutes(session.focusMinutes);
-    setFeeding(kind);
-    void feedRef.current(kind);
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    rewardRef.current = props.onReward;
+  });
+
+  useEffect(() => {
+    if (!brought) return;
+    const timer = window.setTimeout(() => setBrought(null), 3600);
+    return () => window.clearTimeout(timer);
+  }, [brought]);
+
+  useEffect(() => {
+    const current = session;
+    if (!current?.rewarded || current.phase !== 'focus' || !current.full) return;
+    if (asked.current === current.signalId) return;
+    const pending = readPendingReward() === current.signalId;
+    if (openedRewarded.current === current.signalId && !pending) return;
+    asked.current = current.signalId;
+    const signalId = current.signalId;
+    writePendingReward(signalId);
+    void rewardRef.current(signalId).then((result) => {
+      if (!alive.current) return;
+      if (!result) {
+        setRewardError(signalId);
+        return;
+      }
+      clearPendingReward(signalId);
+      setRewardError(null);
+      if (shownReward.current === signalId && !result.created) return;
+      shownReward.current = signalId;
+      setFeeding(result.food);
+      setArrival({ id: result.itemId, token: Date.now() });
+      setBrought(broughtLine(result.itemId));
+    });
   }, [session]);
 
   function remember(minutes: number, persist: boolean) {
@@ -311,13 +373,49 @@ export function FocusScreen(props: FocusScreenProps) {
         {finished ? <button type="button" className="focus-break" onClick={props.onBreak}>Перерыв 5 минут</button> : null}
         <p className="focus-today">{todayLine}</p>
         {props.notice ? <p role="status" className="focus-note">{props.notice}</p> : null}
+        {rewardError && rewardError === session?.signalId ? (
+          <p role="alert" className="focus-note">
+            Награда не сохранилась.{' '}
+            <button
+              type="button"
+              className="settings-retry"
+              onClick={() => {
+                const signalId = rewardError;
+                setRewardError(null);
+                void rewardRef.current(signalId).then((result) => {
+                  if (!alive.current) return;
+                  if (!result) {
+                    setRewardError(signalId);
+                    return;
+                  }
+                  clearPendingReward(signalId);
+                  shownReward.current = signalId;
+                  setFeeding(result.food);
+                  setArrival({ id: result.itemId, token: Date.now() });
+                  setBrought(broughtLine(result.itemId));
+                });
+              }}
+            >
+              Повторить
+            </button>
+          </p>
+        ) : null}
       </div>
-      <div className="focus-cat">
-        {feeding ? (
-          <TreatSprite kind={feeding} reduced={still} onDone={() => setFeeding(null)} />
-        ) : (
-          <CatSprite clip={clip} face={1} reduced={still} />
-        )}
+      <div className="focus-side">
+        <div className="focus-cat">
+          {feeding ? (
+            <TreatSprite kind={feeding} reduced={still} onDone={() => setFeeding(null)} />
+          ) : (
+            <CatSprite clip={clip} face={1} reduced={still} />
+          )}
+        </div>
+        <RewardCabinet
+          rewards={book.rewards}
+          arrivalId={arrival?.id ?? null}
+          arrivalToken={arrival?.token ?? 0}
+          motion={!still}
+          caption={brought}
+        />
       </div>
     </section>
   );

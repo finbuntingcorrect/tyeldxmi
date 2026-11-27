@@ -4,12 +4,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   createFileStore,
+  grantAccountReward,
   loginAccount,
   logoutAccount,
   readAccountNotebook,
   registerAccount,
   writeAccountNotebook,
 } from './cabinet';
+import { settleSession, startFocus } from '../src/lib/focusSession';
 
 const directory = await mkdtemp(join(tmpdir(), 'today-cat-cabinet-'));
 const store = createFileStore(join(directory, 'accounts.json'));
@@ -128,6 +130,28 @@ const unset = await loginAccount(store, 'old@example.com', 'letter1', false);
 assert.equal(unset.status, 401);
 assert.equal(unset.body.error, 'password_unset');
 assert.equal(unset.cookie, undefined);
+
+const kisa = await registerAccount(store, 'Киса', 'secret12', false);
+assert.equal(kisa.status, 200);
+const kisaToken = tokenFrom(kisa.cookie);
+const started = startFocus('task', 20, 1_000, 'focus-signal-1');
+const settled = { ...settleSession(started, 1_000 + 20 * 60_000).session, rewarded: true };
+const withFocus = await writeAccountNotebook(store, kisaToken, { name: 'Киса', mode: 'planner', greeted: true, focusSession: settled });
+assert.equal(withFocus.status, 200);
+const early = await grantAccountReward(store, kisaToken, 'focus-signal-1', '2026-11-26');
+assert.equal(early.status, 200);
+assert.equal(early.body.created, true);
+const repeated = await grantAccountReward(store, kisaToken, 'focus-signal-1', '2026-11-26');
+assert.equal(repeated.status, 200);
+assert.equal(repeated.body.created, false);
+assert.equal(repeated.body.reward.itemId, early.body.reward.itemId);
+assert.equal(repeated.body.reward.food, early.body.reward.food);
+const kept = await writeAccountNotebook(store, kisaToken, { name: 'Киса', mode: 'planner', greeted: true });
+assert.equal(kept.body.notebook.rewards.length, 1);
+assert.equal(kept.body.notebook.rewards[0].signalId, 'focus-signal-1');
+const blocked = await grantAccountReward(store, kisaToken, 'another-signal', '2026-11-26');
+assert.equal(blocked.status, 409);
+assert.equal(blocked.body.error, 'pending');
 
 const raw = await readFile(join(directory, 'accounts.json'), 'utf8');
 assert.equal(raw.includes('secret12'), false);

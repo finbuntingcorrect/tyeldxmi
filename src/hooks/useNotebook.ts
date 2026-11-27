@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { cabinetError, cabinetUsesBrowser, fetchCabinet, loginCabinet, logoutCabinet, registerCabinet, requestEmailLink, resetCabinetPassword, saveCabinet } from '../lib/cabinetApi';
+import { cabinetError, cabinetUsesBrowser, fetchCabinet, grantCabinetReward, loginCabinet, logoutCabinet, registerCabinet, requestEmailLink, resetCabinetPassword, saveCabinet } from '../lib/cabinetApi';
+import type { FocusReward } from '../lib/rewards';
 import {
   claimMatches,
   clearClaim,
@@ -377,6 +378,31 @@ export function useNotebook() {
     return true;
   }
 
+  function keepReward(reward: FocusReward) {
+    if (bookRef.current.rewards.some((item) => item.signalId === reward.signalId)) return;
+    commit((book) => (
+      book.rewards.some((item) => item.signalId === reward.signalId)
+        ? book
+        : { ...book, rewards: [...book.rewards, reward] }
+    ));
+  }
+
+  async function grantFocusReward(signalId: string, date: string) {
+    await chain.current.catch(() => undefined);
+    if (failedSave.current) await scheduleSave().catch(() => undefined);
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      const result = await grantCabinetReward(signalId, date);
+      if (result === 'pending') {
+        await new Promise((resolve) => window.setTimeout(resolve, 250));
+        continue;
+      }
+      if (!result) return null;
+      keepReward(result.reward);
+      return result;
+    }
+    return null;
+  }
+
   function feedTreat(date: string, kind: TreatKind) {
     if (bookRef.current.cat.treats.some((item) => item.date === date && item[kind])) return;
     commit((book) => markTreatFed(book, date, kind));
@@ -488,6 +514,7 @@ export function useNotebook() {
     },
     setCat: (cat: CatPrefs) => commitSaved((book) => setCatPrefs(book, cat)),
     feedTreat,
+    grantFocusReward,
   };
 }
 

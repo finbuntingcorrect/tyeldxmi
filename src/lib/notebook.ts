@@ -2,6 +2,7 @@ import { addDays, isDateKey, monthDay, occurrenceDates, weekday } from '../../se
 import type { DayPart, Priority, RepeatKind } from '../types';
 import type { LegacyStoredTask } from '../types';
 import { defaultCatPrefs, feedTreat, parseCatPrefs, parseFocusSession, type CatPrefs, type FocusChange, type FocusSession, type TreatKind } from './focusSession.ts';
+import { parseRewards, type FocusReward } from './rewards.ts';
 import { normalizeSchedule, sameSchedule } from './schedule.ts';
 
 export type AppMode = 'habits' | 'planner' | 'focus';
@@ -96,6 +97,7 @@ export type Notebook = {
   marks: HabitMark[];
   weekItems: WeekItem[];
   dayNotes: DayNote[];
+  rewards: FocusReward[];
 };
 
 export type TaskDraft = {
@@ -154,6 +156,7 @@ export function emptyNotebook(): Notebook {
     marks: [],
     weekItems: [],
     dayNotes: [],
+    rewards: [],
   };
 }
 
@@ -987,6 +990,7 @@ export function parseNotebook(value: unknown): Notebook | null {
       book.dayNotes.push({ date: note.date, text });
     }
   }
+  book.rewards = parseRewards(raw.rewards);
   if (!book.mode) book.greeted = false;
   return book;
 }

@@ -1,5 +1,6 @@
 import { createLocalCabinet, type LocalCabinet } from './localCabinet';
 import type { Notebook } from './notebook';
+import { grantReward, parseRewards, type FocusReward } from './rewards';
 
 export type CabinetPayload = {
   login: string;
@@ -127,6 +128,49 @@ export function logoutCabinet() {
     return Promise.resolve({});
   }
   return request('/api/auth', 'POST', { action: 'logout' });
+}
+
+export type GrantedReward = {
+  reward: FocusReward;
+  created: boolean;
+};
+
+export async function grantCabinetReward(signalId: string, date: string): Promise<GrantedReward | 'pending' | null> {
+  const local = async () => {
+    const run = async () => {
+      const current = await localCabinet().readSession();
+      if (!current) throw new Error('auth');
+      const granted = grantReward(current.notebook, signalId, date, Math.random);
+      if (granted.error || !granted.reward) return 'pending' as const;
+      if (granted.created) await localCabinet().save(granted.book);
+      return { reward: granted.reward, created: granted.created };
+    };
+    if (typeof navigator !== 'undefined' && navigator.locks) {
+      return navigator.locks.request('today-cat-reward', run);
+    }
+    return run();
+  };
+  if (preferBrowser) {
+    try {
+      return await local();
+    } catch {
+      return null;
+    }
+  }
+  try {
+    const payload = await request('/api/notebook', 'POST', { action: 'reward', signalId, date });
+    const [reward] = parseRewards([payload.reward]);
+    if (!reward) return null;
+    return { reward, created: payload.created === true };
+  } catch (error) {
+    if (error instanceof Error && error.message === 'pending') return 'pending';
+    if (!isStorage(error)) return null;
+    try {
+      return await local();
+    } catch {
+      return null;
+    }
+  }
 }
 
 export async function saveCabinet(notebook: Notebook) {

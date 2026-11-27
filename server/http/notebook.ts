@@ -1,5 +1,5 @@
 import { readCookie } from '../account';
-import { cabinetStore, readAccountNotebook, writeAccountNotebook } from '../cabinet';
+import { cabinetStore, grantAccountReward, readAccountNotebook, writeAccountNotebook } from '../cabinet';
 import { cookieHeader, readBody, send, type NodeRequest, type NodeResponse } from './node';
 
 export default async function handler(req: NodeRequest, res: NodeResponse) {
@@ -18,7 +18,13 @@ export default async function handler(req: NodeRequest, res: NodeResponse) {
       return;
     }
     const body = readBody(req.body);
-    const notebook = body && typeof body === 'object' ? (body as { notebook?: unknown }).notebook : undefined;
+    const record = body && typeof body === 'object' ? body as { notebook?: unknown; action?: unknown; signalId?: unknown; date?: unknown } : undefined;
+    if (record?.action === 'reward') {
+      const result = await grantAccountReward(store, token, record.signalId, record.date);
+      send(res, result.status, result.body);
+      return;
+    }
+    const notebook = record?.notebook;
     const result = await writeAccountNotebook(store, token, notebook);
     send(res, result.status, result.body);
   } catch (error) {

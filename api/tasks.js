@@ -45,17 +45,43 @@ function weekday(key) {
   const [year, month, day] = key.split("-").map(Number);
   return new Date(Date.UTC(year, month - 1, day)).getUTCDay();
 }
+function monthDay(key) {
+  return Number(key.slice(8, 10));
+}
+function daysInMonth(year, month) {
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+function repeatDay(year, month, wanted) {
+  const last = daysInMonth(year, month);
+  if (wanted >= 29 && wanted > last) return last;
+  return wanted;
+}
+function dayCount(from, to2) {
+  const [fromYear, fromMonth, fromDay] = from.split("-").map(Number);
+  const [toYear, toMonth, toDay] = to2.split("-").map(Number);
+  const start = Date.UTC(fromYear, fromMonth - 1, fromDay);
+  const end = Date.UTC(toYear, toMonth - 1, toDay);
+  return Math.round((end - start) / 864e5);
+}
+function mondayOf(key) {
+  const day = weekday(key);
+  return addDays(key, day === 0 ? -6 : 1 - day);
+}
 function occurrenceDates(input) {
   if (!isDateKey(input.start) || !isDateKey(input.from) || !isDateKey(input.to)) return [];
   const end = input.until && isDateKey(input.until) && input.until < input.to ? input.until : input.to;
   let cursor = input.start > input.from ? input.start : input.from;
   if (cursor > end) return [];
+  const interval = Number.isInteger(input.interval) && (input.interval ?? 1) >= 1 && (input.interval ?? 1) <= 99 ? input.interval ?? 1 : 1;
   const allowed = new Set(input.weekdays.filter((day) => day >= 0 && day <= 6));
+  const wanted = input.monthDay && input.monthDay >= 1 && input.monthDay <= 31 ? input.monthDay : monthDay(input.start);
   const dates = [];
   while (cursor <= end && dates.length < 400) {
     const day = weekday(cursor);
-    const include = input.kind === "daily" || input.kind === "weekdays" && day >= 1 && day <= 5 || input.kind === "weekly" && allowed.has(day);
-    if (include) dates.push(cursor);
+    const [year, month, date] = cursor.split("-").map(Number);
+    const months = (year - Number(input.start.slice(0, 4))) * 12 + (month - Number(input.start.slice(5, 7)));
+    const include = input.kind === "daily" && dayCount(input.start, cursor) % interval === 0 || input.kind === "weekdays" && day >= 1 && day <= 5 || input.kind === "weekly" && allowed.has(day) && dayCount(mondayOf(input.start), mondayOf(cursor)) / 7 % interval === 0 || input.kind === "monthly" && months >= 0 && months % interval === 0 && date === repeatDay(year, month, wanted);
+    if (include && cursor >= input.start) dates.push(cursor);
     cursor = addDays(cursor, 1);
   }
   return dates;

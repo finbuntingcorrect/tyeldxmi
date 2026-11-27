@@ -1,7 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import { localDateKey, dateFromKey, formatLocalDate } from '../lib/date';
-import { claimTreat } from '../lib/treats';
-import type { TreatKind } from '../lib/focusSession';
 import { catPose } from '../lib/focusSession';
 import { dayHint, isOpenTask, needsHello, personName, taskMark, tasksForDate } from '../lib/notebook';
 import { isPlannerPage, modeForPage, pagePath, safeNext, weekMonday } from '../lib/route';
@@ -334,11 +332,10 @@ export function Home() {
             onToggleSound={() => void toggleSound()}
             onDismissNotice={() => { focus.clearNotice(); setSoundNote(null); }}
             onDismissRemind={focus.dismissRemind}
-            onFeed={async (kind: TreatKind) => {
-              const won = await claimTreat(notebook.login, today, kind);
-              if (!won) return false;
-              notebook.feedTreat(today, kind);
-              return true;
+            onReward={async (signalId) => {
+              const result = await notebook.grantFocusReward(signalId, today);
+              if (!result) return null;
+              return { food: result.reward.food, itemId: result.reward.itemId, created: result.created };
             }}
           />
         ) : null}

@@ -5557,7 +5557,7 @@ async function requestLink(emailValue, origin) {
     `INSERT INTO magic_links (id, email, token_hash, expires_at) VALUES ($1, $2, $3, now() + interval '30 minutes')`,
     [(0, import_node_crypto.randomUUID)(), email, hashToken(raw)]
   );
-  const mail = await sendMagicLink(email, `${origin}/?magic=${encodeURIComponent(raw)}`);
+  const mail = await sendMagicLink(email, `${origin}/forgot-password?magic=${encodeURIComponent(raw)}`);
   if (mail !== "sent") {
     await sql.query("DELETE FROM magic_links WHERE token_hash = $1", [hashToken(raw)]);
     return { status: 503, body: { error: mail === "unconfigured" ? "mail" : "mail_failed" } };
@@ -5638,10 +5638,19 @@ function isDateKey(value) {
   const date = new Date(Date.UTC(year, month - 1, day));
   return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
 }
+function monthDay(key) {
+  return Number(key.slice(8, 10));
+}
 
 // src/lib/focusSession.ts
+var DEFAULT_FOCUS_MINUTES = 20;
+var BREAK_MINUTES = 5;
+var LONG_BREAK_MINUTES = 15;
+var DEFAULT_ROUNDS = 4;
 var MIN_FOCUS_MINUTES = 1;
 var MAX_FOCUS_MINUTES = 180;
+var WHISKAS_MS = 20 * 6e4;
+var SHEBA_MS = 40 * 6e4;
 function defaultCatPrefs() {
   return {
     sound: false,
@@ -5651,8 +5660,29 @@ function defaultCatPrefs() {
     hidden: false,
     reminders: false,
     x: null,
-    y: null
+    y: null,
+    pomodoroMinutes: DEFAULT_FOCUS_MINUTES,
+    shortMinutes: BREAK_MINUTES,
+    longMinutes: LONG_BREAK_MINUTES,
+    rounds: DEFAULT_ROUNDS,
+    autoStart: false,
+    focusDate: "",
+    focusCompleted: 0,
+    focusMsToday: 0,
+    focusCycle: 0,
+    treats: []
   };
+}
+function parseTreats(value) {
+  if (!Array.isArray(value)) return [];
+  const days = [];
+  for (const item of value) {
+    if (!item || typeof item !== "object") continue;
+    const raw = item;
+    if (typeof raw.date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(raw.date)) continue;
+    days.push({ date: raw.date, whiskas: raw.whiskas === true, sheba: raw.sheba === true });
+  }
+  return days;
 }
 function parseFocusMinutes(value) {
   const number = typeof value === "number" ? value : typeof value === "string" && value.trim() !== "" ? Number(value) : Number.NaN;
@@ -5676,9 +5706,15 @@ function parseFocusSession(value) {
     paused: raw.paused === true,
     sliceAppliedMs: typeof raw.sliceAppliedMs === "number" ? Math.max(0, raw.sliceAppliedMs) : 0,
     settled: raw.settled === true,
+    full: typeof raw.full === "boolean" ? raw.full : raw.settled === true && raw.paused !== true,
+    plannedBreak: raw.plannedBreak === "long" ? "long" : "short",
     reminded: raw.reminded === true,
-    signalId: raw.signalId
+    signalId: raw.signalId,
+    rewarded: raw.rewarded === true
   };
+}
+function storedMinutes(value, fallback, min, max) {
+  return typeof value === "number" && Number.isInteger(value) && value >= min && value <= max ? value : fallback;
 }
 function parseCatPrefs(value) {
   const base = defaultCatPrefs();
@@ -5693,14 +5729,64 @@ function parseCatPrefs(value) {
     hidden: raw.hidden === true,
     reminders: raw.reminders === true,
     x: typeof raw.x === "number" ? raw.x : null,
-    y: typeof raw.y === "number" ? raw.y : null
+    y: typeof raw.y === "number" ? raw.y : null,
+    pomodoroMinutes: storedMinutes(raw.pomodoroMinutes, base.pomodoroMinutes, MIN_FOCUS_MINUTES, MAX_FOCUS_MINUTES),
+    shortMinutes: storedMinutes(raw.shortMinutes, base.shortMinutes, 1, 60),
+    longMinutes: storedMinutes(raw.longMinutes, base.longMinutes, 1, 60),
+    rounds: storedMinutes(raw.rounds, base.rounds, 1, 8),
+    autoStart: raw.autoStart === true,
+    focusDate: typeof raw.focusDate === "string" ? raw.focusDate : "",
+    focusCompleted: typeof raw.focusCompleted === "number" && raw.focusCompleted > 0 ? Math.round(raw.focusCompleted) : 0,
+    focusMsToday: typeof raw.focusMsToday === "number" && raw.focusMsToday > 0 ? Math.round(raw.focusMsToday) : 0,
+    focusCycle: typeof raw.focusCycle === "number" && raw.focusCycle > 0 ? Math.round(raw.focusCycle) : 0,
+    treats: parseTreats(raw.treats)
   };
+}
+
+// src/lib/rewards.ts
+var CABINET_RATIO = 1315 / 1196;
+var REWARD_LIMIT = 2e3;
+var REWARD_ITEMS = [
+  { id: "violet-bag", name: "\u0424\u0438\u043E\u043B\u0435\u0442\u043E\u0432\u044B\u0439 \u043F\u0430\u043A\u0435\u0442 \u043A\u043E\u0440\u043C\u0430", brought: "\u0444\u0438\u043E\u043B\u0435\u0442\u043E\u0432\u044B\u0439 \u043F\u0430\u043A\u0435\u0442 \u043A\u043E\u0440\u043C\u0430", shelf: "top", weight: 20 },
+  { id: "black-bag", name: "\u0427\u0451\u0440\u043D\u043E-\u0437\u043E\u043B\u043E\u0442\u043E\u0439 \u043F\u0430\u043A\u0435\u0442 \u043A\u043E\u0440\u043C\u0430", brought: "\u0447\u0451\u0440\u043D\u043E-\u0437\u043E\u043B\u043E\u0442\u043E\u0439 \u043F\u0430\u043A\u0435\u0442 \u043A\u043E\u0440\u043C\u0430", shelf: "top", weight: 20 },
+  { id: "fish-can", name: "\u0420\u044B\u0431\u043D\u044B\u0435 \u043A\u043E\u043D\u0441\u0435\u0440\u0432\u044B", brought: "\u0440\u044B\u0431\u043D\u044B\u0435 \u043A\u043E\u043D\u0441\u0435\u0440\u0432\u044B", shelf: "top", weight: 20 },
+  { id: "treat-jar", name: "\u0411\u0430\u043D\u043E\u0447\u043A\u0430 \u043B\u0430\u043A\u043E\u043C\u0441\u0442\u0432", brought: "\u0431\u0430\u043D\u043E\u0447\u043A\u0443 \u043B\u0430\u043A\u043E\u043C\u0441\u0442\u0432", shelf: "top", weight: 20 },
+  { id: "chicken", name: "\u041A\u0443\u0440\u043E\u0447\u043A\u0430", brought: "\u043A\u0443\u0440\u043E\u0447\u043A\u0443", shelf: "middle", weight: 20 },
+  { id: "fish-cracker", name: "\u0420\u044B\u0431\u043A\u0430-\u043B\u0430\u043A\u043E\u043C\u0441\u0442\u0432\u043E", brought: "\u0440\u044B\u0431\u043A\u0443-\u043B\u0430\u043A\u043E\u043C\u0441\u0442\u0432\u043E", shelf: "middle", weight: 20 },
+  { id: "bone", name: "\u0418\u0433\u0440\u0443\u0448\u0435\u0447\u043D\u0430\u044F \u043A\u043E\u0441\u0442\u043E\u0447\u043A\u0430", brought: "\u0438\u0433\u0440\u0443\u0448\u0435\u0447\u043D\u0443\u044E \u043A\u043E\u0441\u0442\u043E\u0447\u043A\u0443", shelf: "middle", weight: 15 },
+  { id: "mouse", name: "\u0418\u0433\u0440\u0443\u0448\u0435\u0447\u043D\u0430\u044F \u043C\u044B\u0448\u043A\u0430", brought: "\u0438\u0433\u0440\u0443\u0448\u0435\u0447\u043D\u0443\u044E \u043C\u044B\u0448\u043A\u0443", shelf: "middle", weight: 15 },
+  { id: "ball", name: "\u041C\u044F\u0447\u0438\u043A", brought: "\u043C\u044F\u0447\u0438\u043A", shelf: "bottom", weight: 15 },
+  { id: "wand", name: "\u0423\u0434\u043E\u0447\u043A\u0430 \u0441 \u043F\u0435\u0440\u044C\u044F\u043C\u0438", brought: "\u0443\u0434\u043E\u0447\u043A\u0443 \u0441 \u043F\u0435\u0440\u044C\u044F\u043C\u0438", shelf: "bottom", weight: 15 },
+  { id: "scrunchie", name: "\u0420\u0435\u0437\u0438\u043D\u043A\u0430 \u0434\u043B\u044F \u0432\u043E\u043B\u043E\u0441", brought: "\u0440\u0435\u0437\u0438\u043D\u043A\u0443 \u0434\u043B\u044F \u0432\u043E\u043B\u043E\u0441", shelf: "bottom", weight: 10 },
+  { id: "sock", name: "\u0423\u043A\u0440\u0430\u0434\u0435\u043D\u043D\u044B\u0439 \u043D\u043E\u0441\u043E\u043A", brought: "\u0443\u043A\u0440\u0430\u0434\u0435\u043D\u043D\u044B\u0439 \u043D\u043E\u0441\u043E\u043A", shelf: "bottom", weight: 10 }
+];
+var ITEM_IDS = new Set(REWARD_ITEMS.map((item) => item.id));
+function parseRewards(value) {
+  if (!Array.isArray(value)) return [];
+  const rewards = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const item of value) {
+    if (!item || typeof item !== "object") continue;
+    const raw = item;
+    if (!validSignal(raw.signalId) || typeof raw.itemId !== "string" || !ITEM_IDS.has(raw.itemId)) continue;
+    if (raw.food !== "whiskas" && raw.food !== "sheba") continue;
+    if (typeof raw.date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(raw.date)) continue;
+    if (seen.has(raw.signalId)) continue;
+    seen.add(raw.signalId);
+    rewards.push({ signalId: raw.signalId, itemId: raw.itemId, food: raw.food, date: raw.date });
+    if (rewards.length >= REWARD_LIMIT) break;
+  }
+  return rewards;
+}
+function validSignal(value) {
+  return typeof value === "string" && /^[A-Za-z0-9-]{8,80}$/.test(value);
 }
 
 // src/lib/notebook.ts
 var PARTS = /* @__PURE__ */ new Set(["morning", "afternoon", "evening", "anytime"]);
 var PRIORITIES = /* @__PURE__ */ new Set(["high", "normal", "low"]);
-var REPEATS = /* @__PURE__ */ new Set(["daily", "weekdays", "weekly"]);
+var SERIES_REPEATS = /* @__PURE__ */ new Set(["daily", "weekdays", "weekly", "monthly"]);
+var HABIT_REPEATS = /* @__PURE__ */ new Set(["daily", "weekdays", "weekly"]);
 var MODES = /* @__PURE__ */ new Set(["habits", "planner", "focus"]);
 var THEMES = /* @__PURE__ */ new Set(["blue", "pink", "yellow", "dark"]);
 function emptyNotebook() {
@@ -5720,7 +5806,8 @@ function emptyNotebook() {
     habits: [],
     marks: [],
     weekItems: [],
-    dayNotes: []
+    dayNotes: [],
+    rewards: []
   };
 }
 function cleanWeekdays(days) {
@@ -5732,8 +5819,18 @@ function asPart(value) {
 function asPriority(value) {
   return typeof value === "string" && PRIORITIES.has(value) ? value : "normal";
 }
-function asRepeat(value) {
-  return typeof value === "string" && REPEATS.has(value) ? value : null;
+function asSeriesRepeat(value) {
+  return typeof value === "string" && SERIES_REPEATS.has(value) ? value : null;
+}
+function asHabitRepeat(value) {
+  return typeof value === "string" && HABIT_REPEATS.has(value) ? value : null;
+}
+function asInterval(value) {
+  const number = typeof value === "number" ? value : 1;
+  return Number.isInteger(number) && number >= 1 && number <= 99 ? number : 1;
+}
+function asMonthDay(value) {
+  return typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 31 ? value : null;
 }
 function asMode(value) {
   return typeof value === "string" && MODES.has(value) ? value : null;
@@ -5758,13 +5855,16 @@ function parseNotebook(value) {
       if (!item || typeof item !== "object") continue;
       const task = item;
       if (typeof task.id !== "string" || typeof task.title !== "string" || typeof task.date !== "string" || !isDateKey(task.date)) continue;
-      const repeat = asRepeat(task.repeatKind);
+      const repeat = asSeriesRepeat(task.repeatKind);
+      const legacyDone = task.completed === true;
+      const mark = task.mark === "done" || task.mark === "missed" ? task.mark : legacyDone ? "done" : null;
       book.tasks.push({
         id: task.id,
         title: task.title.trim().slice(0, 160),
-        completed: task.completed === true,
+        completed: mark === "done",
+        mark,
         createdAt: typeof task.createdAt === "string" ? task.createdAt : (/* @__PURE__ */ new Date(0)).toISOString(),
-        completedAt: typeof task.completedAt === "string" ? task.completedAt : null,
+        completedAt: mark === "done" && typeof task.completedAt === "string" ? task.completedAt : null,
         date: task.date,
         dayPart: asPart(task.dayPart),
         priority: asPriority(task.priority),
@@ -5784,7 +5884,7 @@ function parseNotebook(value) {
     for (const item of raw.series) {
       if (!item || typeof item !== "object") continue;
       const rule = item;
-      const repeat = asRepeat(rule.repeatKind);
+      const repeat = asSeriesRepeat(rule.repeatKind);
       if (typeof rule.id !== "string" || typeof rule.title !== "string" || typeof rule.start !== "string" || !repeat || !isDateKey(rule.start)) continue;
       book.series.push({
         id: rule.id,
@@ -5793,6 +5893,8 @@ function parseNotebook(value) {
         priority: asPriority(rule.priority),
         repeatKind: repeat,
         weekdays: Array.isArray(rule.weekdays) ? cleanWeekdays(rule.weekdays.map(Number)) : [],
+        interval: asInterval(rule.interval),
+        monthDay: repeat === "monthly" ? asMonthDay(rule.monthDay) ?? monthDay(rule.start) : null,
         start: rule.start,
         until: typeof rule.until === "string" && isDateKey(rule.until) ? rule.until : null
       });
@@ -5811,14 +5913,15 @@ function parseNotebook(value) {
     for (const item of raw.habits) {
       if (!item || typeof item !== "object") continue;
       const habit = item;
-      const repeat = asRepeat(habit.repeatKind);
+      const repeat = asHabitRepeat(habit.repeatKind);
       if (typeof habit.id !== "string" || typeof habit.title !== "string" || typeof habit.start !== "string" || !repeat || !isDateKey(habit.start)) continue;
       book.habits.push({
         id: habit.id,
         title: habit.title.trim().slice(0, 160),
         repeatKind: repeat,
         weekdays: Array.isArray(habit.weekdays) ? cleanWeekdays(habit.weekdays.map(Number)) : [],
-        start: habit.start
+        start: habit.start,
+        archived: habit.archived === true
       });
     }
   }
@@ -5859,11 +5962,13 @@ function parseNotebook(value) {
       book.dayNotes.push({ date: note.date, text });
     }
   }
+  book.rewards = parseRewards(raw.rewards);
   if (!book.mode) book.greeted = false;
   return book;
 }
 
 // server/cabinet.ts
+var NOTEBOOK_LIMIT = 5e5;
 var dummyHash = null;
 function token2() {
   return (0, import_node_crypto3.randomBytes)(32).toString("base64url");
@@ -5959,6 +6064,15 @@ function createFileStore(filePath) {
         const notebooks = db.notebooks.filter((item) => item.userId !== userId);
         notebooks.push({ userId, data });
         return { db: { ...db, notebooks }, result: void 0 };
+      });
+    },
+    updateNotebook(userId, recipe) {
+      return update(async (db) => {
+        const current = db.notebooks.find((item) => item.userId === userId)?.data ?? null;
+        const next = recipe(current);
+        const notebooks = db.notebooks.filter((item) => item.userId !== userId);
+        notebooks.push({ userId, data: next.data });
+        return { db: { ...db, notebooks }, result: next.result };
       });
     }
   };
@@ -6101,6 +6215,31 @@ async function createNeonStore() {
          ON CONFLICT (user_id) DO UPDATE SET data = EXCLUDED.data, updated_at = now()`,
         [userId, JSON.stringify(data)]
       );
+    },
+    async updateNotebook(userId, recipe) {
+      for (let attempt = 0; attempt < 8; attempt += 1) {
+        const current = await this.readNotebook(userId);
+        const next = recipe(current);
+        const encoded = JSON.stringify(next.data);
+        if (encoded.length > NOTEBOOK_LIMIT) throw new Error("notebook");
+        if (current == null) {
+          const inserted = asRows(await sql.query(
+            `INSERT INTO notebooks (user_id, data, updated_at) VALUES ($1, $2::jsonb, now())
+             ON CONFLICT (user_id) DO NOTHING RETURNING data`,
+            [userId, encoded]
+          ));
+          if (inserted.length > 0) return next.result;
+          continue;
+        }
+        const updated = asRows(await sql.query(
+          `UPDATE notebooks SET data = $2::jsonb, updated_at = now()
+           WHERE user_id = $1 AND data = $3::jsonb
+           RETURNING data`,
+          [userId, encoded, JSON.stringify(current)]
+        ));
+        if (updated.length > 0) return next.result;
+      }
+      throw new Error("storage");
     }
   };
 }

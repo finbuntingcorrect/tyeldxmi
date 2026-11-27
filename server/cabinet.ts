@@ -6,6 +6,7 @@ import { databaseUrl } from './db';
 import { ensureSchema } from './schema';
 import { hashPassword, normalizeLogin, validPassword, verifyPassword } from './password';
 import { emptyNotebook, parseNotebook, type Notebook } from '../src/lib/notebook';
+import { grantReward, validRewardDate, validSignal } from '../src/lib/rewards';
 
 type CabinetUser = {
   id: string;
@@ -42,6 +43,7 @@ export type CabinetStore = {
   userForToken: (tokenHash: string) => Promise<CabinetUser | null>;
   readNotebook: (userId: string) => Promise<unknown | null>;
   writeNotebook: (userId: string, data: Notebook) => Promise<void>;
+  updateNotebook: <T>(userId: string, recipe: (current: unknown) => { data: Notebook; result: T }) => Promise<T>;
 };
 
 const NOTEBOOK_LIMIT = 500_000;
@@ -149,6 +151,15 @@ export function createFileStore(filePath: string): CabinetStore {
         const notebooks = db.notebooks.filter((item) => item.userId !== userId);
         notebooks.push({ userId, data });
         return { db: { ...db, notebooks }, result: undefined };
+      });
+    },
+    updateNotebook(userId, recipe) {
+      return update(async (db) => {
+        const current = db.notebooks.find((item) => item.userId === userId)?.data ?? null;
+        const next = recipe(current);
+        const notebooks = db.notebooks.filter((item) => item.userId !== userId);
+        notebooks.push({ userId, data: next.data });
+        return { db: { ...db, notebooks }, result: next.result };
       });
     },
   };
@@ -304,6 +315,31 @@ async function createNeonStore(): Promise<CabinetStore> {
         [userId, JSON.stringify(data)],
       );
     },
+    async updateNotebook(userId, recipe) {
+      for (let attempt = 0; attempt < 8; attempt += 1) {
+        const current = await this.readNotebook(userId);
+        const next = recipe(current);
+        const encoded = JSON.stringify(next.data);
+        if (encoded.length > NOTEBOOK_LIMIT) throw new Error('notebook');
+        if (current == null) {
+          const inserted = asRows(await sql.query(
+            `INSERT INTO notebooks (user_id, data, updated_at) VALUES ($1, $2::jsonb, now())
+             ON CONFLICT (user_id) DO NOTHING RETURNING data`,
+            [userId, encoded],
+          ));
+          if (inserted.length > 0) return next.result;
+          continue;
+        }
+        const updated = asRows(await sql.query(
+          `UPDATE notebooks SET data = $2::jsonb, updated_at = now()
+           WHERE user_id = $1 AND data = $3::jsonb
+           RETURNING data`,
+          [userId, encoded, JSON.stringify(current)],
+        ));
+        if (updated.length > 0) return next.result;
+      }
+      throw new Error('storage');
+    },
   };
 }
 
@@ -447,8 +483,35 @@ export function notebookFromBody(value: unknown): Notebook | null {
 export async function writeAccountNotebook(store: CabinetStore, rawToken: string, value: unknown): Promise<AccountResult> {
   const user = rawToken ? await store.userForToken(hashToken(rawToken)) : null;
   if (!user) return { status: 401, body: { error: 'auth' } };
-  const notebook = notebookFromBody(value);
-  if (!notebook) return { status: 400, body: { error: 'notebook' } };
-  await store.writeNotebook(user.id, notebook);
+  const incoming = notebookFromBody(value);
+  if (!incoming) return { status: 400, body: { error: 'notebook' } };
+  const notebook = await store.updateNotebook(user.id, (current) => {
+    const stored = parseNotebook(notebookValue(current));
+    const rewards = stored?.rewards ?? [];
+    return { data: { ...incoming, rewards }, result: { ...incoming, rewards } };
+  });
   return { status: 200, body: { login: user.login, notebook } };
+}
+
+export async function grantAccountReward(store: CabinetStore, rawToken: string, signalId: unknown, date: unknown): Promise<AccountResult> {
+  const user = rawToken ? await store.userForToken(hashToken(rawToken)) : null;
+  if (!user) return { status: 401, body: { error: 'auth' } };
+  if (!validSignal(signalId)) return { status: 400, body: { error: 'notebook' } };
+  const day = validRewardDate(date) ? date : new Date().toISOString().slice(0, 10);
+  const outcome = await store.updateNotebook(user.id, (current) => {
+    const book = parseNotebook(notebookValue(current)) ?? freshNotebook(user.login);
+    const granted = grantReward(book, signalId, day, Math.random);
+    return { data: granted.book, result: granted };
+  });
+  if (outcome.error || !outcome.reward) return { status: 409, body: { error: 'pending' } };
+  return { status: 200, body: { reward: outcome.reward, created: outcome.created } };
+}
+
+function notebookValue(value: unknown) {
+  if (typeof value !== 'string') return value;
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    return null;
+  }
 }
