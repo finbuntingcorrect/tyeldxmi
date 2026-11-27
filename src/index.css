@@ -2429,8 +2429,8 @@ html[data-theme='dark'] {
 }
 
 .diary-plus.pixel-button .pixel-button-art {
-  width: var(--diary-box);
-  height: var(--diary-box);
+  width: calc(var(--diary-box) + 1mm);
+  height: calc(var(--diary-box) + 1mm);
 }
 
 .habit-add.pixel-button {
