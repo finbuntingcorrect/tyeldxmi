@@ -226,12 +226,12 @@ html[data-theme='dark'] {
 
 .focus-stage {
   display: grid;
-  grid-template-columns: minmax(0, 22rem) minmax(16rem, 28rem);
+  grid-template-columns: minmax(0, 22rem) max-content;
   column-gap: clamp(1.25rem, 3vw, 3rem);
   row-gap: 0;
   align-items: start;
   justify-content: center;
-  width: min(100%, 62rem);
+  width: min(100%, 80rem);
   margin: 0.25rem auto 0.75rem;
 }
 
@@ -458,7 +458,7 @@ html[data-theme='dark'] {
 }
 
 .reward-cabinet {
-  width: 11.5rem;
+  width: 23rem;
   min-width: 0;
   flex: none;
 }
@@ -515,7 +515,7 @@ html[data-theme='dark'] {
   padding: 0 0.18em;
   background: var(--color-ink);
   color: var(--color-card);
-  font-size: clamp(7px, 3.4cqw, 10px);
+  font-size: clamp(8px, 2.8cqw, 15px);
   font-weight: 700;
   line-height: 1.15;
 }
@@ -542,9 +542,24 @@ html[data-theme='dark'] {
   100% { transform: scale(1); }
 }
 
+@media (max-width: 1099px) and (min-width: 901px) {
+  .focus-stage {
+    grid-template-columns: minmax(0, 18rem) max-content;
+  }
+
+  .focus-cat {
+    width: 11rem;
+    height: 11rem;
+  }
+
+  .reward-cabinet {
+    width: 20rem;
+  }
+}
+
 @media (max-height: 820px) and (min-width: 901px) {
   .focus-stage {
-    grid-template-columns: minmax(0, 18rem) minmax(14rem, 24rem);
+    grid-template-columns: minmax(0, 18rem) max-content;
     column-gap: 1.5rem;
   }
 
@@ -554,7 +569,7 @@ html[data-theme='dark'] {
   }
 
   .reward-cabinet {
-    width: 10rem;
+    width: 20rem;
   }
 }
 
@@ -565,14 +580,26 @@ html[data-theme='dark'] {
   }
 
   .reward-cabinet {
-    width: 16rem;
+    width: 32rem;
+  }
+}
+
+@media (min-width: 1280px) and (min-height: 821px) {
+  .focus-stage {
+    grid-template-columns: 22rem max-content;
   }
 }
 
 @media (max-width: 900px) {
   .focus-stage {
-    grid-template-columns: minmax(0, 22rem);
+    grid-template-columns: minmax(0, 1fr);
     width: 100%;
+  }
+
+  .focus-dial-wrap,
+  .focus-controls {
+    width: min(100%, 22rem);
+    justify-self: center;
   }
 
   .focus-side {
@@ -580,6 +607,7 @@ html[data-theme='dark'] {
     grid-row: 3;
     align-items: flex-end;
     justify-content: center;
+    flex-wrap: wrap;
     width: 100%;
     margin-top: 0.75rem;
   }
@@ -590,7 +618,7 @@ html[data-theme='dark'] {
   }
 
   .reward-cabinet {
-    width: min(18rem, calc(100% - 8rem));
+    width: min(28rem, 100%);
   }
 }
 
