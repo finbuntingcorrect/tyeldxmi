@@ -2790,6 +2790,10 @@ html[data-theme='dark'] {
   border-top: 1px solid var(--color-line);
 }
 
+.settings-sheet > .settings-block:first-child + .settings-block {
+  border-top: 0;
+}
+
 .settings-block h2 {
   margin: 0 0 0.8rem;
   font-size: 1.65rem;
