@@ -225,8 +225,8 @@ export function SignupScreen({ onCreate }: { onCreate: (email: string, password:
           onChange={(value) => { setPassword(value); setPasswordErrorText(null); setFormError(null); }}
         />
         {formError ? <p className="auth-error" role="alert">{formError}</p> : null}
-        <p className="auth-status" role="status" aria-live="polite">{pending ? 'Создаём аккаунт…' : ''}</p>
-        <button type="submit" className="public-primary auth-submit" disabled={pending}>{pending ? 'Создаём аккаунт…' : 'Создать аккаунт'}</button>
+        <p className="auth-status" role="status" aria-live="polite">{pending ? 'Создаём…' : ''}</p>
+        <button type="submit" className="public-primary auth-submit" disabled={pending}>{pending ? 'Создаём…' : 'Создать'}</button>
         <p className="auth-links"><AppLink href="/login">Уже есть аккаунт? Войти</AppLink></p>
       </form>
     </PublicFrame>

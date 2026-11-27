@@ -9,7 +9,6 @@ import { isPageDate, weekMonday } from '../lib/route';
 import { PlanTask } from './PlanTask';
 import { PixelArrow } from './PixelArrow';
 import { PixelIconButton } from './PixelIconButton';
-import { uiKit } from '../lib/uiKit';
 
 const DAY_NAMES = ['Понедельник', 'Вторник', 'Среда', 'Четверг', 'Пятница', 'Суббота', 'Воскресенье'];
 const BANDS = ['sage', 'peach', 'sand', 'sage', 'sand', 'peach', 'sage'];
@@ -33,6 +32,8 @@ type DiaryScreenProps = {
   onNote: (id: string, text: string) => void;
   onMark: (id: string, mark: TaskMark | null) => Promise<string | null>;
   ensureWeek: (monday: string) => void;
+  composeDay?: string | null;
+  onDismissCompose?: () => void;
 };
 
 function monthName(date: Date) {
@@ -168,6 +169,11 @@ export function DiaryScreen(props: DiaryScreenProps) {
   const [picking, setPicking] = useState(false);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [openDays, setOpenDays] = useState<Record<string, boolean>>({});
+  const [seenCompose, setSeenCompose] = useState<string | null>(null);
+  if (props.composeDay && props.composeDay !== seenCompose) {
+    setSeenCompose(props.composeDay);
+    setOpenDays((current) => current[props.composeDay!] ? current : { ...current, [props.composeDay!]: true });
+  }
   const [importantDays, setImportantDays] = useState<Record<string, boolean>>({});
   const adding = useRef(new Set<string>());
   const ensureRef = useRef(props.ensureWeek);
@@ -462,6 +468,7 @@ export function DiaryScreen(props: DiaryScreenProps) {
     setDrafts((current) => ({ ...current, [date]: '' }));
     setImportantDays((current) => ({ ...current, [date]: false }));
     setOpenDays((current) => ({ ...current, [date]: false }));
+    if (props.composeDay === date) props.onDismissCompose?.();
   }
 
   function renderDay(date: string, index: number, quiet: boolean) {
@@ -580,7 +587,6 @@ export function DiaryScreen(props: DiaryScreenProps) {
 
   const busy = turn !== null || busyFlip;
   const weeks = [addDays(shown, -7), shown, addDays(shown, 7)];
-  const noTasks = props.book.tasks.every((task) => task.deleted);
 
   return (
     <section className="diary" aria-busy={busy}>
@@ -613,12 +619,6 @@ export function DiaryScreen(props: DiaryScreenProps) {
         <PixelArrow direction="next" label="Следующая неделя" disabled={editing > 0 || busy} onClick={() => goWeek(addDays(shown, 7))} />
         <button type="button" className="diary-today-button" disabled={editing > 0 || busy} onClick={() => goWeek(props.today)}><span>Эта неделя</span></button>
       </div>
-      {noTasks ? (
-        <div className="diary-empty">
-          <img src={uiKit.empty.tasks} alt="" width={160} height={160} draggable={false} />
-          <p>Пока нет задач.</p>
-        </div>
-      ) : null}
       <div className={`diary-stage ${curl ? 'is-book' : ''}`}>
       {curl ? <div ref={hostRef} className={`diary-book ${busyFlip ? 'is-turning' : ''}`} /> : (
       <div

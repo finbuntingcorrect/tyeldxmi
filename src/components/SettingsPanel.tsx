@@ -109,17 +109,21 @@ export function SettingsPanel({ login, name, theme, cat, onName, onTheme, onCat 
           }}
         >
           <label htmlFor="display-name">Имя</label>
-          <input id="display-name" className="paper-field" autoComplete="nickname" value={draft} onChange={(event) => { setDraft(event.target.value); setNameSaved(false); setNameError(null); }} />
-          <div className="settings-name-actions">
+          <div className="settings-name-line">
+            <input id="display-name" className="paper-field" autoComplete="nickname" value={draft} onChange={(event) => { setDraft(event.target.value); setNameSaved(false); setNameError(null); }} />
             <button type="submit" className="paper-submit" disabled={namePending}>{namePending ? 'Сохраняем…' : 'Сохранить'}</button>
-            {nameSaved ? <p role="status">Сохранено</p> : null}
-            {nameError ? (
-              <p role="alert">
-                {nameError}{' '}
-                <button type="button" className="settings-retry" onClick={() => void saveName()}>Повторить</button>
-              </p>
-            ) : null}
           </div>
+          {nameSaved || nameError ? (
+            <div className="settings-name-actions">
+              {nameSaved ? <p role="status">Сохранено</p> : null}
+              {nameError ? (
+                <p role="alert">
+                  {nameError}{' '}
+                  <button type="button" className="settings-retry" onClick={() => void saveName()}>Повторить</button>
+                </p>
+              ) : null}
+            </div>
+          ) : null}
         </form>
       </section>
 

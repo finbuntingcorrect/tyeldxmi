@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { localDateKey, dateFromKey, formatLocalDate } from '../lib/date';
 import { catPose } from '../lib/focusSession';
-import { dayHint, isOpenTask, needsHello, personName, taskMark, tasksForDate } from '../lib/notebook';
+import { isOpenTask, needsHello, personName, tasksForDate } from '../lib/notebook';
 import { isPlannerPage, modeForPage, pagePath, safeNext, weekMonday } from '../lib/route';
 import { useRoute } from '../hooks/routeContext';
 import { unlockSound } from '../lib/focusSound';
@@ -9,7 +9,6 @@ import { useFocusController } from '../hooks/useFocusController';
 import { useNotebook } from '../hooks/useNotebook';
 import { ForgotScreen, LoginScreen, ResetScreen, SignupScreen } from './AuthScreens';
 import { CabinetSplash } from './AccountGate';
-import { FirstHello } from './FirstHello';
 import { LandingPage } from './LandingPage';
 import { CatCompanion } from './CatCompanion';
 import { FocusBar } from './FocusBar';
@@ -33,6 +32,7 @@ export function Home() {
   const conflictDialog = useDialogLayer(Boolean(conflict), () => setConflict(null), conflictOpener);
   const [reduced, setReduced] = useState(() => window.matchMedia('(prefers-reduced-motion: reduce)').matches);
   const [soundNote, setSoundNote] = useState<string | null>(null);
+  const [composeDay, setComposeDay] = useState<string | null>(null);
   const book = notebook.book;
   const focus = useFocusController({
     login: notebook.login,
@@ -71,6 +71,15 @@ export function Home() {
     if (!next || !book.greeted || !personName(book.name, notebook.login) || next === book.mode) return;
     notebook.chooseMode(next);
   }, [page, book.greeted, book.mode, book.name, notebook]);
+
+  const opening = notebook.status === 'ready' && needsHello(book) && (page.name === 'calendar' || page.name === 'day');
+  if (opening && composeDay !== today) setComposeDay(today);
+  useEffect(() => {
+    if (!opening) return;
+    notebook.chooseMode('planner');
+    const dest = `/app/day/${today}`;
+    if (window.location.pathname !== dest) replace(dest);
+  }, [opening, today, notebook, replace]);
 
   useEffect(() => {
     warmImages(cabinetSources());
@@ -142,27 +151,9 @@ export function Home() {
   }
   if (page.name === 'forgot') return <ForgotScreen onForgot={notebook.requestEmail} />;
 
-  if (needsHello(book) && isPlannerPage(page)) {
-    return (
-      <FirstHello
-        onAdd={() => {
-          notebook.chooseMode('planner');
-          go(`/app/day/${today}`);
-        }}
-        onSkip={() => {
-          notebook.chooseMode('planner');
-          go('/app');
-        }}
-      />
-    );
-  }
-
   const person = personName(book.name, notebook.login);
 
   const todayTasks = tasksForDate(book, today);
-  const openToday = todayTasks.filter((task) => isOpenTask(task)).length;
-  const missedToday = todayTasks.filter((task) => taskMark(task) === 'missed').length;
-  const hint = dayHint(openToday, todayTasks.length, true, missedToday);
   const showingGreeting = greeting && (page.name === 'calendar' || page.name === 'day');
   const pose = catPose({
     greeting: showingGreeting,
@@ -243,19 +234,18 @@ export function Home() {
     <div className="min-w-0 overflow-x-clip overflow-y-auto" style={{ paddingRight: 'var(--cat-lane, 0px)', height: 'calc(100dvh - var(--cat-bottom, 0px))' }}>
     <div className={`mx-auto w-full min-w-0 px-2 py-4 sm:px-6 sm:py-10 ${page.name === 'calendar' || page.name === 'day' ? 'max-w-none' : 'max-w-6xl'} ${session && !session.settled && page.name !== 'focus' ? 'pb-28' : ''}`}>
       <div className="min-w-0 overflow-x-clip border border-line bg-card">
-        <header className="flex flex-col gap-2 px-3 py-4 sm:flex-row sm:items-end sm:justify-between sm:px-6">
-          <div className="min-w-0">
-            <h1 className="text-2xl leading-tight break-words sm:text-4xl">{person ? `Привет, ${person}` : 'Привет'}</h1>
-            <p className="mt-1 text-sm text-muted">{formatLocalDate(dateFromKey(today))}</p>
-            <p className="text-sm text-muted">{hint}</p>
-          </div>
-          <div className="account-actions">
+        <header className="app-header">
+          <div className="app-header-row">
+            <h1 className="app-header-title">{person ? `Привет, ${person}` : 'Привет'}</h1>
+            <div className="account-actions">
             <AppLink href="/app/settings" aria-current={page.name === 'settings' ? 'page' : undefined} className={page.name === 'settings' ? 'account-settings is-current' : 'account-settings'}>
               <img className="settings-paw" src={uiKit.icon.settings} alt="" width={30} height={30} draggable={false} />
               Настройки
             </AppLink>
             <button type="button" onClick={() => { void notebook.signOut().then((left) => { if (left) go('/'); }); }}>Выйти</button>
+            </div>
           </div>
+          <p className="app-header-date">{formatLocalDate(dateFromKey(today))}</p>
         </header>
         <ModeSwitch page={page} />
         {notebook.error ? (
@@ -305,6 +295,8 @@ export function Home() {
             onNote={notebook.setTaskNote}
             onMark={notebook.setTaskVerdict}
             ensureWeek={notebook.ensureWeek}
+            composeDay={composeDay}
+            onDismissCompose={() => setComposeDay(null)}
           />
         ) : null}
         {page.name === 'focus' ? (

@@ -368,7 +368,11 @@ export function FocusScreen(props: FocusScreenProps) {
         </div>
       </div>
       <div className="focus-controls">
-        <PixelIconButton kind={running ? 'pause' : 'play'} label={primary} className="focus-go" onClick={onPrimary} />
+        <div className="focus-go-wrap">
+          <PixelIconButton kind={running ? 'pause' : 'play'} label={primary} className="focus-go" onClick={onPrimary} />
+          <p className="focus-go-word" aria-hidden="true">{primary}</p>
+        </div>
+        {adjustable && !editing ? <p className="focus-dial-hint">Минуты ставятся кругом.</p> : null}
         {active ? <button type="button" className="focus-reset" onClick={props.onReset}>Сбросить</button> : null}
         {finished ? <button type="button" className="focus-break" onClick={props.onBreak}>Перерыв 5 минут</button> : null}
         <p className="focus-today">{todayLine}</p>

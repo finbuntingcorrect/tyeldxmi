@@ -136,6 +136,16 @@ function HabitTable({
     alignTracker(node, month, today);
   }, [month, today, readOnly]);
 
+  const [earlier, setEarlier] = useState(false);
+  useEffect(() => {
+    const node = scrollerRef.current;
+    if (!node) return;
+    const sync = () => setEarlier(node.scrollLeft > 12);
+    sync();
+    node.addEventListener('scroll', sync, { passive: true });
+    return () => node.removeEventListener('scroll', sync);
+  }, [month, today, habits.length, dates.length, readOnly]);
+
   const menuHabit = habits.find((habit) => habit.id === menuId) ?? null;
 
   useLayoutEffect(() => {
@@ -231,7 +241,9 @@ function HabitTable({
   }
 
   return (
-    <div ref={scrollerRef} className="habit-scroll" style={{ ['--habit-days' as string]: dates.length }}>
+    <>
+    {earlier ? <p className="habit-earlier">Слева дни с начала месяца.</p> : null}
+    <div ref={scrollerRef} className={earlier ? 'habit-scroll is-cut' : 'habit-scroll'} style={{ ['--habit-days' as string]: dates.length }}>
       <table className="habit-table">
         <caption className="sr-only">Трекер привычек за {monthTitle(month)}</caption>
         <colgroup>
@@ -384,6 +396,7 @@ function HabitTable({
         document.body,
       ) : null}
     </div>
+    </>
   );
 }
 
@@ -484,13 +497,13 @@ export function HabitsScreen({ book, today, onCreate, onRename, onArchive, onMar
         <PixelArrow direction="next" label="Следующий месяц" onClick={() => showMonth(shiftMonth(month, 1))} />
         <button type="button" className="habit-current" disabled={month === currentMonth} onClick={() => showMonth(currentMonth)}>Текущий месяц</button>
       </header>
-      <p className="habit-hint">Нажимай на ячейку: ✓ → × → пусто</p>
       {active.length === 0 && !adding ? (
         <div className="habit-empty">
           <img src={uiKit.empty.habits} alt="" width={160} height={160} draggable={false} />
           <p>Пока нет привычек.</p>
         </div>
       ) : null}
+      {active.length > 0 ? <p className="habit-hint">Нажимай на ячейку: ✓ → × → пусто</p> : null}
       <HabitTable
         habits={active}
         month={month}
